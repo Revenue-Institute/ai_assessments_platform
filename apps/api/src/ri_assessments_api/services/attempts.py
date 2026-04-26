@@ -276,6 +276,23 @@ def complete_assignment(
         update["total_time_seconds"] = total_seconds
 
     supabase.table("assignments").update(update).eq("id", assignment["id"]).execute()
+
+    # Score every attempt synchronously. Failures here are logged but do
+    # not roll back the status flip — the candidate's submission stands
+    # and an admin can rescore. Synchronous keeps v1 simple; BullMQ async
+    # lands when the latency starts mattering.
+    try:
+        from .scoring import score_assignment
+
+        score_assignment(supabase, assignment["id"])
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "scoring failed for assignment %s; admin rescore will retry",
+            assignment["id"],
+        )
+
     return {
         "assignment_id": assignment["id"],
         "status": "completed",

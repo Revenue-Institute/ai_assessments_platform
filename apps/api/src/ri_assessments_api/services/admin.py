@@ -360,8 +360,8 @@ def get_assignment_detail(
             "final_score, max_possible_score, created_at, "
             "subjects(full_name, email), modules(title), "
             "attempts(id, question_template_id, rendered_prompt, raw_answer, "
-            "submitted_at, score, max_score, score_rationale, "
-            "active_time_seconds)"
+            "submitted_at, score, max_score, score_rationale, scorer_model, "
+            "scorer_confidence, needs_review, active_time_seconds)"
         )
         .eq("id", assignment_id)
         .limit(1)
@@ -384,6 +384,9 @@ def get_assignment_detail(
             score=a.get("score"),
             max_score=a["max_score"],
             score_rationale=a.get("score_rationale"),
+            scorer_model=a.get("scorer_model"),
+            scorer_confidence=a.get("scorer_confidence"),
+            needs_review=bool(a.get("needs_review")),
             active_time_seconds=a.get("active_time_seconds"),
         )
         for a in attempts_raw

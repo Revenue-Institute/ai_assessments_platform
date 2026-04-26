@@ -3,6 +3,8 @@ import {
   ApiError,
   cancelAssignment,
   getAssignment,
+  rescoreAssignment,
+  rescoreAttempt,
 } from "@/lib/api";
 import { Header } from "../../components/header";
 
@@ -29,6 +31,34 @@ export default async function AssignmentDetailPage({
     "use server";
     try {
       await cancelAssignment(id);
+      redirect(`/assignments/${id}`);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        redirect(`/assignments/${id}`);
+      }
+      throw e;
+    }
+  }
+
+  async function rescoreAll(): Promise<void> {
+    "use server";
+    try {
+      await rescoreAssignment(id);
+      redirect(`/assignments/${id}`);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        redirect(`/assignments/${id}`);
+      }
+      throw e;
+    }
+  }
+
+  async function rescoreOne(formData: FormData): Promise<void> {
+    "use server";
+    const attemptId = String(formData.get("attempt_id") ?? "");
+    if (!attemptId) return;
+    try {
+      await rescoreAttempt(attemptId);
       redirect(`/assignments/${id}`);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -103,7 +133,14 @@ export default async function AssignmentDetailPage({
                   key={a.id}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">Question {i + 1}</p>
+                    <p className="font-medium">
+                      Question {i + 1}
+                      {a.needs_review && (
+                        <span className="ml-2 rounded bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-200 uppercase tracking-wide">
+                          Needs review
+                        </span>
+                      )}
+                    </p>
                     <p className="text-muted-foreground text-xs">
                       {a.submitted_at ? "submitted" : "in progress"}
                     </p>
@@ -116,15 +153,39 @@ export default async function AssignmentDetailPage({
                       {JSON.stringify(a.raw_answer, null, 2)}
                     </pre>
                   )}
-                  <div className="mt-2 flex gap-3 text-muted-foreground text-xs">
+                  {a.score_rationale && (
+                    <p className="mt-2 rounded border border-border/40 bg-muted/30 p-2 text-muted-foreground text-xs">
+                      {a.score_rationale}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-muted-foreground text-xs">
                     <span>
                       Score:{" "}
                       {a.score != null
                         ? `${a.score} / ${a.max_score}`
                         : `— / ${a.max_score}`}
                     </span>
+                    {a.scorer_model && (
+                      <span>
+                        Scorer: <code>{a.scorer_model}</code>
+                      </span>
+                    )}
+                    {a.scorer_confidence != null && (
+                      <span>Confidence: {a.scorer_confidence}</span>
+                    )}
                     {a.active_time_seconds != null && (
                       <span>Active: {a.active_time_seconds}s</span>
+                    )}
+                    {a.submitted_at && (
+                      <form action={rescoreOne} className="ml-auto">
+                        <input name="attempt_id" type="hidden" value={a.id} />
+                        <button
+                          className="rounded border border-emerald-900/40 bg-emerald-950/30 px-2 py-1 text-emerald-200 text-xs hover:bg-emerald-950/50"
+                          type="submit"
+                        >
+                          Rescore
+                        </button>
+                      </form>
                     )}
                   </div>
                 </li>
@@ -133,18 +194,30 @@ export default async function AssignmentDetailPage({
           )}
         </section>
 
-        {detail.status !== "completed" &&
-          detail.status !== "cancelled" &&
-          detail.status !== "expired" && (
-            <form action={cancel}>
+        <div className="flex flex-wrap gap-2">
+          {detail.status === "completed" && (
+            <form action={rescoreAll}>
               <button
-                className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm hover:bg-red-950/50"
+                className="rounded border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-emerald-200 text-sm hover:bg-emerald-950/50"
                 type="submit"
               >
-                Cancel assignment
+                Rescore all attempts
               </button>
             </form>
           )}
+          {detail.status !== "completed" &&
+            detail.status !== "cancelled" &&
+            detail.status !== "expired" && (
+              <form action={cancel}>
+                <button
+                  className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm hover:bg-red-950/50"
+                  type="submit"
+                >
+                  Cancel assignment
+                </button>
+              </form>
+            )}
+        </div>
       </div>
     </>
   );

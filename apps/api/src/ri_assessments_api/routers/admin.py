@@ -155,3 +155,63 @@ def cancel_assignment(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssignmentDetail:
     return admin_service.cancel_assignment(supabase, principal, assignment_id)
+
+
+@router.post(
+    "/assignments/{assignment_id}/rescore", response_model=AssignmentDetail
+)
+def rescore_assignment(
+    assignment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentDetail:
+    """Re-runs scoring across every attempt on the assignment. Each attempt's
+    current score is snapshotted to attempt_scores_history first."""
+
+    from ..services import scoring as scoring_service
+
+    current = (
+        supabase.table("attempts")
+        .select(
+            "id, score, max_score, score_rationale, scorer_model, "
+            "scorer_version, rubric_version, scorer_confidence"
+        )
+        .eq("assignment_id", assignment_id)
+        .execute()
+    ).data or []
+    history_rows = [
+        {
+            "attempt_id": row["id"],
+            "score": row.get("score"),
+            "max_score": row.get("max_score"),
+            "score_rationale": row.get("score_rationale"),
+            "scorer_model": row.get("scorer_model"),
+            "scorer_version": row.get("scorer_version"),
+            "rubric_version": row.get("rubric_version"),
+            "scorer_confidence": row.get("scorer_confidence"),
+            "recorded_by": principal.user_id,
+        }
+        for row in current
+        if row.get("score") is not None
+    ]
+    if history_rows:
+        supabase.table("attempt_scores_history").insert(history_rows).execute()
+
+    scoring_service.score_assignment(supabase, assignment_id)
+    return admin_service.get_assignment_detail(supabase, assignment_id)
+
+
+@router.post("/attempts/{attempt_id}/rescore", response_model=AssignmentDetail)
+def rescore_attempt(
+    attempt_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentDetail:
+    """Rescore a single attempt and re-derive assignment-level rollups."""
+
+    from ..services import scoring as scoring_service
+
+    aggregate = scoring_service.rescore_attempt(
+        supabase, attempt_id=attempt_id, recorded_by=principal.user_id
+    )
+    return admin_service.get_assignment_detail(supabase, aggregate["assignment_id"])

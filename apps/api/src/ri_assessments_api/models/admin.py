@@ -112,6 +112,9 @@ class AttemptSummary(BaseModel):
     score: float | None = None
     max_score: float
     score_rationale: str | None = None
+    scorer_model: str | None = None
+    scorer_confidence: float | None = None
+    needs_review: bool = False
     active_time_seconds: int | None = None
 
 

@@ -73,6 +73,9 @@ export type AttemptSummary = {
   score: number | null;
   max_score: number;
   score_rationale: string | null;
+  scorer_model?: string | null;
+  scorer_confidence?: number | null;
+  needs_review?: boolean;
   active_time_seconds: number | null;
 };
 
@@ -198,6 +201,16 @@ export const createAssignment = (body: {
   });
 export const cancelAssignment = (id: string) =>
   callApi<AssignmentDetail>(`/api/assignments/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+export const rescoreAssignment = (id: string) =>
+  callApi<AssignmentDetail>(`/api/assignments/${id}/rescore`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+export const rescoreAttempt = (attemptId: string) =>
+  callApi<AssignmentDetail>(`/api/attempts/${attemptId}/rescore`, {
     method: "POST",
     body: JSON.stringify({}),
   });
