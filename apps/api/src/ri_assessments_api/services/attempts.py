@@ -1,0 +1,283 @@
+"""Attempt lifecycle: lazy creation on first view, idempotent submit,
+deadline enforcement, and final completion (spec §10.1, §13.1, §14.2)."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import HTTPException, status
+from supabase import Client
+
+from .code_runner import grade_code_attempt
+from .randomizer import question_seed, render_prompt, sample_variables
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _ensure_in_progress(assignment: dict[str, Any]) -> None:
+    if assignment["status"] != "in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Assessment is {assignment['status']}, not in progress.",
+        )
+    expires_at = _parse_ts(assignment["expires_at"])
+    if expires_at and expires_at <= datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Assessment time limit has elapsed.",
+        )
+
+
+def _question_at(assignment: dict[str, Any], index: int) -> dict[str, Any]:
+    snapshot = assignment.get("module_snapshot") or {}
+    questions: list[dict[str, Any]] = snapshot.get("questions") or []
+    if index < 0 or index >= len(questions):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question index out of range.",
+        )
+    return questions[index]
+
+
+def _sanitize_interactive_config(
+    qtype: str, config: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Strip answer fields the candidate must not see (spec §13.2)."""
+
+    if not config:
+        return None
+    cfg = dict(config)
+    if qtype == "mcq" or qtype == "multi_select":
+        cfg.pop("correct_index", None)
+        cfg.pop("correct_indices", None)
+    if qtype == "code":
+        cfg.pop("hidden_tests", None)
+    if qtype == "n8n":
+        cfg.pop("reference_workflow", None)
+    if qtype == "diagram":
+        cfg.pop("reference_structure", None)
+    if qtype == "sql":
+        cfg.pop("expected_query_result", None)
+        cfg.pop("expected_sql_patterns", None)
+    if qtype == "notebook":
+        cfg.pop("validation_script", None)
+    return cfg
+
+
+def get_assignment_for_token(supabase: Client, raw_token: str) -> dict[str, Any]:
+    """Look up the full assignment row for a candidate token."""
+
+    from .tokens import hash_token
+
+    res = (
+        supabase.table("assignments")
+        .select(
+            "id, status, expires_at, started_at, completed_at, "
+            "random_seed, module_snapshot"
+        )
+        .eq("token_hash", hash_token(raw_token))
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found.",
+        )
+    return rows[0]
+
+
+def _existing_attempt(
+    supabase: Client, assignment_id: str, question_template_id: str
+) -> dict[str, Any] | None:
+    res = (
+        supabase.table("attempts")
+        .select(
+            "id, raw_answer, started_at, submitted_at, rendered_prompt, "
+            "variables_used, expected_answer"
+        )
+        .eq("assignment_id", assignment_id)
+        .eq("question_template_id", question_template_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
+def _create_attempt(
+    supabase: Client,
+    *,
+    assignment_id: str,
+    random_seed: int,
+    question: dict[str, Any],
+) -> dict[str, Any]:
+    qid = question["id"]
+    variables = sample_variables(
+        question.get("variable_schema") or {},
+        question_seed(random_seed, qid),
+    )
+    rendered = render_prompt(question["prompt_template"], variables)
+    payload = {
+        "assignment_id": assignment_id,
+        "question_template_id": qid,
+        "rendered_prompt": rendered,
+        "variables_used": variables,
+        "expected_answer": None,  # solver execution lands with E2B in Phase 2
+        "started_at": datetime.now(UTC).isoformat(),
+        "max_score": float(question.get("max_points") or 10),
+    }
+    inserted = supabase.table("attempts").insert(payload).execute()
+    if not inserted.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create attempt.",
+        )
+    return inserted.data[0]
+
+
+def get_or_create_attempt_view(
+    supabase: Client,
+    raw_token: str,
+    index: int,
+) -> dict[str, Any]:
+    """Returns a candidate-safe view of the attempt at `index`. Lazily
+    creates the row on first view (samples vars, renders prompt)."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    _ensure_in_progress(assignment)
+    question = _question_at(assignment, index)
+
+    attempt = _existing_attempt(supabase, assignment["id"], question["id"])
+    if attempt is None:
+        attempt = _create_attempt(
+            supabase,
+            assignment_id=assignment["id"],
+            random_seed=int(assignment["random_seed"]),
+            question=question,
+        )
+
+    questions = assignment["module_snapshot"]["questions"]
+    return {
+        "assignment_id": assignment["id"],
+        "index": index,
+        "total": len(questions),
+        "question_template_id": question["id"],
+        "type": question["type"],
+        "rendered_prompt": attempt["rendered_prompt"],
+        "max_points": float(question.get("max_points") or 10),
+        "time_limit_seconds": question.get("time_limit_seconds"),
+        "competency_tags": question.get("competency_tags") or [],
+        "interactive_config": _sanitize_interactive_config(
+            question["type"], question.get("interactive_config")
+        ),
+        "raw_answer": attempt.get("raw_answer"),
+        "submitted_at": attempt.get("submitted_at"),
+        "expires_at": assignment["expires_at"],
+    }
+
+
+def submit_answer(
+    supabase: Client,
+    raw_token: str,
+    index: int,
+    answer: dict[str, Any] | list[Any] | str | int | float | bool | None,
+) -> dict[str, Any]:
+    """Saves the candidate answer for a question. Idempotent overwrite
+    until the assignment is completed."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    _ensure_in_progress(assignment)
+    question = _question_at(assignment, index)
+
+    attempt = _existing_attempt(supabase, assignment["id"], question["id"])
+    if attempt is None:
+        # Submit before view should not happen, but heal gracefully.
+        attempt = _create_attempt(
+            supabase,
+            assignment_id=assignment["id"],
+            random_seed=int(assignment["random_seed"]),
+            question=question,
+        )
+
+    update: dict[str, Any] = {
+        "raw_answer": {"value": answer},
+        "submitted_at": datetime.now(UTC).isoformat(),
+    }
+
+    # test_cases scoring on code questions runs synchronously here. Other
+    # scoring modes wait for the BullMQ worker (Phase 3).
+    rubric = question.get("rubric") or {}
+    if (
+        question["type"] == "code"
+        and rubric.get("scoring_mode") == "test_cases"
+        and isinstance(answer, dict)
+    ):
+        candidate_code = answer.get("code")
+        if isinstance(candidate_code, str) and candidate_code.strip():
+            try:
+                update.update(
+                    grade_code_attempt(
+                        code=candidate_code,
+                        config=question.get("interactive_config") or {},
+                        max_points=float(question.get("max_points") or 10),
+                    )
+                )
+                if update.get("score_rationale"):
+                    update["rubric_version"] = rubric.get("version", "1")
+            except HTTPException:
+                # Sandbox is unavailable; keep the answer but leave score null.
+                # An admin rescore picks this up later (spec §9.3).
+                pass
+
+    supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()
+
+    questions = assignment["module_snapshot"]["questions"]
+    next_index = index + 1 if index + 1 < len(questions) else None
+    return {
+        "ok": True,
+        "next_index": next_index,
+        "total": len(questions),
+    }
+
+
+def complete_assignment(
+    supabase: Client,
+    raw_token: str,
+) -> dict[str, Any]:
+    """Marks the assignment completed. Computes total_time_seconds from the
+    started_at + now diff (a coarse fallback; the proper number is the sum
+    of attempt.active_time_seconds, computed once heartbeats land in v1)."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    if assignment["status"] == "completed":
+        return {
+            "assignment_id": assignment["id"],
+            "status": "completed",
+            "completed_at": assignment.get("completed_at"),
+        }
+    _ensure_in_progress(assignment)
+
+    now = datetime.now(UTC)
+    started_at = _parse_ts(assignment.get("started_at"))
+    total_seconds = int((now - started_at).total_seconds()) if started_at else None
+
+    update = {
+        "status": "completed",
+        "completed_at": now.isoformat(),
+    }
+    if total_seconds is not None:
+        update["total_time_seconds"] = total_seconds
+
+    supabase.table("assignments").update(update).eq("id", assignment["id"]).execute()
+    return {
+        "assignment_id": assignment["id"],
+        "status": "completed",
+        "completed_at": now.isoformat(),
+    }

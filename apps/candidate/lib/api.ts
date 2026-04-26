@@ -25,6 +25,34 @@ export type ConsentResponse = {
   server_deadline: string;
 };
 
+export type CandidateQuestionView = {
+  assignment_id: string;
+  index: number;
+  total: number;
+  question_template_id: string;
+  type: string;
+  rendered_prompt: string;
+  max_points: number;
+  time_limit_seconds: number | null;
+  competency_tags: string[];
+  interactive_config: Record<string, unknown> | null;
+  raw_answer: { value: unknown } | null;
+  submitted_at: string | null;
+  expires_at: string;
+};
+
+export type SubmitAnswerResponse = {
+  ok: true;
+  next_index: number | null;
+  total: number;
+};
+
+export type CompleteResponse = {
+  assignment_id: string;
+  status: "completed";
+  completed_at: string;
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -70,4 +98,31 @@ export function postConsent(token: string, forwardedIp?: string) {
     body: JSON.stringify({}),
     headers: forwardedIp ? { "x-forwarded-for": forwardedIp } : undefined,
   });
+}
+
+export function fetchQuestion(token: string, index: number) {
+  return callApi<CandidateQuestionView>(
+    `/a/${encodeURIComponent(token)}/questions/${index}`
+  );
+}
+
+export function submitQuestion(
+  token: string,
+  index: number,
+  answer: unknown,
+) {
+  return callApi<SubmitAnswerResponse>(
+    `/a/${encodeURIComponent(token)}/questions/${index}/submit`,
+    {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    }
+  );
+}
+
+export function completeAssignment(token: string) {
+  return callApi<CompleteResponse>(
+    `/a/${encodeURIComponent(token)}/complete`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
 }

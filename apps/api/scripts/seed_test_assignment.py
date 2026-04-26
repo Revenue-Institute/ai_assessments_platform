@@ -114,19 +114,20 @@ def ensure_subject(supabase) -> str:
 
 
 def build_module_snapshot() -> dict:
-    """Minimal module shape sufficient for the consent screen + a single MCQ.
+    """Module snapshot covering mcq + short + long + code, with one MCQ that
+    uses sampled variables and a Python code question that exercises the E2B
+    runner."""
 
-    The candidate UI only needs title/description/duration/questions for v1;
-    full QuestionTemplate fidelity ships once randomizer + renderer are wired."""
     return {
-        "slug": "seed-mcq-smoke",
+        "slug": "seed-mixed-smoke",
         "title": "Seed smoke test",
         "description": (
-            "A one-question assessment used to verify the candidate flow "
-            "end-to-end. Not for real evaluation."
+            "A four-question assessment used to verify the candidate flow "
+            "end-to-end (mcq, short, long, mcq with sampled variables). "
+            "Not for real evaluation."
         ),
         "domain": "ops",
-        "target_duration_minutes": 5,
+        "target_duration_minutes": 15,
         "difficulty": "junior",
         "questions": [
             {
@@ -159,7 +160,178 @@ def build_module_snapshot() -> dict:
                     ],
                     "correct_index": 0,
                 },
-            }
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "short_answer",
+                "prompt_template": (
+                    "In one sentence, name a HubSpot workflow trigger you would use "
+                    "to enroll a contact when their lifecycle stage becomes "
+                    "Marketing Qualified Lead."
+                ),
+                "variable_schema": {},
+                "rubric": {
+                    "version": "1",
+                    "scoring_mode": "rubric_ai",
+                    "criteria": [
+                        {
+                            "id": "trigger",
+                            "label": "Names a valid trigger",
+                            "weight": 1.0,
+                            "description": "References a property-based trigger on lifecycle stage.",
+                            "scoring_guidance": "Accept 'lifecycle stage is any of MQL', 'contact property change', etc.",
+                        }
+                    ],
+                },
+                "competency_tags": ["hubspot.workflows"],
+                "max_points": 10,
+                "difficulty": "junior",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "long_answer",
+                "prompt_template": (
+                    "Describe how you would design a re-engagement sequence for "
+                    "contacts who have been inactive for 90 days. Cover: entry "
+                    "criteria, branching, exit criteria, and one risk you would "
+                    "monitor."
+                ),
+                "variable_schema": {},
+                "rubric": {
+                    "version": "1",
+                    "scoring_mode": "rubric_ai",
+                    "criteria": [
+                        {
+                            "id": "structure",
+                            "label": "Covers all four elements",
+                            "weight": 0.5,
+                            "description": "Entry, branching, exit, risk all addressed.",
+                            "scoring_guidance": "Penalize answers that only describe one or two elements.",
+                        },
+                        {
+                            "id": "judgment",
+                            "label": "Operational judgment",
+                            "weight": 0.5,
+                            "description": "Risk awareness and exit criteria are concrete.",
+                            "scoring_guidance": "Reward specific risks (suppression overlap, deliverability).",
+                        },
+                    ],
+                },
+                "competency_tags": ["marketing.content", "hubspot.workflows"],
+                "max_points": 20,
+                "difficulty": "mid",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "mcq",
+                "prompt_template": (
+                    "A SaaS company has $${{ revenue }} in ARR and is growing "
+                    "{{ growth_rate * 100 }}% YoY. Which growth motion is the "
+                    "most appropriate next investment?"
+                ),
+                "variable_schema": {
+                    "revenue": {
+                        "kind": "int",
+                        "min": 5_000_000,
+                        "max": 25_000_000,
+                        "step": 1_000_000,
+                    },
+                    "growth_rate": {
+                        "kind": "float",
+                        "min": 0.10,
+                        "max": 0.45,
+                        "decimals": 2,
+                    },
+                },
+                "rubric": {
+                    "version": "1",
+                    "scoring_mode": "rubric_ai",
+                    "criteria": [
+                        {
+                            "id": "fit",
+                            "label": "Motion fits the size + growth profile",
+                            "weight": 1.0,
+                            "description": "Justification matches stage and capacity.",
+                            "scoring_guidance": "No single right answer; reward reasoning.",
+                        }
+                    ],
+                },
+                "competency_tags": ["sales.pipeline_management"],
+                "max_points": 10,
+                "difficulty": "senior",
+                "interactive_config": {
+                    "options": [
+                        "Hire a partnerships lead and build a co-sell motion",
+                        "Double the SDR team and add an outbound playbook",
+                        "Invest in a self-serve PLG funnel for SMB",
+                        "Launch enterprise security certifications and ABM",
+                    ],
+                },
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "code",
+                "prompt_template": (
+                    "Implement `total(prices)` that returns the sum of a list "
+                    "of numeric prices, rounded to 2 decimal places. Returning "
+                    "0 for an empty list is required."
+                ),
+                "variable_schema": {},
+                "rubric": {
+                    "version": "1",
+                    "scoring_mode": "test_cases",
+                    "criteria": [
+                        {
+                            "id": "correctness",
+                            "label": "Hidden tests pass",
+                            "weight": 1.0,
+                            "description": "All hidden tests must pass.",
+                            "scoring_guidance": "Score = passed / total * max_points",
+                        }
+                    ],
+                },
+                "competency_tags": ["engineering.python"],
+                "max_points": 20,
+                "difficulty": "junior",
+                "interactive_config": {
+                    "language": "python",
+                    "starter_code": (
+                        "def total(prices):\n"
+                        "    # TODO: return the sum of prices, rounded to 2 decimals.\n"
+                        "    return 0\n"
+                    ),
+                    "visible_tests": (
+                        "from solution import total\n"
+                        "\n"
+                        "def test_basic():\n"
+                        "    assert total([1, 2, 3]) == 6\n"
+                        "\n"
+                        "def test_empty():\n"
+                        "    assert total([]) == 0\n"
+                    ),
+                    "hidden_tests": (
+                        "from solution import total\n"
+                        "\n"
+                        "def test_empty():\n"
+                        "    assert total([]) == 0\n"
+                        "\n"
+                        "def test_single():\n"
+                        "    assert total([10.0]) == 10.0\n"
+                        "\n"
+                        "def test_multi():\n"
+                        "    assert total([1.5, 2.5, 3.0]) == 7.0\n"
+                        "\n"
+                        "def test_rounding():\n"
+                        "    assert total([0.1, 0.2]) == 0.3\n"
+                        "\n"
+                        "def test_negatives():\n"
+                        "    assert total([5, -2.5]) == 2.5\n"
+                    ),
+                    "allow_internet": False,
+                    "packages": [],
+                    "time_limit_exec_ms": 15000,
+                },
+            },
         ],
     }
 

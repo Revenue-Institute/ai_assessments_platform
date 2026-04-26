@@ -1,13 +1,157 @@
-"""Admin endpoints (spec §14.1). Requires Supabase JWT.
-Stub router — concrete endpoints land in later phases."""
+"""Admin endpoints (spec §14.1). All routes require a valid Supabase JWT
+linked to a public.users row."""
+
+from __future__ import annotations
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
-from ..auth import require_admin_jwt
+from ..auth import AdminPrincipal, require_admin_jwt
+from ..db import get_supabase
+from ..models.admin import (
+    AssignmentCreateRequest,
+    AssignmentDetail,
+    AssignmentMagicLink,
+    AssignmentSummary,
+    ModuleCreateRequest,
+    ModuleDetail,
+    ModulePatchRequest,
+    ModuleSummary,
+    SubjectCreateRequest,
+    SubjectSummary,
+)
+from ..services import admin as admin_service
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin_jwt)])
 
 
-@router.get("/ping")
-def admin_ping() -> dict[str, str]:
-    return {"ok": "admin"}
+@router.get("/me")
+def me(
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+) -> dict[str, str | None]:
+    return {
+        "user_id": principal.user_id,
+        "email": principal.email,
+        "full_name": principal.full_name,
+        "role": principal.role,
+    }
+
+
+# Modules --------------------------------------------------------------------
+
+
+@router.get("/modules", response_model=list[ModuleSummary])
+def list_modules(
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> list[ModuleSummary]:
+    return admin_service.list_modules(supabase)
+
+
+@router.post("/modules", response_model=ModuleSummary, status_code=201)
+def create_module(
+    payload: ModuleCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ModuleSummary:
+    return admin_service.create_module(supabase, principal, payload)
+
+
+@router.get("/modules/{module_id}", response_model=ModuleDetail)
+def get_module(
+    module_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ModuleDetail:
+    return admin_service.get_module(supabase, module_id)
+
+
+@router.patch("/modules/{module_id}", response_model=ModuleSummary)
+def patch_module(
+    module_id: str,
+    payload: ModulePatchRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ModuleSummary:
+    return admin_service.patch_module(supabase, principal, module_id, payload)
+
+
+@router.post("/modules/{module_id}/publish", response_model=ModuleSummary)
+def publish_module(
+    module_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ModuleSummary:
+    return admin_service.publish_module(supabase, principal, module_id)
+
+
+@router.post("/modules/{module_id}/archive", response_model=ModuleSummary)
+def archive_module(
+    module_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ModuleSummary:
+    return admin_service.archive_module(supabase, principal, module_id)
+
+
+# Subjects -------------------------------------------------------------------
+
+
+@router.get("/subjects", response_model=list[SubjectSummary])
+def list_subjects(
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> list[SubjectSummary]:
+    return admin_service.list_subjects(supabase)
+
+
+@router.post("/subjects", response_model=SubjectSummary, status_code=201)
+def create_subject(
+    payload: SubjectCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SubjectSummary:
+    return admin_service.create_subject(supabase, principal, payload)
+
+
+# Assignments ----------------------------------------------------------------
+
+
+@router.get("/assignments", response_model=list[AssignmentSummary])
+def list_assignments(
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> list[AssignmentSummary]:
+    return admin_service.list_assignments(supabase)
+
+
+@router.post(
+    "/assignments",
+    response_model=AssignmentMagicLink,
+    status_code=201,
+)
+def create_assignment(
+    payload: AssignmentCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentMagicLink:
+    return admin_service.create_assignment(supabase, principal, payload)
+
+
+@router.get(
+    "/assignments/{assignment_id}", response_model=AssignmentDetail
+)
+def get_assignment(
+    assignment_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentDetail:
+    return admin_service.get_assignment_detail(supabase, assignment_id)
+
+
+@router.post(
+    "/assignments/{assignment_id}/cancel", response_model=AssignmentDetail
+)
+def cancel_assignment(
+    assignment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentDetail:
+    return admin_service.cancel_assignment(supabase, principal, assignment_id)

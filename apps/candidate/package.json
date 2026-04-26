@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@repo/design-system": "workspace:*",
+    "@monaco-editor/react": "^4.7.0",
+    "@repo/integrity": "workspace:*",
     "@repo/observability": "workspace:*",
     "@repo/schemas": "workspace:*",
     "@t3-oss/env-nextjs": "^0.13.10",
