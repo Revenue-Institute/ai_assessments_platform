@@ -2,42 +2,15 @@
   "name": "api",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm:next-dev\" \"npm:stripe\"",
-    "next-dev": "bun --bun next dev -p 3002",
-    "build": "bun --bun next build",
-    "start": "bun --bun next start",
-    "analyze": "ANALYZE=true npm run build",
-    "test": "NODE_ENV=test vitest run",
-    "stripe": "stripe listen --forward-to localhost:3002/webhooks/payments",
-    "clean": "git clean -xdf .cache .turbo dist node_modules",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
-  },
-  "dependencies": {
-    "@repo/analytics": "workspace:*",
-    "@repo/auth": "workspace:*",
-    "@repo/database": "workspace:*",
-    "@repo/design-system": "workspace:*",
-    "@repo/next-config": "workspace:*",
-    "@repo/observability": "workspace:*",
-    "@repo/payments": "workspace:*",
-    "@sentry/nextjs": "^10.42.0",
-    "@t3-oss/env-nextjs": "^0.13.10",
-    "import-in-the-middle": "^3.0.0",
-    "next": "16.1.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "require-in-the-middle": "8.0.1",
-    "svix": "^1.86.0",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "@types/node": "25.3.5",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
-    "concurrently": "^9.2.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "dev": "uv run uvicorn ri_assessments_api.main:app --reload --port 8000",
+    "start": "uv run uvicorn ri_assessments_api.main:app --host 0.0.0.0 --port 8000",
+    "test": "uv run pytest",
+    "lint": "uv run ruff check src tests",
+    "fmt": "uv run ruff format src tests",
+    "typecheck": "uv run python -c 'import ri_assessments_api'",
+    "gen-schemas": "uv run python scripts/gen_schemas.py",
+    "migrate": "uv run python scripts/apply_migrations.py",
+    "seed": "uv run python scripts/seed_test_assignment.py",
+    "clean": "git clean -xdf .cache .turbo dist node_modules .venv"
   }
 }

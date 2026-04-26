@@ -1,1 +1,14 @@
-.vercel
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+src/ri_assessments_api/generated/
+!src/ri_assessments_api/generated/.gitkeep

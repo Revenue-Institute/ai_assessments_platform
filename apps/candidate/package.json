@@ -1,0 +1,32 @@
+{
+  "name": "candidate",
+  "private": true,
+  "scripts": {
+    "dev": "bun --bun next dev -p 3001",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "test": "NODE_ENV=test vitest run",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "dependencies": {
+    "@repo/design-system": "workspace:*",
+    "@repo/observability": "workspace:*",
+    "@repo/schemas": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.13.10",
+    "next": "16.1.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "25.3.5",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

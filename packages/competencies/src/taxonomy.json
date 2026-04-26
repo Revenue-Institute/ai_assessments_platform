@@ -1,0 +1,63 @@
+[
+  { "id": "marketing", "domain": "marketing", "label": "Marketing", "parent_id": null, "description": "Top-level marketing competency group" },
+  { "id": "marketing.strategy", "domain": "marketing", "label": "Marketing Strategy", "parent_id": "marketing", "description": "Brand positioning, ICP definition, go-to-market plans" },
+  { "id": "marketing.paid_ads", "domain": "marketing", "label": "Paid Ads", "parent_id": "marketing", "description": "Paid acquisition across channels" },
+  { "id": "marketing.paid_ads.google", "domain": "marketing", "label": "Google Ads", "parent_id": "marketing.paid_ads", "description": "Search, display, performance max" },
+  { "id": "marketing.paid_ads.linkedin", "domain": "marketing", "label": "LinkedIn Ads", "parent_id": "marketing.paid_ads", "description": "B2B paid social on LinkedIn" },
+  { "id": "marketing.seo", "domain": "marketing", "label": "SEO", "parent_id": "marketing", "description": "Organic search strategy and execution" },
+  { "id": "marketing.content", "domain": "marketing", "label": "Content Marketing", "parent_id": "marketing", "description": "Content planning, writing, distribution" },
+  { "id": "marketing.analytics", "domain": "marketing", "label": "Marketing Analytics", "parent_id": "marketing", "description": "Attribution, funnel analysis, reporting" },
+
+  { "id": "sales", "domain": "sales", "label": "Sales", "parent_id": null, "description": "Top-level sales competency group" },
+  { "id": "sales.prospecting", "domain": "sales", "label": "Prospecting", "parent_id": "sales", "description": "Outbound research and outreach" },
+  { "id": "sales.discovery", "domain": "sales", "label": "Discovery", "parent_id": "sales", "description": "Pain identification and qualification" },
+  { "id": "sales.negotiation", "domain": "sales", "label": "Negotiation", "parent_id": "sales", "description": "Pricing, terms, and deal closure" },
+  { "id": "sales.pipeline_management", "domain": "sales", "label": "Pipeline Management", "parent_id": "sales", "description": "Forecasting, stage hygiene, deal review" },
+
+  { "id": "ops", "domain": "ops", "label": "Operations", "parent_id": null, "description": "Top-level operations competency group" },
+  { "id": "ops.process_design", "domain": "ops", "label": "Process Design", "parent_id": "ops", "description": "Designing repeatable business processes" },
+  { "id": "ops.sop_documentation", "domain": "ops", "label": "SOP Documentation", "parent_id": "ops", "description": "Writing and maintaining standard operating procedures" },
+  { "id": "ops.project_management", "domain": "ops", "label": "Project Management", "parent_id": "ops", "description": "Scoping, scheduling, and delivering projects" },
+  { "id": "ops.vendor_management", "domain": "ops", "label": "Vendor Management", "parent_id": "ops", "description": "Selecting and managing third-party providers" },
+
+  { "id": "hubspot", "domain": "hubspot", "label": "HubSpot", "parent_id": null, "description": "Top-level HubSpot competency group" },
+  { "id": "hubspot.workflows", "domain": "hubspot", "label": "HubSpot Workflows", "parent_id": "hubspot", "description": "Automation building inside HubSpot" },
+  { "id": "hubspot.integrations", "domain": "hubspot", "label": "HubSpot Integrations", "parent_id": "hubspot", "description": "Connecting HubSpot to external systems" },
+  { "id": "hubspot.migrations", "domain": "hubspot", "label": "HubSpot Migrations", "parent_id": "hubspot", "description": "Migrating data into and within HubSpot" },
+  { "id": "hubspot.reporting", "domain": "hubspot", "label": "HubSpot Reporting", "parent_id": "hubspot", "description": "Dashboards, reports, and custom report builder" },
+  { "id": "hubspot.crm_hygiene", "domain": "hubspot", "label": "HubSpot CRM Hygiene", "parent_id": "hubspot", "description": "Data quality, deduplication, property governance" },
+
+  { "id": "data", "domain": "data", "label": "Data", "parent_id": null, "description": "Top-level data competency group" },
+  { "id": "data.sql", "domain": "data", "label": "SQL", "parent_id": "data", "description": "Querying relational databases" },
+  { "id": "data.python_analysis", "domain": "data", "label": "Python Analysis", "parent_id": "data", "description": "Pandas, numpy, exploratory analysis" },
+  { "id": "data.data_modeling", "domain": "data", "label": "Data Modeling", "parent_id": "data", "description": "Schema design, normalization, dimensional modeling" },
+  { "id": "data.visualization", "domain": "data", "label": "Data Visualization", "parent_id": "data", "description": "Building charts and dashboards that communicate" },
+  { "id": "data.stats", "domain": "data", "label": "Statistics", "parent_id": "data", "description": "Inferential statistics and experiment analysis" },
+  { "id": "data.data_science", "domain": "data", "label": "Data Science", "parent_id": "data", "description": "Applied ML, feature engineering, evaluation" },
+  { "id": "data.ml_basics", "domain": "data", "label": "ML Basics", "parent_id": "data", "description": "Foundational ML concepts and algorithms" },
+
+  { "id": "engineering", "domain": "engineering", "label": "Engineering", "parent_id": null, "description": "Top-level engineering competency group" },
+  { "id": "engineering.python", "domain": "engineering", "label": "Python", "parent_id": "engineering", "description": "General-purpose Python engineering" },
+  { "id": "engineering.javascript_typescript", "domain": "engineering", "label": "JavaScript / TypeScript", "parent_id": "engineering", "description": "Web and Node engineering" },
+  { "id": "engineering.systems_design", "domain": "engineering", "label": "Systems Design", "parent_id": "engineering", "description": "Designing scalable, reliable systems" },
+  { "id": "engineering.debugging", "domain": "engineering", "label": "Debugging", "parent_id": "engineering", "description": "Diagnosing and resolving production issues" },
+
+  { "id": "ai", "domain": "ai", "label": "AI", "parent_id": null, "description": "Top-level AI competency group" },
+  { "id": "ai.prompt_engineering", "domain": "ai", "label": "Prompt Engineering", "parent_id": "ai", "description": "Designing prompts for production LLM systems" },
+  { "id": "ai.rag", "domain": "ai", "label": "Retrieval-Augmented Generation", "parent_id": "ai", "description": "Embedding, retrieval, and grounding" },
+  { "id": "ai.agents", "domain": "ai", "label": "AI Agents", "parent_id": "ai", "description": "Tool-use, planning, and autonomous loops" },
+  { "id": "ai.evaluation", "domain": "ai", "label": "AI Evaluation", "parent_id": "ai", "description": "Eval design, regression detection, scoring rubrics" },
+  { "id": "ai.vertex", "domain": "ai", "label": "Google Vertex AI", "parent_id": "ai", "description": "Vertex AI platform and Gemini APIs" },
+  { "id": "ai.claude_anthropic", "domain": "ai", "label": "Claude / Anthropic", "parent_id": "ai", "description": "Claude API, tool use, prompt caching, agents" },
+
+  { "id": "automation", "domain": "automation", "label": "Automation", "parent_id": null, "description": "Top-level automation competency group" },
+  { "id": "automation.n8n", "domain": "automation", "label": "n8n", "parent_id": "automation", "description": "Workflow automation in n8n" },
+  { "id": "automation.zapier", "domain": "automation", "label": "Zapier", "parent_id": "automation", "description": "Workflow automation in Zapier" },
+  { "id": "automation.make", "domain": "automation", "label": "Make", "parent_id": "automation", "description": "Workflow automation in Make (Integromat)" },
+  { "id": "automation.clay", "domain": "automation", "label": "Clay", "parent_id": "automation", "description": "Data enrichment and outbound automation in Clay" },
+
+  { "id": "finance", "domain": "finance", "label": "Finance", "parent_id": null, "description": "Top-level finance competency group" },
+  { "id": "finance.budgeting", "domain": "finance", "label": "Budgeting", "parent_id": "finance", "description": "Annual and operational budget construction" },
+  { "id": "finance.financial_modeling", "domain": "finance", "label": "Financial Modeling", "parent_id": "finance", "description": "Three-statement and operating models" },
+  { "id": "finance.quickbooks", "domain": "finance", "label": "QuickBooks", "parent_id": "finance", "description": "Bookkeeping and reporting in QuickBooks" }
+]
