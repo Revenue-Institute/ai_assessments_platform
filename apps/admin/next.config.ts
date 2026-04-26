@@ -2,7 +2,10 @@ import { config, withAnalyzer } from "@repo/next-config";
 import { withLogging, withSentry } from "@repo/observability/next-config";
 import type { NextConfig } from "next";
 
-let nextConfig: NextConfig = withLogging(config);
+let nextConfig: NextConfig = withLogging({
+  ...config,
+  output: "standalone",
+});
 
 if (process.env.VERCEL) {
   nextConfig = withSentry(nextConfig);

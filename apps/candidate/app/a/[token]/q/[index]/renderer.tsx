@@ -1,6 +1,7 @@
 import type { CandidateQuestionView } from "@/lib/api";
 import { CodeRenderer } from "./code-editor";
 import { DiagramRenderer } from "./diagram-editor";
+import { N8nRenderer } from "./n8n-editor";
 import { NotebookRenderer } from "./notebook-editor";
 import { SqlRenderer } from "./sql-editor";
 
@@ -90,6 +91,18 @@ export function QuestionRenderer({
         <NotebookRenderer
           config={config}
           initialCells={previous}
+          questionIndex={question.index}
+          token={token}
+        />
+      );
+    }
+    case "n8n": {
+      const previous = (question.raw_answer?.value as
+        | { workflow_id?: string }
+        | undefined)?.workflow_id;
+      return (
+        <N8nRenderer
+          initialWorkflowId={previous ?? null}
           questionIndex={question.index}
           token={token}
         />

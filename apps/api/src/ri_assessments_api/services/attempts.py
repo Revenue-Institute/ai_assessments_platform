@@ -11,6 +11,7 @@ from supabase import Client
 
 from .code_runner import grade_code_attempt
 from .diagram_runner import grade_diagram_attempt
+from .n8n_runner import grade_n8n_attempt
 from .notebook_runner import grade_notebook_attempt
 from .randomizer import question_seed, render_prompt, sample_variables
 from .sql_runner import grade_sql_attempt
@@ -291,6 +292,26 @@ def submit_answer(
                 update.update(
                     grade_notebook_attempt(
                         cells=notebook_cells,
+                        config=config,
+                        max_points=max_points,
+                    )
+                )
+                if update.get("score_rationale"):
+                    update["rubric_version"] = rubric.get("version", "1")
+            except HTTPException:
+                pass
+
+    if (
+        qtype == "n8n"
+        and rubric.get("scoring_mode") in ("structural_match", "test_cases")
+        and isinstance(answer, dict)
+    ):
+        workflow_payload = answer.get("workflow")
+        if isinstance(workflow_payload, dict):
+            try:
+                update.update(
+                    grade_n8n_attempt(
+                        submission=workflow_payload,
                         config=config,
                         max_points=max_points,
                     )

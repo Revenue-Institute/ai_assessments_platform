@@ -1,0 +1,82 @@
+# RI Assessments Platform — local stack.
+# Brings up: FastAPI, admin (Next.js), candidate (Next.js), self-hosted
+# n8n, redis. Supabase + Voyage + Anthropic + E2B + Resend stay external
+# — point at them via apps/api/.env.local.
+#
+# Usage:
+#   cp apps/api/.env.example apps/api/.env.local      # then fill in
+#   cp apps/admin/.env.example apps/admin/.env.local  # then fill in
+#   docker compose up --build
+#
+# n8n's first boot prints a one-time signup URL in the n8n service logs.
+# Sign up to bootstrap an owner account, then issue an API key under
+# Settings → API and copy it to N8N_ADMIN_API_KEY.
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - apps/api/.env.local
+    environment:
+      APP_ENV: local
+      INTERNAL_API_URL: http://api:8000
+      N8N_HOST: http://n8n:5678
+      UPSTASH_REDIS_URL: http://redis:6379
+    ports:
+      - "8000:8000"
+    depends_on:
+      - n8n
+      - redis
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    env_file:
+      - apps/admin/.env.local
+    environment:
+      INTERNAL_API_URL: http://api:8000
+      NEXT_PUBLIC_ADMIN_URL: http://localhost:3000
+      NEXT_PUBLIC_CANDIDATE_URL: http://localhost:3001
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  candidate:
+    build:
+      context: .
+      dockerfile: apps/candidate/Dockerfile
+    environment:
+      INTERNAL_API_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_CANDIDATE_URL: http://localhost:3001
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n-data:/home/node/.n8n
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  n8n-data:

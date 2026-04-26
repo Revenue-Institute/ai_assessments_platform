@@ -186,3 +186,22 @@ class NotebookRunResponse(BaseModel):
     cells: list[NotebookCellOutputView]
     runtime_ms: int
     timed_out: bool
+
+
+class N8nEmbedRequest(BaseModel):
+    question_index: int = Field(ge=0)
+
+
+class N8nEmbedResponse(BaseModel):
+    workflow_id: str
+    embed_url: str
+
+
+class N8nExportRequest(BaseModel):
+    question_index: int = Field(ge=0)
+    workflow_id: str
+
+
+class N8nExportResponse(BaseModel):
+    workflow_id: str
+    workflow: dict[str, Any]

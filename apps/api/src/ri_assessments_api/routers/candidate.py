@@ -22,6 +22,10 @@ from ..models.candidate import (
     EventsResponse,
     HeartbeatRequest,
     HeartbeatResponse,
+    N8nEmbedRequest,
+    N8nEmbedResponse,
+    N8nExportRequest,
+    N8nExportResponse,
     NotebookCellOutputView,
     NotebookRunRequest,
     NotebookRunResponse,
@@ -39,6 +43,10 @@ from ..services.attempts import (
 )
 from ..services.code_runner import run_test_suite, run_user_code
 from ..services.integrity import record_events, record_heartbeat
+from ..services.n8n_runner import (
+    export_workflow,
+    provision_workspace,
+)
 from ..services.notebook_runner import run_notebook
 from ..services.sql_runner import run_sql
 
@@ -315,3 +323,51 @@ def notebook_run(
         runtime_ms=result.runtime_ms,
         timed_out=result.timed_out,
     )
+
+
+# n8n runner --------------------------------------------------------------
+
+
+def _config_for_n8n_question(supabase: Client, token: str, index: int) -> dict:
+    assignment = get_assignment_for_token(supabase, token)
+    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    if index < 0 or index >= len(questions):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question index out of range.",
+        )
+    question = questions[index]
+    if question["type"] != "n8n":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Endpoint is only valid for n8n questions.",
+        )
+    return question.get("interactive_config") or {}
+
+
+@router.post("/{token}/n8n/embed", response_model=N8nEmbedResponse)
+def n8n_embed(
+    token: str,
+    body: N8nEmbedRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> N8nEmbedResponse:
+    config = _config_for_n8n_question(supabase, token, body.question_index)
+    starter = config.get("starter_workflow") or {}
+    assignment = get_assignment_for_token(supabase, token)
+    title = (
+        (assignment.get("module_snapshot") or {}).get("title") or "RI Workflow"
+    )
+    result = provision_workspace(starter_workflow=starter, title=str(title))
+    return N8nEmbedResponse(workflow_id=result.workflow_id, embed_url=result.embed_url)
+
+
+@router.post("/{token}/n8n/export", response_model=N8nExportResponse)
+def n8n_export(
+    token: str,
+    body: N8nExportRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> N8nExportResponse:
+    # Validates question type and ensures we own the workflow lookup path.
+    _config_for_n8n_question(supabase, token, body.question_index)
+    workflow = export_workflow(body.workflow_id)
+    return N8nExportResponse(workflow_id=body.workflow_id, workflow=workflow)
