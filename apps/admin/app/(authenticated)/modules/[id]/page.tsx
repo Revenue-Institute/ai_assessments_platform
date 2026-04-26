@@ -85,9 +85,10 @@ export default async function ModuleDetailPage({
           <p
             className={`rounded px-3 py-2 text-sm ${
               error
-                ? "border border-red-900/50 bg-red-950/30 text-red-200"
-                : "border border-emerald-900/50 bg-emerald-950/30 text-emerald-200"
+                ? "border border-destructive/50 bg-destructive/15 text-destructive"
+                : "border border-primary/50 bg-primary/15 text-primary"
             }`}
+            role={error ? "alert" : "status"}
           >
             {error || ok}
           </p>
@@ -140,7 +141,7 @@ export default async function ModuleDetailPage({
                         <form action={removeQuestion}>
                           <input name="question_id" type="hidden" value={q.id} />
                           <button
-                            className="rounded border border-red-900/40 px-2 py-0.5 text-red-300 text-xs hover:bg-red-950/40"
+                            className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15"
                             type="submit"
                           >
                             Remove
@@ -161,10 +162,7 @@ export default async function ModuleDetailPage({
         <section className="flex gap-2">
           {detail.status === "draft" && (
             <form action={publish}>
-              <button
-                className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-                type="submit"
-              >
+              <button className="btn-primary text-sm" type="submit">
                 Publish
               </button>
             </form>
@@ -188,10 +186,8 @@ export default async function ModuleDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-muted-foreground text-xs uppercase tracking-wide">
-        {label}
-      </p>
-      <p className="font-medium text-sm">{value}</p>
+      <p className="eyebrow-label">{label}</p>
+      <p className="mt-0.5 font-medium text-sm">{value}</p>
     </div>
   );
 }

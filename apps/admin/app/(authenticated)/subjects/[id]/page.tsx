@@ -68,7 +68,10 @@ export default async function SubjectDetailPage({
       <Header page={subjectDisplayName(allAssignments)} pages={["Subjects"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -118,11 +121,11 @@ function CompetencyTrendList({
             >
               <div className="flex items-baseline justify-between gap-3">
                 <p className="font-medium">{t.competency_id}</p>
-                <p className="text-emerald-300 text-xs">
+                <p className="text-primary text-xs">
                   {Math.round(t.latest_score_pct)}%
                   {t.delta_vs_previous != null && t.delta_vs_previous !== 0 && (
                     <span
-                      className={`ml-1 ${t.delta_vs_previous >= 0 ? "text-emerald-400" : "text-red-300"}`}
+                      className={`ml-1 ${t.delta_vs_previous >= 0 ? "text-primary" : "text-destructive"}`}
                     >
                       ({t.delta_vs_previous >= 0 ? "+" : ""}
                       {t.delta_vs_previous.toFixed(1)} vs prior)
@@ -168,7 +171,8 @@ function Sparkline({ points }: { points: number[] }) {
     .join(" ");
   return (
     <svg
-      className="mt-1"
+      aria-hidden="true"
+      className="mt-1 text-primary"
       height={H}
       viewBox={`0 0 ${W} ${H}`}
       width={W}
@@ -176,7 +180,7 @@ function Sparkline({ points }: { points: number[] }) {
       <path
         d={path}
         fill="none"
-        stroke="rgb(52 211 153)"
+        stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
@@ -185,13 +189,7 @@ function Sparkline({ points }: { points: number[] }) {
         const x = i * stepX;
         const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
         return (
-          <circle
-            cx={x}
-            cy={y}
-            fill="rgb(52 211 153)"
-            key={i}
-            r={2}
-          />
+          <circle cx={x} cy={y} fill="currentColor" key={i} r={2} />
         );
       })}
     </svg>
@@ -242,7 +240,7 @@ function AssignmentHistory({
               </td>
               <td className="px-2 py-1.5 text-right">
                 <Link
-                  className="text-emerald-300 text-xs hover:underline"
+                  className="text-primary text-xs hover:underline"
                   href={`/assignments/${a.id}`}
                 >
                   Open

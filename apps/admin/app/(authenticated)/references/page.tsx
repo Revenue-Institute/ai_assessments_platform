@@ -112,9 +112,10 @@ export default async function ReferencesPage({
           <p
             className={`rounded px-3 py-2 text-sm ${
               error || loadError
-                ? "border border-red-900/50 bg-red-950/30 text-red-200"
-                : "border border-emerald-900/50 bg-emerald-950/30 text-emerald-200"
+                ? "border border-destructive/50 bg-destructive/15 text-destructive"
+                : "border border-primary/50 bg-primary/15 text-primary"
             }`}
+            role={error || loadError ? "alert" : "status"}
           >
             {error || loadError || ok}
           </p>
@@ -129,10 +130,7 @@ export default async function ReferencesPage({
             <Field label="URL" name="url" placeholder="https://..." required />
             <Field label="Title (optional)" name="title" />
             <Field label="Domain (optional)" name="domain" placeholder="hubspot, ai..." />
-            <button
-              className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-              type="submit"
-            >
+            <button className="btn-primary text-sm" type="submit">
               Fetch + index
             </button>
           </form>
@@ -145,10 +143,7 @@ export default async function ReferencesPage({
             <Field label="Title" name="title" required />
             <Field label="Domain (optional)" name="domain" />
             <Field label="Content" name="content" textarea />
-            <button
-              className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-              type="submit"
-            >
+            <button className="btn-primary text-sm" type="submit">
               Index
             </button>
           </form>
@@ -182,7 +177,7 @@ export default async function ReferencesPage({
                   <form action={deleteAction}>
                     <input name="id" type="hidden" value={d.id} />
                     <button
-                      className="rounded border border-red-900/40 bg-red-950/30 px-2 py-1 text-red-200 text-xs hover:bg-red-950/50"
+                      className="rounded border border-destructive/40 bg-destructive/15 px-2 py-1 text-destructive text-xs hover:bg-destructive/25"
                       type="submit"
                     >
                       Remove
@@ -212,7 +207,7 @@ function Field({
   textarea?: boolean;
 }) {
   const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
+    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
     <label className="space-y-1">
       <span className="text-sm">{label}</span>

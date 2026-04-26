@@ -83,7 +83,7 @@ export default async function NewModuleWizardPage({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-6">
           <div>
-            <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
+            <p className="eyebrow-label">
               Step 1 of 2 · Brief
             </p>
             <h1 className="mt-1 font-semibold text-2xl">Describe the role</h1>
@@ -101,7 +101,10 @@ export default async function NewModuleWizardPage({
         </section>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -148,7 +151,7 @@ export default async function NewModuleWizardPage({
           />
 
           <fieldset className="grid grid-cols-5 gap-3 rounded border border-border/40 bg-background/30 p-3">
-            <legend className="px-1 text-emerald-300/70 text-xs uppercase tracking-wide">
+            <legend className="px-1 eyebrow-label">
               Question mix (%)
             </legend>
             <NumField label="mcq" name="mcq_pct" defaultValue="30" />
@@ -160,10 +163,7 @@ export default async function NewModuleWizardPage({
 
           <Field label="Notes for the generator (optional)" name="notes" textarea />
 
-          <button
-            className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-            type="submit"
-          >
+          <button className="btn-primary text-sm" type="submit">
             Generate outline
           </button>
           <p className="text-muted-foreground text-xs">
@@ -198,7 +198,7 @@ function Field({
   textarea?: boolean;
 }) {
   const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
+    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
     <label className="space-y-1">
       <span className="text-sm">{label}</span>
@@ -236,7 +236,7 @@ function NumField({
     <label className="space-y-1">
       <span className="text-muted-foreground text-xs">{label}</span>
       <input
-        className="block w-full rounded border border-border/60 bg-background px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+        className="block w-full rounded border border-border/60 bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
         defaultValue={defaultValue}
         max="100"
         min="0"

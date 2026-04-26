@@ -63,9 +63,10 @@ export default async function SubjectsPage({
           <p
             className={`rounded px-3 py-2 text-sm ${
               error || loadError
-                ? "border border-red-900/50 bg-red-950/30 text-red-200"
-                : "border border-emerald-900/50 bg-emerald-950/30 text-emerald-200"
+                ? "border border-destructive/50 bg-destructive/15 text-destructive"
+                : "border border-primary/50 bg-primary/15 text-primary"
             }`}
+            role={error || loadError ? "alert" : "status"}
           >
             {error || loadError || ok}
           </p>
@@ -105,10 +106,7 @@ export default async function SubjectsPage({
             />
           </label>
           <div className="md:col-span-3">
-            <button
-              className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-              type="submit"
-            >
+            <button className="btn-primary text-sm" type="submit">
               Add subject
             </button>
           </div>

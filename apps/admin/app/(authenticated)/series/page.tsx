@@ -100,9 +100,10 @@ export default async function SeriesPage({
           <p
             className={`rounded px-3 py-2 text-sm ${
               error || loadError
-                ? "border border-red-900/50 bg-red-950/30 text-red-200"
-                : "border border-emerald-900/50 bg-emerald-950/30 text-emerald-200"
+                ? "border border-destructive/50 bg-destructive/15 text-destructive"
+                : "border border-primary/50 bg-primary/15 text-primary"
             }`}
+            role={error || loadError ? "alert" : "status"}
           >
             {error || loadError || ok}
           </p>
@@ -164,10 +165,7 @@ export default async function SeriesPage({
             />
           </label>
           <div className="flex items-end md:col-span-2">
-            <button
-              className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-              type="submit"
-            >
+            <button className="btn-primary text-sm" type="submit">
               Create series
             </button>
           </div>
@@ -214,7 +212,7 @@ export default async function SeriesPage({
                     <form action={issueNext}>
                       <input name="series_id" type="hidden" value={s.id} />
                       <button
-                        className="rounded border border-emerald-900/40 bg-emerald-950/30 px-2 py-1 text-emerald-200 text-xs hover:bg-emerald-950/50"
+                        className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
                         type="submit"
                       >
                         Issue next

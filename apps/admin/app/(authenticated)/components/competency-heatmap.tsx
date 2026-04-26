@@ -97,7 +97,9 @@ function ScoreCell({ score }: { score: number | undefined }) {
     );
   }
   const bg = scoreColor(score);
-  const fg = score >= 50 ? "rgb(243 250 247)" : "rgb(15 23 42)";
+  // High scores get a light foreground for contrast on darker greens;
+  // low scores need dark text for AA contrast on the lighter amber/red mix.
+  const fg = score >= 50 ? "rgb(248 250 252)" : "rgb(15 23 42)";
   return (
     <td
       className="border-border/30 border-l px-2 py-2 text-center font-medium"
@@ -116,17 +118,23 @@ function tagShort(id: string): string {
   return id.split(".").slice(-2).join(".");
 }
 
+// Heatmap stop colors derive from the brand palette: deep red (destructive)
+// at the low end, brand warning amber in the middle, brand forest green at
+// the high end. Hardcoded rgb tuples here so we can interpolate; if the
+// palette ever shifts these should be regenerated to match.
+const STOP_LOW = "rgb(127 29 29)"; // dark destructive
+const STOP_MID = "rgb(146 64 14)"; // dark warning
+const STOP_HIGH = "rgb(10 143 93)"; // brand forest
+
 function scoreColor(score: number): string {
-  // 0 → red, 50 → amber, 100 → emerald
   const clamped = Math.max(0, Math.min(100, score));
   const t = clamped / 100;
-  // simple piecewise: 0..0.5 red→amber, 0.5..1 amber→emerald
   if (t < 0.5) {
     const k = t / 0.5;
-    return mix("rgb(127 29 29)", "rgb(146 64 14)", k);
+    return mix(STOP_LOW, STOP_MID, k);
   }
   const k = (t - 0.5) / 0.5;
-  return mix("rgb(146 64 14)", "rgb(6 95 70)", k);
+  return mix(STOP_MID, STOP_HIGH, k);
 }
 
 function mix(a: string, b: string, t: number): string {

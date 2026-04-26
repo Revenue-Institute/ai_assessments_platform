@@ -43,8 +43,13 @@ export function DistributionBox({
   const candidateAhead = candidateScore >= stats.median_pct;
 
   return (
-    <div>
-      <svg height={height} viewBox={`0 0 ${width} ${height}`} width={width}>
+    <div className="text-muted-foreground">
+      <svg
+        aria-hidden="true"
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+      >
         {/* track grid */}
         <line
           stroke="currentColor"
@@ -57,7 +62,8 @@ export function DistributionBox({
         />
         {/* whisker */}
         <line
-          stroke="rgb(125 211 252 / 0.6)"
+          stroke="currentColor"
+          strokeOpacity={0.5}
           strokeWidth={1}
           x1={minX}
           x2={maxX}
@@ -65,7 +71,8 @@ export function DistributionBox({
           y2={trackY}
         />
         <line
-          stroke="rgb(125 211 252 / 0.6)"
+          stroke="currentColor"
+          strokeOpacity={0.5}
           strokeWidth={1}
           x1={minX}
           x2={minX}
@@ -73,7 +80,8 @@ export function DistributionBox({
           y2={trackY + 4}
         />
         <line
-          stroke="rgb(125 211 252 / 0.6)"
+          stroke="currentColor"
+          strokeOpacity={0.5}
           strokeWidth={1}
           x1={maxX}
           x2={maxX}
@@ -82,9 +90,10 @@ export function DistributionBox({
         />
         {/* IQR box */}
         <rect
-          fill="rgb(56 189 248 / 0.18)"
+          fill="currentColor"
+          fillOpacity={0.18}
           height={12}
-          stroke="rgb(56 189 248)"
+          stroke="currentColor"
           strokeWidth={1}
           width={Math.max(1, p75X - p25X)}
           x={p25X}
@@ -92,20 +101,21 @@ export function DistributionBox({
         />
         {/* median */}
         <line
-          stroke="rgb(56 189 248)"
+          stroke="currentColor"
           strokeWidth={2}
           x1={medX}
           x2={medX}
           y1={trackY - 6}
           y2={trackY + 6}
         />
-        {/* candidate marker */}
+        {/* candidate marker — primary if at/above median, destructive otherwise */}
         <circle
+          className={candidateAhead ? "text-primary" : "text-destructive"}
           cx={candX}
           cy={trackY}
-          fill={candidateAhead ? "rgb(52 211 153)" : "rgb(248 113 113)"}
+          fill="currentColor"
           r={5}
-          stroke="rgb(15 23 42)"
+          stroke="var(--background)"
           strokeWidth={1}
         />
       </svg>

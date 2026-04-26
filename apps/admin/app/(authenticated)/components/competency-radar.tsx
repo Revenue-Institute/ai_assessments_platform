@@ -32,7 +32,7 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
     .join(" ");
 
   return (
-    <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
+    <div className="rounded-xl border border-border/50 bg-muted/20 p-4 text-primary">
       <svg
         height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -77,9 +77,10 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
 
         {/* radar polygon */}
         <polygon
-          fill="rgb(16 185 129 / 0.25)"
+          fill="currentColor"
+          fillOpacity={0.25}
           points={polygonPoints}
-          stroke="rgb(52 211 153)"
+          stroke="currentColor"
           strokeLinejoin="round"
           strokeWidth={2}
         />
@@ -95,7 +96,7 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
             <circle
               cx={x}
               cy={y}
-              fill="rgb(52 211 153)"
+              fill="currentColor"
               key={`pt-${slice.competency_id}`}
               r={3}
             />
@@ -116,21 +117,31 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
                 : "middle";
           const tag = displayTag(slice.competency_id);
           return (
-            <text
-              dominantBaseline="middle"
-              fill="currentColor"
-              fillOpacity={0.7}
-              fontSize={10}
-              key={`label-${slice.competency_id}`}
-              textAnchor={anchor}
-              x={x}
-              y={y}
-            >
-              {tag}
-              <tspan fill="rgb(52 211 153)" x={x} y={y + 12}>
+            <g key={`label-${slice.competency_id}`}>
+              <text
+                className="text-foreground"
+                dominantBaseline="middle"
+                fill="currentColor"
+                fillOpacity={0.7}
+                fontSize={10}
+                textAnchor={anchor}
+                x={x}
+                y={y}
+              >
+                {tag}
+              </text>
+              <text
+                className="text-primary"
+                dominantBaseline="middle"
+                fill="currentColor"
+                fontSize={10}
+                textAnchor={anchor}
+                x={x}
+                y={y + 12}
+              >
                 {Math.round(slice.score_pct)}%
-              </tspan>
-            </text>
+              </text>
+            </g>
           );
         })}
       </svg>

@@ -25,16 +25,16 @@ export default async function ModulesPage() {
               Question modules. Drafts can be edited; published modules can be assigned.
             </p>
           </div>
-          <Link
-            className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-            href="/modules/new"
-          >
+          <Link className="btn-primary text-sm" href="/modules/new">
             New module
           </Link>
         </section>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -72,10 +72,10 @@ export default async function ModulesPage() {
 function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "published"
-      ? "bg-emerald-900/40 text-emerald-200"
+      ? "bg-primary/20 text-primary"
       : status === "archived"
-        ? "bg-zinc-800 text-zinc-300"
-        : "bg-amber-900/40 text-amber-200";
+        ? "bg-muted text-muted-foreground"
+        : "bg-warning/20 text-warning";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

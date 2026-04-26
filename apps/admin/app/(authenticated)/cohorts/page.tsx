@@ -125,16 +125,16 @@ export default async function CohortsPage({
               type="number"
             />
           </label>
-          <button
-            className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-            type="submit"
-          >
+          <button className="btn-primary text-sm" type="submit">
             Apply
           </button>
         </form>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -153,11 +153,11 @@ export default async function CohortsPage({
             <ul className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
               {weak.weak_spots.map((w) => (
                 <li
-                  className="flex items-center justify-between rounded border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
                   key={w.competency_id}
                 >
                   <span className="truncate">{w.competency_id}</span>
-                  <span className="text-amber-200">
+                  <span className="text-warning">
                     {Math.round(w.median_pct)}% · n={w.sample_size}
                   </span>
                 </li>

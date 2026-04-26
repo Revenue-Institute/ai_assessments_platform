@@ -16,9 +16,15 @@ const SEVERITY: Record<string, "info" | "warn" | "alert"> = {
 };
 
 const COLOR_BY_SEVERITY: Record<"info" | "warn" | "alert", string> = {
-  info: "border-emerald-900/40 bg-emerald-950/20 text-emerald-200",
-  warn: "border-amber-900/50 bg-amber-950/30 text-amber-200",
-  alert: "border-red-900/50 bg-red-950/30 text-red-200",
+  info: "border-primary/40 bg-primary/10 text-primary",
+  warn: "border-warning/50 bg-warning/15 text-warning",
+  alert: "border-destructive/50 bg-destructive/15 text-destructive",
+};
+
+const DOT_BY_SEVERITY: Record<"info" | "warn" | "alert", string> = {
+  info: "bg-primary",
+  warn: "bg-warning",
+  alert: "bg-destructive",
 };
 
 export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
@@ -59,13 +65,7 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
               key={ev.id}
             >
               <span
-                className={`mt-0.5 inline-block w-2 shrink-0 rounded-full ${
-                  sev === "alert"
-                    ? "h-2 bg-red-400"
-                    : sev === "warn"
-                      ? "h-2 bg-amber-400"
-                      : "h-2 bg-emerald-400"
-                }`}
+                className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${DOT_BY_SEVERITY[sev]}`}
                 aria-hidden="true"
               />
               <div className="flex-1 min-w-0">

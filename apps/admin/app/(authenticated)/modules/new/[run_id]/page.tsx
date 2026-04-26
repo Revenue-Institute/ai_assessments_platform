@@ -132,9 +132,7 @@ export default async function OutlineReviewPage({
       <Header page="Review outline" pages={["Modules", "New module"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
-            Step 2 of 2 · Outline review
-          </p>
+          <p className="eyebrow-label">Step 2 of 2 · Outline review</p>
           <h1 className="mt-1 font-semibold text-2xl">{outline.title}</h1>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             {outline.description}
@@ -148,7 +146,10 @@ export default async function OutlineReviewPage({
         </section>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -227,10 +228,7 @@ export default async function OutlineReviewPage({
             ))}
           </ol>
 
-          <button
-            className="rounded bg-emerald-500 px-3 py-3 font-medium text-emerald-950 text-sm hover:bg-emerald-400"
-            type="submit"
-          >
+          <button className="btn-primary text-sm" type="submit">
             Generate questions for {outline.topics.length} topics
           </button>
           <p className="text-muted-foreground text-xs">
@@ -262,7 +260,7 @@ function Field({
   className?: string;
 }) {
   const inputClass =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
+    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
     <label className={`space-y-1 ${className}`}>
       <span className="text-muted-foreground text-xs">{label}</span>

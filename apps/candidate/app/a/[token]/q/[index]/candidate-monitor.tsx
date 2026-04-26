@@ -145,14 +145,14 @@ export function CandidateMonitor({ token }: { token: string }) {
     <>
       {!isFullscreen && (
         <div
-          className="flex items-center justify-between gap-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200 text-xs"
+          className="flex items-center justify-between gap-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
           role="status"
         >
           <span>
             This assessment runs in fullscreen. Exits are logged.
           </span>
           <button
-            className="rounded bg-amber-400 px-2 py-1 font-medium text-amber-950 hover:bg-amber-300"
+            className="rounded bg-warning px-2 py-1 font-medium text-warning-foreground hover:opacity-90"
             onClick={enterFullscreen}
             type="button"
           >
@@ -168,9 +168,9 @@ export function CandidateMonitor({ token }: { token: string }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
           role="dialog"
         >
-          <div className="max-w-md rounded border border-amber-500/40 bg-card p-6 text-center shadow-xl animate-reveal">
+          <div className="max-w-md rounded border border-warning/40 bg-card p-6 text-center shadow-xl animate-reveal">
             <h2
-              className="font-semibold text-amber-200 text-lg"
+              className="font-semibold text-warning text-lg"
               id="fs-modal-title"
             >
               Return to fullscreen to continue

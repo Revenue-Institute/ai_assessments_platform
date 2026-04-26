@@ -160,7 +160,7 @@ export default async function AssignmentDetailPage({
                     <p className="font-medium">
                       Question {i + 1}
                       {a.needs_review && (
-                        <span className="ml-2 rounded bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-200 uppercase tracking-wide">
+                        <span className="ml-2 rounded bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning uppercase tracking-wide">
                           Needs review
                         </span>
                       )}
@@ -204,7 +204,7 @@ export default async function AssignmentDetailPage({
                       <form action={rescoreOne} className="ml-auto">
                         <input name="attempt_id" type="hidden" value={a.id} />
                         <button
-                          className="rounded border border-emerald-900/40 bg-emerald-950/30 px-2 py-1 text-emerald-200 text-xs hover:bg-emerald-950/50"
+                          className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
                           type="submit"
                         >
                           Rescore
@@ -227,7 +227,7 @@ export default async function AssignmentDetailPage({
           {detail.status === "completed" && (
             <form action={rescoreAll}>
               <button
-                className="rounded border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-emerald-200 text-sm hover:bg-emerald-950/50"
+                className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
                 type="submit"
               >
                 Rescore all attempts
@@ -240,7 +240,7 @@ export default async function AssignmentDetailPage({
               <>
                 <form action={resendEmail}>
                   <button
-                    className="rounded border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-emerald-200 text-sm hover:bg-emerald-950/50"
+                    className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
                     type="submit"
                   >
                     Resend magic link
@@ -248,7 +248,7 @@ export default async function AssignmentDetailPage({
                 </form>
                 <form action={cancel}>
                   <button
-                    className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm hover:bg-red-950/50"
+                    className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm hover:bg-destructive/25"
                     type="submit"
                   >
                     Cancel assignment

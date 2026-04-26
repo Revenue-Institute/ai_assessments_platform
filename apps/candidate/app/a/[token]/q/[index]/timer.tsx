@@ -22,7 +22,7 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   const tone = expired
     ? "border-destructive/60 bg-destructive/15 text-destructive"
     : minutes < 5
-      ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
+      ? "border-warning/60 bg-warning/15 text-warning"
       : "border-primary/40 bg-primary/10 text-primary";
 
   return (

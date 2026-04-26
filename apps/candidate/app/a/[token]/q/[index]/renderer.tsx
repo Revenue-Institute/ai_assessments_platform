@@ -134,7 +134,6 @@ function McqRenderer({ question }: { question: CandidateQuestionView }) {
             required
             type="radio"
             value={opt}
-            onChange={undefined}
           />
           <input name="answer_index" type="hidden" value={String(i)} />
           <span className="text-sm leading-6">{opt}</span>
@@ -190,13 +189,17 @@ function UnsupportedRenderer({
   question: CandidateQuestionView;
 }) {
   return (
-    <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 text-sm">
-      <p className="font-medium">Renderer not yet wired</p>
-      <p className="mt-1 text-amber-200/80">
-        Question type <code>{question.type}</code> renders in a later phase.
-        Submit a placeholder to advance.
+    <div
+      className="rounded border border-warning/40 bg-warning/10 p-4 text-warning text-sm"
+      role="alert"
+    >
+      <p className="font-medium">Unrecognized question type</p>
+      <p className="mt-1 text-warning/80">
+        We can&apos;t render <code>{question.type}</code> here. Please flag this
+        to the Revenue Institute team — your time and attempt are still being
+        recorded.
       </p>
-      <input name="answer" type="hidden" value="(not yet supported)" />
+      <input name="answer" type="hidden" value="" />
     </div>
   );
 }

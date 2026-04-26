@@ -229,7 +229,7 @@ function TestResultPane({ result }: { result: TestResult }) {
           className={
             passed
               ? "font-medium text-primary"
-              : "font-medium text-amber-300"
+              : "font-medium text-warning"
           }
         >
           {result.passed}/{result.total} passed ({result.runtime_ms} ms)

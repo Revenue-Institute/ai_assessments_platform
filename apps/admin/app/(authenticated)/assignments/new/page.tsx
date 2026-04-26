@@ -95,28 +95,34 @@ export default async function NewAssignmentPage({
         </section>
 
         {(sp.error || loadError) && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {sp.error || loadError}
           </p>
         )}
 
         {issuedLinks.length > 0 && (
-          <section className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 p-4 text-sm">
-            <p className="font-medium text-emerald-200">
+          <section
+            className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm"
+            role="status"
+          >
+            <p className="font-medium text-primary">
               {issuedLinks.length} magic link
               {issuedLinks.length === 1 ? "" : "s"} issued
               {sp.ok ? ` · ${sp.ok}` : ""}
             </p>
-            <p className="mt-1 text-emerald-100/70 text-xs">
+            <p className="mt-1 text-muted-foreground text-xs">
               Tokens are not retrievable later. Copy what you need now.
             </p>
             <ul className="mt-2 space-y-1 text-xs">
               {issuedLinks.map((row, i) => (
                 <li className="flex flex-col gap-1" key={i}>
-                  <span className="text-emerald-300/70">
+                  <span className="text-muted-foreground">
                     Assignment <code>{row.assignment_id.slice(0, 8)}…</code>
                   </span>
-                  <code className="break-all rounded bg-emerald-950/60 p-2 text-emerald-100">
+                  <code className="break-all rounded bg-secondary p-2 text-foreground">
                     {row.magic_link_url}
                   </code>
                 </li>
@@ -126,14 +132,17 @@ export default async function NewAssignmentPage({
         )}
 
         {failedRows.length > 0 && (
-          <section className="rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-sm">
-            <p className="font-medium text-red-200">
+          <section
+            className="rounded-xl border border-destructive/50 bg-destructive/15 p-4 text-sm"
+            role="alert"
+          >
+            <p className="font-medium text-destructive">
               {failedRows.length} subject{failedRows.length === 1 ? "" : "s"} failed
             </p>
             <ul className="mt-2 space-y-1 text-xs">
               {failedRows.map((f, i) => (
                 <li key={i}>
-                  <code className="text-red-300">{f.subject_id}</code> ·{" "}
+                  <code className="text-destructive">{f.subject_id}</code> ·{" "}
                   {f.detail}
                 </li>
               ))}
@@ -218,7 +227,7 @@ export default async function NewAssignmentPage({
           </div>
 
           <button
-            className="mt-1 rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400 disabled:opacity-50"
+            className="btn-primary mt-1 text-sm"
             disabled={publishable.length === 0 || subjects.length === 0}
             type="submit"
           >

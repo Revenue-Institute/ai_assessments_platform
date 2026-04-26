@@ -58,7 +58,10 @@ export default async function NewModulePage({
         </section>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -92,10 +95,7 @@ export default async function NewModulePage({
               <option value="expert">expert</option>
             </select>
           </label>
-          <button
-            className="mt-2 rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-            type="submit"
-          >
+          <button className="btn-primary mt-2 text-sm" type="submit">
             Create draft
           </button>
         </form>
@@ -122,7 +122,7 @@ function Field({
   textarea?: boolean;
 }) {
   const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
+    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
     <label className="space-y-1">
       <span className="text-sm">{label}</span>

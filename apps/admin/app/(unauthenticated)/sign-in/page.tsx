@@ -38,7 +38,7 @@ export default async function SignInPage({
           </label>
           <input
             autoComplete="email"
-            className="w-full rounded border border-emerald-900/50 bg-transparent px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+            className="w-full rounded border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none"
             id="email"
             name="email"
             required
@@ -51,7 +51,7 @@ export default async function SignInPage({
           </label>
           <input
             autoComplete="current-password"
-            className="w-full rounded border border-emerald-900/50 bg-transparent px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+            className="w-full rounded border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none"
             id="password"
             name="password"
             required
@@ -59,14 +59,14 @@ export default async function SignInPage({
           />
         </div>
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
-        <button
-          className="w-full rounded bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-500"
-          type="submit"
-        >
+        <button className="btn-primary w-full" type="submit">
           Sign in
         </button>
       </form>

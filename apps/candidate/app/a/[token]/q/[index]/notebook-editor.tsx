@@ -248,7 +248,7 @@ function CellOutputView({ output }: { output: CellOutput }) {
         </pre>
       )}
       {output.stderr && (
-        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-amber-500/10 p-2 text-amber-300">
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-warning/10 p-2 text-warning">
           {output.stderr}
         </pre>
       )}

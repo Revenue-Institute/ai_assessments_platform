@@ -45,6 +45,8 @@
   --accent-foreground: var(--brand-deep-navy);
   --destructive: hsl(0, 72%, 51%);
   --destructive-foreground: #FFFFFF;
+  --warning: hsl(38, 92%, 50%);
+  --warning-foreground: var(--brand-deep-navy);
   --success: var(--brand-forest);
   --border: var(--brand-border-light);
   --input: var(--brand-border-light);
@@ -84,6 +86,8 @@
   --accent-foreground: var(--brand-deep-navy);
   --destructive: hsl(0, 72%, 51%);
   --destructive-foreground: var(--brand-light-base);
+  --warning: hsl(38, 92%, 55%);
+  --warning-foreground: var(--brand-deep-navy);
   --success: var(--brand-neon);
   --border: hsl(217, 33%, 22%);
   --input: hsl(217, 33%, 22%);
@@ -132,6 +136,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);

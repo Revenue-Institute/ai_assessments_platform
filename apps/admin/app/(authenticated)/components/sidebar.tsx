@@ -75,7 +75,7 @@ export function GlobalSidebar({
       <Sidebar variant="inset">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <LayersIcon className="h-5 w-5 text-emerald-400" />
+            <LayersIcon className="h-5 w-5 text-primary" />
             <span className="font-medium text-sm">RI Assessments</span>
           </div>
         </SidebarHeader>

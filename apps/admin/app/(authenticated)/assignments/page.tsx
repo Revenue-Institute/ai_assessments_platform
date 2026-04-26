@@ -29,16 +29,16 @@ export default async function AssignmentsPage() {
               Magic-link assignments. Status and scores update as candidates submit.
             </p>
           </div>
-          <Link
-            className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400"
-            href="/assignments/new"
-          >
+          <Link className="btn-primary text-sm" href="/assignments/new">
             New assignment
           </Link>
         </section>
 
         {error && (
-          <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+          <p
+            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -80,7 +80,7 @@ export default async function AssignmentsPage() {
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Link
-                      className="text-emerald-300 text-xs hover:underline"
+                      className="text-primary text-xs hover:underline"
                       href={`/assignments/${a.id}`}
                     >
                       Open
@@ -99,12 +99,12 @@ export default async function AssignmentsPage() {
 function StatusPill({ status }: { status: string }) {
   const tone =
     status === "completed"
-      ? "bg-emerald-900/40 text-emerald-200"
+      ? "bg-primary/20 text-primary"
       : status === "in_progress"
-        ? "bg-amber-900/40 text-amber-200"
+        ? "bg-warning/20 text-warning"
         : status === "cancelled" || status === "expired"
-          ? "bg-zinc-800 text-zinc-300"
-          : "bg-blue-900/40 text-blue-200";
+          ? "bg-muted text-muted-foreground"
+          : "bg-secondary text-secondary-foreground";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

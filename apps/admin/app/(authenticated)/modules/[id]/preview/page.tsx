@@ -30,7 +30,10 @@ export default async function ModulePreviewPage({
         pages={["Modules", detail.title]}
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <p className="rounded border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-amber-200 text-xs">
+        <p
+          className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
+          role="status"
+        >
           Admin preview. Variables are sampled deterministically and
           answer-revealing fields are stripped, matching the candidate view.
           Answers are not graded here.
@@ -38,7 +41,7 @@ export default async function ModulePreviewPage({
 
         <div>
           <Link
-            className="text-emerald-300 text-sm hover:underline"
+            className="text-primary text-sm hover:underline"
             href={`/modules/${id}`}
           >
             &larr; Back to module
@@ -57,7 +60,7 @@ export default async function ModulePreviewPage({
                 key={q.question_template_id}
               >
                 <header className="mb-2 flex items-center justify-between">
-                  <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
+                  <p className="eyebrow-label">
                     Question {i + 1} of {preview.questions.length} &middot;{" "}
                     {q.type}
                   </p>
@@ -74,7 +77,7 @@ export default async function ModulePreviewPage({
                 </h2>
 
                 {q.competency_tags.length > 0 && (
-                  <p className="mb-2 text-emerald-300/60 text-xs">
+                  <p className="mb-2 text-muted-foreground text-xs">
                     {q.competency_tags.map((t) => `#${t}`).join("  ")}
                   </p>
                 )}
