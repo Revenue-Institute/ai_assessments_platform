@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .logging_config import install_pii_filter
 from .routers import (
     admin,
     benchmarks,
@@ -21,6 +22,7 @@ async def lifespan(_app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    install_pii_filter()
     settings = get_settings()
     app = FastAPI(
         title="RI Assessments API",

@@ -125,12 +125,20 @@ export default async function QuestionPage({
       </article>
 
       {submitError && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p
+          aria-live="assertive"
+          className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm"
+          role="alert"
+        >
           {submitError}
         </p>
       )}
 
-      <form action={handleSubmit} className="space-y-3">
+      <form
+        action={handleSubmit}
+        aria-label={`Question ${idx + 1} answer form`}
+        className="space-y-3"
+      >
         <QuestionRenderer question={question} token={token} />
         <SubmitButton last={idx === question.total - 1} />
       </form>
@@ -141,7 +149,7 @@ export default async function QuestionPage({
 function SubmitButton({ last }: { last: boolean }) {
   return (
     <button
-      className="w-full rounded bg-emerald-500 px-3 py-3 font-medium text-emerald-950 hover:bg-emerald-400"
+      className="w-full rounded bg-emerald-500 px-3 py-3 font-medium text-emerald-950 hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950"
       type="submit"
     >
       {last ? "Submit and finish" : "Save and continue"}
