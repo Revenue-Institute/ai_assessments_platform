@@ -7,7 +7,9 @@ import {
   submitQuestion,
 } from "@/lib/api";
 import { CandidateMonitor } from "./candidate-monitor";
+import { QuestionNavigator } from "./question-navigator";
 import { QuestionRenderer } from "./renderer";
+import { CountdownTimer } from "./timer";
 
 type Params = { token: string; index: string };
 type SearchParams = Promise<{ error?: string }>;
@@ -102,12 +104,13 @@ export default async function QuestionPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12">
       <CandidateMonitor token={token} />
+      <QuestionNavigator current={idx} token={token} total={question.total} />
 
       <header className="flex items-center justify-between">
         <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
           Question {idx + 1} of {question.total}
         </p>
-        <Deadline expiresAt={question.expires_at} />
+        <CountdownTimer deadlineIso={question.expires_at} />
       </header>
 
       <article className="space-y-2">
@@ -132,17 +135,6 @@ export default async function QuestionPage({
         <SubmitButton last={idx === question.total - 1} />
       </form>
     </main>
-  );
-}
-
-function Deadline({ expiresAt }: { expiresAt: string }) {
-  // Server-rendered fixed timestamp; the live ticking countdown lands when
-  // we wire a client-side timer on top of the server-authoritative deadline.
-  const date = new Date(expiresAt);
-  return (
-    <p className="text-emerald-100/60 text-xs">
-      Expires {date.toLocaleString()}
-    </p>
   );
 }
 

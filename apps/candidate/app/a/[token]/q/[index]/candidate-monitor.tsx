@@ -4,24 +4,35 @@ import {
   installIntegrityMonitor,
   type IntegrityEvent,
 } from "@repo/integrity/browser";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { env } from "@/env";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const EVENTS_FLUSH_MS = 2_000;
+const FULLSCREEN_GRACE_MS = 3_000;
 
 /** Mounts the spec §10.2 browser monitor and runs a 10s heartbeat that
  * reports focused-seconds back to FastAPI. Lives inside the question page
- * so it auto-tears down on navigation. */
+ * so it auto-tears down on navigation.
+ *
+ * Also enforces fullscreen per spec §10.3: on first mount surfaces an
+ * "Enter fullscreen" banner if the page isn't already fullscreen, and on
+ * fullscreen_exited (after a 3s grace) shows a blocking modal asking
+ * the candidate to return to fullscreen. */
 export function CandidateMonitor({ token }: { token: string }) {
   const queueRef = useRef<IntegrityEvent[]>([]);
   const focusedSecondsRef = useRef(0);
   const lastTickRef = useRef<number>(Date.now());
   const isFocusedRef = useRef<boolean>(true);
+  const mountedAtRef = useRef<number>(Date.now());
+
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
       isFocusedRef.current = !document.hidden && document.hasFocus();
+      setIsFullscreen(Boolean(document.fullscreenElement));
     }
 
     const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
@@ -40,7 +51,6 @@ export function CandidateMonitor({ token }: { token: string }) {
           body: JSON.stringify({ events: batch }),
         });
       } catch {
-        // Re-queue on transport failure so we try again next tick.
         queueRef.current.unshift(...batch);
       }
     };
@@ -65,7 +75,7 @@ export function CandidateMonitor({ token }: { token: string }) {
           }),
         });
       } catch {
-        // Best-effort. Server-side deadline is authoritative.
+        // Server-side deadline is authoritative.
       }
     };
 
@@ -79,6 +89,18 @@ export function CandidateMonitor({ token }: { token: string }) {
           isFocusedRef.current = true;
           lastTickRef.current = Date.now();
         }
+        if (event.type === "fullscreen_entered") {
+          setIsFullscreen(true);
+          setShowExitModal(false);
+        }
+        if (event.type === "fullscreen_exited") {
+          setIsFullscreen(false);
+          // Spec §10.3: don't show on the first 3s in case the browser
+          // auto-exits during navigation.
+          if (Date.now() - mountedAtRef.current > FULLSCREEN_GRACE_MS) {
+            setShowExitModal(true);
+          }
+        }
       },
     });
 
@@ -89,7 +111,6 @@ export function CandidateMonitor({ token }: { token: string }) {
     );
 
     const onUnload = () => {
-      // Best-effort flush before navigating away.
       if (queueRef.current.length > 0) {
         navigator.sendBeacon?.(
           eventsUrl,
@@ -111,5 +132,64 @@ export function CandidateMonitor({ token }: { token: string }) {
     };
   }, [token]);
 
-  return null;
+  const enterFullscreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch {
+      // Some browsers throw on iframes / permission denial. The integrity
+      // event log will record either way.
+    }
+  };
+
+  return (
+    <>
+      {!isFullscreen && (
+        <div
+          className="rounded border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-amber-200 text-xs"
+          role="status"
+        >
+          <span className="mr-3">
+            This assessment runs in fullscreen. Exits are logged.
+          </span>
+          <button
+            className="rounded bg-amber-500 px-2 py-1 font-medium text-amber-950 hover:bg-amber-400"
+            onClick={enterFullscreen}
+            type="button"
+          >
+            Enter fullscreen
+          </button>
+        </div>
+      )}
+
+      {showExitModal && (
+        <div
+          aria-labelledby="fs-modal-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          role="dialog"
+        >
+          <div className="max-w-md rounded-xl border border-amber-900/60 bg-emerald-950/95 p-6 text-center shadow-xl">
+            <h2
+              className="font-semibold text-amber-200 text-lg"
+              id="fs-modal-title"
+            >
+              Return to fullscreen to continue
+            </h2>
+            <p className="mt-2 text-sm text-emerald-100/70">
+              Your timer is still running and this exit has been logged.
+              Re-enter fullscreen to dismiss this prompt.
+            </p>
+            <button
+              autoFocus
+              className="mt-4 rounded bg-emerald-500 px-4 py-2 font-medium text-emerald-950 hover:bg-emerald-400"
+              onClick={enterFullscreen}
+              type="button"
+            >
+              Re-enter fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
