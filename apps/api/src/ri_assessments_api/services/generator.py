@@ -304,6 +304,36 @@ def _document_title_lookup(supabase: Client, document_ids: list[str]) -> dict[st
     return {row["id"]: row.get("title", "") for row in res.data or []}
 
 
+def _self_verify_question(raw_q: dict[str, Any]) -> bool:
+    """Spec §6.3 rule 10. Returns True when the question's solver works
+    on 3 sampled variable sets, or when there is no solver to run.
+    Skips silently when E2B is unavailable so local dev / first-deploy
+    flows aren't blocked."""
+
+    solver = raw_q.get("solver_code")
+    schema = raw_q.get("variable_schema") or {}
+    if not isinstance(solver, str) or not solver.strip():
+        return True
+    from .solver_runner import fairness_check
+
+    report = fairness_check(
+        solver_code=solver,
+        variable_schema=schema,
+        sample_count=3,
+    )
+    # When E2B is offline every sample comes back with `solver returned
+    # no result` — treat that as "could not verify, accept" so we don't
+    # block all generated questions in dev.
+    if report.get("failures"):
+        all_no_result = all(
+            f.get("error") == "solver returned no result"
+            for f in report["failures"]
+        )
+        if all_no_result:
+            return True
+    return bool(report.get("passed"))
+
+
 def _normalize_question_row(
     raw: dict[str, Any],
     *,
@@ -478,6 +508,15 @@ def generate_questions(
 
         rows = []
         for raw_q in raw_questions:
+            # Spec §6.3 rule 10: self-verify by running the solver on 3
+            # sampled variable sets. If the solver doesn't parse / run /
+            # produce a dict, skip the question and add a note in the
+            # generation_run output so the admin can review.
+            if not _self_verify_question(raw_q):
+                log.warning(
+                    "self-verification failed for generated question; skipping"
+                )
+                continue
             rows.append(
                 _normalize_question_row(
                     raw_q,

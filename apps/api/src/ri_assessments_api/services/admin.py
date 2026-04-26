@@ -184,6 +184,23 @@ def publish_module(
             status_code=409,
             detail="Cannot publish a module with zero questions.",
         )
+
+    # Spec §8.4 fairness validation: pull every question's full template,
+    # sample 50 variable sets per question, run any solver, fail publish
+    # on errors. Skips when E2B is offline (so local dev still works).
+    question_rows = (
+        supabase.table("question_templates")
+        .select("id, variable_schema, solver_code")
+        .eq("module_id", module_id)
+        .execute()
+    ).data or []
+    from .solver_runner import assert_publishable, fairness_check_module
+
+    fairness = fairness_check_module(
+        questions=question_rows, sample_count=50
+    )
+    assert_publishable(fairness)
+
     now = datetime.now(UTC).isoformat()
     supabase.table("modules").update(
         {"status": "published", "published_at": now, "updated_at": now}

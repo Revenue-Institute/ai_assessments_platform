@@ -128,12 +128,26 @@ def _create_attempt(
         question_seed(random_seed, qid),
     )
     rendered = render_prompt(question["prompt_template"], variables)
+
+    # Spec §8.3: run the solver at attempt-creation time and cache its
+    # output on the row. Fails soft when E2B is offline; admin rescore
+    # picks it up later.
+    expected_answer = None
+    solver_code = question.get("solver_code")
+    if isinstance(solver_code, str) and solver_code.strip():
+        from .solver_runner import execute_solver
+
+        expected_answer = execute_solver(
+            solver_code=solver_code,
+            variables=variables,
+        )
+
     payload = {
         "assignment_id": assignment_id,
         "question_template_id": qid,
         "rendered_prompt": rendered,
         "variables_used": variables,
-        "expected_answer": None,  # solver execution lands with E2B in Phase 2
+        "expected_answer": expected_answer,
         "started_at": datetime.now(UTC).isoformat(),
         "max_score": float(question.get("max_points") or 10),
     }
