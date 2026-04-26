@@ -11,8 +11,10 @@ from ..auth import AdminPrincipal, require_admin_jwt
 from ..db import get_supabase
 from ..models.benchmarks import (
     CohortHeatmapResponse,
+    CompetencyDistributionResponse,
     SeriesCreateRequest,
     SeriesDetail,
+    SeriesIssueNextResponse,
     SeriesSummary,
     SubjectCompetencyResponse,
     WeakSpotsResponse,
@@ -63,6 +65,23 @@ def cohorts_weak_spots(
     )
 
 
+@router.get(
+    "/api/cohorts/distribution", response_model=CompetencyDistributionResponse
+)
+def cohorts_distribution(
+    supabase: Annotated[Client, Depends(get_supabase)],
+    competency_id: str = Query(min_length=1),
+    type: str | None = Query(default=None, alias="type"),
+    exclude_subject_id: str | None = None,
+) -> CompetencyDistributionResponse:
+    return benchmarks_service.competency_distribution(
+        supabase,
+        competency_id=competency_id,
+        subject_type=type,
+        exclude_subject_id=exclude_subject_id,
+    )
+
+
 # Series --------------------------------------------------------------------
 
 
@@ -103,3 +122,24 @@ def attach_assignment(
     return series_service.link_assignment(
         supabase, principal, series_id=series_id, assignment_id=assignment_id
     )
+
+
+@router.post(
+    "/api/series/{series_id}/issue-next",
+    response_model=SeriesIssueNextResponse,
+)
+def issue_next(
+    series_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+    expires_in_days: int = Query(default=7, ge=1, le=90),
+    send_email: bool = Query(default=True),
+) -> SeriesIssueNextResponse:
+    result = series_service.issue_next_for_series(
+        supabase,
+        principal,
+        series_id=series_id,
+        expires_in_days=expires_in_days,
+        send_email=send_email,
+    )
+    return SeriesIssueNextResponse(**result)

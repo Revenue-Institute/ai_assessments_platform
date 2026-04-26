@@ -11,6 +11,8 @@ from supabase import Client
 from ..auth import AdminPrincipal, require_admin_jwt
 from ..db import get_supabase
 from ..models.admin import (
+    AssignmentBulkCreateRequest,
+    AssignmentBulkCreateResult,
     AssignmentCreateRequest,
     AssignmentDetail,
     AssignmentMagicLink,
@@ -133,7 +135,30 @@ def create_assignment(
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssignmentMagicLink:
-    return admin_service.create_assignment(supabase, principal, payload)
+    return admin_service.create_assignment(
+        supabase, principal, payload, send_email=payload.send_email
+    )
+
+
+@router.post(
+    "/assignments/bulk",
+    response_model=AssignmentBulkCreateResult,
+    status_code=201,
+)
+def bulk_create_assignments(
+    payload: AssignmentBulkCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentBulkCreateResult:
+    result = admin_service.bulk_create_assignments(
+        supabase,
+        principal,
+        module_id=payload.module_id,
+        subject_ids=payload.subject_ids,
+        expires_in_days=payload.expires_in_days,
+        send_email=payload.send_email,
+    )
+    return AssignmentBulkCreateResult(**result)
 
 
 @router.get(

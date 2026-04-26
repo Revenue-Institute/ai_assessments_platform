@@ -71,6 +71,14 @@ class AssignmentCreateRequest(BaseModel):
     module_id: str
     subject_id: str
     expires_in_days: int = Field(default=7, ge=1, le=90)
+    send_email: bool = True
+
+
+class AssignmentBulkCreateRequest(BaseModel):
+    module_id: str
+    subject_ids: list[str] = Field(min_length=1, max_length=200)
+    expires_in_days: int = Field(default=7, ge=1, le=90)
+    send_email: bool = True
 
 
 class AssignmentMagicLink(BaseModel):
@@ -84,6 +92,11 @@ class AssignmentMagicLink(BaseModel):
             "Raw signed JWT. Returned once at create time; not retrievable later."
         ),
     )
+
+
+class AssignmentBulkCreateResult(BaseModel):
+    created: list[AssignmentMagicLink]
+    failed: list[dict[str, str]] = Field(default_factory=list)
 
 
 class AssignmentSummary(BaseModel):

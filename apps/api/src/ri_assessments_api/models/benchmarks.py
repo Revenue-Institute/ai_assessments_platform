@@ -103,3 +103,27 @@ class SeriesSummary(BaseModel):
 
 class SeriesDetail(SeriesSummary):
     assignments: list[SeriesAssignmentSummary] = Field(default_factory=list)
+
+
+class SeriesIssueNextResponse(BaseModel):
+    series_id: str
+    assignment_id: str
+    module_id: str
+    magic_link_url: str
+    expires_at: datetime
+    sequence_number: int
+    next_due_at: datetime | None = None
+
+
+class CompetencyDistributionResponse(BaseModel):
+    competency_id: str
+    sample_size: int
+    min_pct: float
+    p25_pct: float
+    median_pct: float
+    p75_pct: float
+    max_pct: float
+    values: list[float] = Field(
+        default_factory=list,
+        description="All score_pct values in the cohort, sorted ascending.",
+    )

@@ -416,6 +416,8 @@ def create_assignment(
     supabase: Client,
     principal: AdminPrincipal,
     payload: AssignmentCreateRequest,
+    *,
+    send_email: bool = True,
 ) -> AssignmentMagicLink:
     _ensure_role(principal, "admin", "reviewer")
     settings = get_settings()
@@ -423,13 +425,14 @@ def create_assignment(
 
     subject_q = (
         supabase.table("subjects")
-        .select("id")
+        .select("id, full_name, email")
         .eq("id", payload.subject_id)
         .limit(1)
         .execute()
     )
     if not subject_q.data:
         raise HTTPException(status_code=404, detail="Subject not found.")
+    subject_row = subject_q.data[0]
 
     expires_at = datetime.now(UTC) + timedelta(days=payload.expires_in_days)
     assignment_id = str(uuid.uuid4())
@@ -454,16 +457,67 @@ def create_assignment(
         }
     ).execute()
 
+    magic_link_url = candidate_token_url(
+        settings.next_public_candidate_url, token
+    )
+
+    if send_email and subject_row.get("email"):
+        # Best-effort. Failures are logged inside the email service; we don't
+        # block the API response since the admin can always copy the URL.
+        from .email import send_magic_link
+
+        send_magic_link(
+            to_email=subject_row["email"],
+            subject_full_name=subject_row.get("full_name") or "there",
+            module_title=snapshot.get("title", "Assessment"),
+            magic_link_url=magic_link_url,
+            expires_at=expires_at,
+        )
+
     return AssignmentMagicLink(
         assignment_id=assignment_id,
         subject_id=payload.subject_id,
         module_id=payload.module_id,
         expires_at=expires_at,
         token=token,
-        magic_link_url=candidate_token_url(
-            settings.next_public_candidate_url, token
-        ),
+        magic_link_url=magic_link_url,
     )
+
+
+def bulk_create_assignments(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    module_id: str,
+    subject_ids: list[str],
+    expires_in_days: int,
+    send_email: bool,
+) -> dict[str, Any]:
+    """Issue one magic link per subject. Failures on individual subjects do
+    not abort the batch — admin sees the per-subject outcome list."""
+
+    _ensure_role(principal, "admin", "reviewer")
+    created: list[AssignmentMagicLink] = []
+    failed: list[dict[str, str]] = []
+    for subject_id in subject_ids:
+        try:
+            link = create_assignment(
+                supabase,
+                principal,
+                AssignmentCreateRequest(
+                    module_id=module_id,
+                    subject_id=subject_id,
+                    expires_in_days=expires_in_days,
+                    send_email=send_email,
+                ),
+                send_email=send_email,
+            )
+            created.append(link)
+        except HTTPException as exc:
+            failed.append({"subject_id": subject_id, "detail": str(exc.detail)})
+        except Exception as exc:
+            failed.append({"subject_id": subject_id, "detail": str(exc)})
+    return {"created": created, "failed": failed}
 
 
 def cancel_assignment(

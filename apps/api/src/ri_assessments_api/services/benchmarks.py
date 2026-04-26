@@ -17,6 +17,7 @@ from ..models.benchmarks import (
     CohortHeatmapCell,
     CohortHeatmapResponse,
     CohortSubject,
+    CompetencyDistributionResponse,
     CompetencyScorePoint,
     SubjectCompetencyResponse,
     SubjectCompetencyTrend,
@@ -228,3 +229,87 @@ def weak_spots(
             )
     out.sort(key=lambda w: w.median_pct)
     return WeakSpotsResponse(threshold_pct=threshold_pct, weak_spots=out)
+
+
+def competency_distribution(
+    supabase: Client,
+    *,
+    competency_id: str,
+    subject_type: str | None = None,
+    exclude_subject_id: str | None = None,
+) -> CompetencyDistributionResponse:
+    """Latest score_pct per subject for a single competency, returned with
+    summary stats (min / p25 / median / p75 / max). Used by the
+    candidate-vs-team overlay (spec §11.3) — caller plots their subject's
+    own latest score on top of this distribution."""
+
+    subj_q = supabase.table("subjects").select("id")
+    if subject_type:
+        subj_q = subj_q.eq("type", subject_type)
+    subjects = subj_q.execute().data or []
+    subject_ids = [s["id"] for s in subjects if s["id"] != exclude_subject_id]
+    if not subject_ids:
+        return CompetencyDistributionResponse(
+            competency_id=competency_id,
+            sample_size=0,
+            min_pct=0,
+            p25_pct=0,
+            median_pct=0,
+            p75_pct=0,
+            max_pct=0,
+            values=[],
+        )
+
+    rows = (
+        supabase.table("competency_scores")
+        .select("subject_id, score_pct, computed_at")
+        .eq("competency_id", competency_id)
+        .in_("subject_id", subject_ids)
+        .execute()
+    ).data or []
+
+    latest_by_subject: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        existing = latest_by_subject.get(r["subject_id"])
+        if existing is None or _parse_ts(r["computed_at"]) > _parse_ts(
+            existing["computed_at"]
+        ):
+            latest_by_subject[r["subject_id"]] = r
+
+    values = sorted(float(r["score_pct"]) for r in latest_by_subject.values())
+    if not values:
+        return CompetencyDistributionResponse(
+            competency_id=competency_id,
+            sample_size=0,
+            min_pct=0,
+            p25_pct=0,
+            median_pct=0,
+            p75_pct=0,
+            max_pct=0,
+            values=[],
+        )
+
+    return CompetencyDistributionResponse(
+        competency_id=competency_id,
+        sample_size=len(values),
+        min_pct=round(values[0], 2),
+        p25_pct=round(_quantile(values, 0.25), 2),
+        median_pct=round(_quantile(values, 0.5), 2),
+        p75_pct=round(_quantile(values, 0.75), 2),
+        max_pct=round(values[-1], 2),
+        values=values,
+    )
+
+
+def _quantile(sorted_values: list[float], q: float) -> float:
+    """Linear-interpolation quantile on a pre-sorted list."""
+    if not sorted_values:
+        return 0.0
+    n = len(sorted_values)
+    if n == 1:
+        return sorted_values[0]
+    idx = (n - 1) * q
+    lo = int(idx)
+    hi = min(lo + 1, n - 1)
+    frac = idx - lo
+    return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * frac

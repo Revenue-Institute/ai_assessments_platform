@@ -131,6 +131,132 @@ def get_series_detail(supabase: Client, series_id: str) -> SeriesDetail:
     )
 
 
+def issue_next_for_series(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    series_id: str,
+    expires_in_days: int = 7,
+    send_email: bool = True,
+) -> dict[str, Any]:
+    """Materialize the next assignment in a series.
+
+    Picks the first published module whose question competency_tags overlap
+    with the series' competency_focus. Issues a fresh magic-link assignment,
+    links it to the series with sequence_number = max + 1, advances
+    next_due_at by cadence_days. Caller is responsible for whether to invoke
+    this on demand (admin button) or via cron."""
+
+    _ensure_role(principal, "admin", "reviewer")
+
+    # Lazy import to avoid circular import (admin.py imports series? — not yet,
+    # but defensive).
+    from ..models.admin import AssignmentCreateRequest
+    from .admin import create_assignment
+
+    detail = (
+        supabase.table("assessment_series")
+        .select(
+            "id, subject_id, name, competency_focus, cadence_days, next_due_at"
+        )
+        .eq("id", series_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    if not detail:
+        raise HTTPException(status_code=404, detail="Series not found.")
+    row = detail[0]
+    focus: list[str] = list(row.get("competency_focus") or [])
+    if not focus:
+        raise HTTPException(
+            status_code=409,
+            detail="Series has no competency_focus; cannot pick a module.",
+        )
+
+    # Find a published module that covers the focus tags. supabase-py's array
+    # overlap operator is `overlaps`. Fall back to "any module with any tag".
+    candidate_q = (
+        supabase.table("modules")
+        .select(
+            "id, slug, title, status, question_templates(competency_tags)"
+        )
+        .eq("status", "published")
+        .order("published_at", desc=True)
+        .limit(50)
+        .execute()
+    ).data or []
+    chosen_id: str | None = None
+    for module in candidate_q:
+        templates = module.get("question_templates") or []
+        flat_tags = {
+            tag
+            for t in templates
+            for tag in (t.get("competency_tags") or [])
+        }
+        if flat_tags & set(focus):
+            chosen_id = module["id"]
+            break
+    if chosen_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No published module covers any of the series' "
+                "competency_focus tags."
+            ),
+        )
+
+    link = create_assignment(
+        supabase,
+        principal,
+        AssignmentCreateRequest(
+            module_id=chosen_id,
+            subject_id=row["subject_id"],
+            expires_in_days=expires_in_days,
+            send_email=send_email,
+        ),
+        send_email=send_email,
+    )
+
+    existing_links = (
+        supabase.table("series_assignments")
+        .select("sequence_number")
+        .eq("series_id", series_id)
+        .execute()
+    ).data or []
+    next_seq = (
+        max((int(r.get("sequence_number") or 0) for r in existing_links), default=0)
+        + 1
+    )
+    supabase.table("series_assignments").insert(
+        {
+            "series_id": series_id,
+            "assignment_id": link.assignment_id,
+            "sequence_number": next_seq,
+        }
+    ).execute()
+
+    cadence = row.get("cadence_days")
+    update: dict[str, Any] = {}
+    if cadence:
+        update["next_due_at"] = (
+            datetime.now(UTC) + timedelta(days=int(cadence))
+        ).isoformat()
+    if update:
+        supabase.table("assessment_series").update(update).eq(
+            "id", series_id
+        ).execute()
+
+    return {
+        "series_id": series_id,
+        "assignment_id": link.assignment_id,
+        "module_id": chosen_id,
+        "magic_link_url": link.magic_link_url,
+        "expires_at": link.expires_at,
+        "sequence_number": next_seq,
+        "next_due_at": update.get("next_due_at"),
+    }
+
+
 def link_assignment(
     supabase: Client,
     principal: AdminPrincipal,

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import {
   ApiError,
   createSeries,
+  issueNextForSeries,
   listSeries,
   listSubjects,
   type SeriesSummary,
@@ -54,6 +55,26 @@ export default async function SeriesPage({
     try {
       await createSeries({ subject_id, name, competency_focus, cadence_days });
       redirect("/series?ok=" + encodeURIComponent("Series created."));
+    } catch (e) {
+      if (e instanceof ApiError) {
+        redirect("/series?error=" + encodeURIComponent(e.message));
+      }
+      throw e;
+    }
+  }
+
+  async function issueNext(formData: FormData): Promise<void> {
+    "use server";
+    const seriesId = String(formData.get("series_id") ?? "");
+    if (!seriesId) return;
+    try {
+      const result = await issueNextForSeries(seriesId);
+      redirect(
+        "/series?ok=" +
+          encodeURIComponent(
+            `Issued sequence ${result.sequence_number}: ${result.magic_link_url}`
+          )
+      );
     } catch (e) {
       if (e instanceof ApiError) {
         redirect("/series?error=" + encodeURIComponent(e.message));
@@ -164,6 +185,7 @@ export default async function SeriesPage({
                 <th className="px-4 py-2">Cadence</th>
                 <th className="px-4 py-2">Next due</th>
                 <th className="px-4 py-2">Assignments</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
@@ -188,6 +210,17 @@ export default async function SeriesPage({
                       : "—"}
                   </td>
                   <td className="px-4 py-2">{s.assignment_count}</td>
+                  <td className="px-4 py-2 text-right">
+                    <form action={issueNext}>
+                      <input name="series_id" type="hidden" value={s.id} />
+                      <button
+                        className="rounded border border-emerald-900/40 bg-emerald-950/30 px-2 py-1 text-emerald-200 text-xs hover:bg-emerald-950/50"
+                        type="submit"
+                      >
+                        Issue next
+                      </button>
+                    </form>
+                  </td>
                 </tr>
               ))}
             </tbody>

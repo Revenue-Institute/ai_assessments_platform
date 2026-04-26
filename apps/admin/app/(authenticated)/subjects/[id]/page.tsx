@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import {
   ApiError,
   type AssignmentSummary,
+  competencyDistribution,
+  type CompetencyDistributionResponse,
   listAssignments,
   subjectCompetencyScores,
   type SubjectCompetencyTrend,
 } from "@/lib/api";
 import { CompetencyRadar } from "../../components/competency-radar";
+import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +27,7 @@ export default async function SubjectDetailPage({
   let trends: SubjectCompetencyTrend[] = [];
   let allAssignments: AssignmentSummary[] = [];
   let error: string | null = null;
+  let distributions: Record<string, CompetencyDistributionResponse> = {};
 
   try {
     const [scores, assignments] = await Promise.all([
@@ -32,6 +36,22 @@ export default async function SubjectDetailPage({
     ]);
     trends = scores.trends;
     allAssignments = assignments.filter((a) => a.subject_id === id);
+
+    if (trends.length > 0) {
+      const distArray = await Promise.all(
+        trends.map((t) =>
+          competencyDistribution({
+            competency_id: t.competency_id,
+            exclude_subject_id: id,
+          }).catch(() => null)
+        )
+      );
+      distributions = Object.fromEntries(
+        distArray
+          .filter((d): d is CompetencyDistributionResponse => d != null)
+          .map((d) => [d.competency_id, d])
+      );
+    }
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     if (e instanceof ApiError) error = e.message;
@@ -55,7 +75,7 @@ export default async function SubjectDetailPage({
 
         <section className="grid gap-4 lg:grid-cols-2">
           <CompetencyRadar slices={radarSlices} />
-          <CompetencyTrendList trends={trends} />
+          <CompetencyTrendList distributions={distributions} trends={trends} />
         </section>
 
         <AssignmentHistory assignments={allAssignments} />
@@ -73,8 +93,10 @@ function subjectDisplayName(assignments: AssignmentSummary[]): string {
 
 function CompetencyTrendList({
   trends,
+  distributions,
 }: {
   trends: SubjectCompetencyTrend[];
+  distributions: Record<string, CompetencyDistributionResponse>;
 }) {
   if (trends.length === 0) {
     return (
@@ -87,31 +109,45 @@ function CompetencyTrendList({
     <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
       <h2 className="mb-3 font-medium text-sm">Competency trends</h2>
       <ul className="space-y-3 text-sm">
-        {trends.map((t) => (
-          <li
-            className="rounded border border-border/40 bg-background/30 p-3"
-            key={t.competency_id}
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="font-medium">{t.competency_id}</p>
-              <p className="text-emerald-300 text-xs">
-                {Math.round(t.latest_score_pct)}%
-                {t.delta_vs_previous != null && t.delta_vs_previous !== 0 && (
-                  <span
-                    className={`ml-1 ${t.delta_vs_previous >= 0 ? "text-emerald-400" : "text-red-300"}`}
-                  >
-                    ({t.delta_vs_previous >= 0 ? "+" : ""}
-                    {t.delta_vs_previous.toFixed(1)} vs prior)
-                  </span>
-                )}
+        {trends.map((t) => {
+          const dist = distributions[t.competency_id];
+          return (
+            <li
+              className="rounded border border-border/40 bg-background/30 p-3"
+              key={t.competency_id}
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-medium">{t.competency_id}</p>
+                <p className="text-emerald-300 text-xs">
+                  {Math.round(t.latest_score_pct)}%
+                  {t.delta_vs_previous != null && t.delta_vs_previous !== 0 && (
+                    <span
+                      className={`ml-1 ${t.delta_vs_previous >= 0 ? "text-emerald-400" : "text-red-300"}`}
+                    >
+                      ({t.delta_vs_previous >= 0 ? "+" : ""}
+                      {t.delta_vs_previous.toFixed(1)} vs prior)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <Sparkline points={t.points.map((p) => p.score_pct)} />
+              <p className="mt-1 text-muted-foreground text-xs">
+                {t.points.length} attempt{t.points.length === 1 ? "" : "s"}
               </p>
-            </div>
-            <Sparkline points={t.points.map((p) => p.score_pct)} />
-            <p className="mt-1 text-muted-foreground text-xs">
-              {t.points.length} attempt{t.points.length === 1 ? "" : "s"}
-            </p>
-          </li>
-        ))}
+              {dist && dist.sample_size > 0 && (
+                <div className="mt-2 border-border/30 border-t pt-2">
+                  <p className="mb-1 text-muted-foreground text-[11px] uppercase tracking-wide">
+                    vs. team
+                  </p>
+                  <DistributionBox
+                    candidateScore={t.latest_score_pct}
+                    stats={dist}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

@@ -194,10 +194,27 @@ export const createAssignment = (body: {
   module_id: string;
   subject_id: string;
   expires_in_days: number;
+  send_email?: boolean;
 }) =>
   callApi<AssignmentMagicLink>("/api/assignments", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ send_email: true, ...body }),
+  });
+
+export type AssignmentBulkResult = {
+  created: AssignmentMagicLink[];
+  failed: Array<{ subject_id: string; detail: string }>;
+};
+
+export const bulkCreateAssignments = (body: {
+  module_id: string;
+  subject_ids: string[];
+  expires_in_days: number;
+  send_email?: boolean;
+}) =>
+  callApi<AssignmentBulkResult>("/api/assignments/bulk", {
+    method: "POST",
+    body: JSON.stringify({ send_email: true, ...body }),
   });
 export const cancelAssignment = (id: string) =>
   callApi<AssignmentDetail>(`/api/assignments/${id}/cancel`, {
@@ -529,3 +546,54 @@ export const attachAssignmentToSeries = (
     `/api/series/${encodeURIComponent(seriesId)}/assignments/${encodeURIComponent(assignmentId)}`,
     { method: "POST", body: JSON.stringify({}) }
   );
+
+export type SeriesIssueNextResponse = {
+  series_id: string;
+  assignment_id: string;
+  module_id: string;
+  magic_link_url: string;
+  expires_at: string;
+  sequence_number: number;
+  next_due_at: string | null;
+};
+
+export const issueNextForSeries = (
+  seriesId: string,
+  options?: { expires_in_days?: number; send_email?: boolean },
+) => {
+  const qs = new URLSearchParams();
+  if (options?.expires_in_days != null)
+    qs.set("expires_in_days", String(options.expires_in_days));
+  if (options?.send_email != null)
+    qs.set("send_email", String(options.send_email));
+  const q = qs.toString();
+  return callApi<SeriesIssueNextResponse>(
+    `/api/series/${encodeURIComponent(seriesId)}/issue-next${q ? `?${q}` : ""}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+};
+
+export type CompetencyDistributionResponse = {
+  competency_id: string;
+  sample_size: number;
+  min_pct: number;
+  p25_pct: number;
+  median_pct: number;
+  p75_pct: number;
+  max_pct: number;
+  values: number[];
+};
+
+export const competencyDistribution = (params: {
+  competency_id: string;
+  type?: SubjectType;
+  exclude_subject_id?: string;
+}) => {
+  const qs = new URLSearchParams({ competency_id: params.competency_id });
+  if (params.type) qs.set("type", params.type);
+  if (params.exclude_subject_id)
+    qs.set("exclude_subject_id", params.exclude_subject_id);
+  return callApi<CompetencyDistributionResponse>(
+    `/api/cohorts/distribution?${qs.toString()}`
+  );
+};

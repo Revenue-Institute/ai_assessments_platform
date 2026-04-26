@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import {
   ApiError,
-  createAssignment,
+  type AssignmentMagicLink,
+  bulkCreateAssignments,
   listModules,
   listSubjects,
   type ModuleSummary,
@@ -11,14 +12,19 @@ import { Header } from "../../components/header";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ error?: string; link?: string; expires?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  ok?: string;
+  links?: string;
+  failed?: string;
+}>;
 
 export default async function NewAssignmentPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const { error, link, expires } = await searchParams;
+  const sp = await searchParams;
 
   let modules: ModuleSummary[] = [];
   let subjects: SubjectSummary[] = [];
@@ -35,26 +41,34 @@ export default async function NewAssignmentPage({
   async function action(formData: FormData): Promise<void> {
     "use server";
     const module_id = String(formData.get("module_id") ?? "");
-    const subject_id = String(formData.get("subject_id") ?? "");
+    const subject_ids = formData.getAll("subject_ids").map((v) => String(v));
     const expires_in_days = Number.parseInt(
       String(formData.get("expires_in_days") ?? "7"),
       10
     );
-    if (!module_id || !subject_id) {
+    const send_email = formData.get("send_email") === "on";
+
+    if (!module_id || subject_ids.length === 0) {
       redirect(
         "/assignments/new?error=" +
-          encodeURIComponent("Pick a module and a subject.")
+          encodeURIComponent("Pick a module and at least one subject.")
       );
     }
+
     try {
-      const result = await createAssignment({
+      const result = await bulkCreateAssignments({
         module_id,
-        subject_id,
+        subject_ids,
         expires_in_days,
+        send_email,
       });
+      const linksJson = encodeURIComponent(
+        JSON.stringify(result.created.map(linkPair))
+      );
+      const failedJson = encodeURIComponent(JSON.stringify(result.failed));
       redirect(
-        `/assignments/new?link=${encodeURIComponent(result.magic_link_url)}` +
-          `&expires=${encodeURIComponent(result.expires_at)}`
+        `/assignments/new?links=${linksJson}&failed=${failedJson}` +
+          (send_email ? "&ok=" + encodeURIComponent("Invites sent") : "")
       );
     } catch (e) {
       if (e instanceof ApiError) {
@@ -64,39 +78,72 @@ export default async function NewAssignmentPage({
     }
   }
 
+  const issuedLinks = decodeIssuedLinks(sp.links);
+  const failedRows = decodeFailedRows(sp.failed);
+
   return (
     <>
       <Header page="New assignment" pages={["Assignments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Issue a magic-link assignment</h1>
+          <h1 className="font-semibold text-xl">Issue magic-link assignments</h1>
           <p className="text-muted-foreground text-sm">
-            The token is signed once and shown below. Copy and email it to the
-            subject; it cannot be retrieved later.
+            Pick one or more subjects and a published module. Each subject gets
+            their own assignment + JWT. Invites are emailed via Resend when
+            enabled and configured; otherwise copy the URLs from the response.
           </p>
         </section>
 
-        {(error || loadError) && (
+        {(sp.error || loadError) && (
           <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
-            {error || loadError}
+            {sp.error || loadError}
           </p>
         )}
 
-        {link && (
+        {issuedLinks.length > 0 && (
           <section className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 p-4 text-sm">
-            <p className="font-medium text-emerald-200">Magic link issued</p>
-            <p className="mt-1 text-emerald-100/70 text-xs">
-              Expires {expires ? new Date(expires).toLocaleString() : ""}
+            <p className="font-medium text-emerald-200">
+              {issuedLinks.length} magic link
+              {issuedLinks.length === 1 ? "" : "s"} issued
+              {sp.ok ? ` · ${sp.ok}` : ""}
             </p>
-            <code className="mt-2 block break-all rounded bg-emerald-950/60 p-2 text-emerald-100 text-xs">
-              {link}
-            </code>
+            <p className="mt-1 text-emerald-100/70 text-xs">
+              Tokens are not retrievable later. Copy what you need now.
+            </p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {issuedLinks.map((row, i) => (
+                <li className="flex flex-col gap-1" key={i}>
+                  <span className="text-emerald-300/70">
+                    Assignment <code>{row.assignment_id.slice(0, 8)}…</code>
+                  </span>
+                  <code className="break-all rounded bg-emerald-950/60 p-2 text-emerald-100">
+                    {row.magic_link_url}
+                  </code>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {failedRows.length > 0 && (
+          <section className="rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-sm">
+            <p className="font-medium text-red-200">
+              {failedRows.length} subject{failedRows.length === 1 ? "" : "s"} failed
+            </p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {failedRows.map((f, i) => (
+                <li key={i}>
+                  <code className="text-red-300">{f.subject_id}</code> ·{" "}
+                  {f.detail}
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
         <form
           action={action}
-          className="grid max-w-2xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
+          className="grid max-w-3xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
           <label className="space-y-1">
             <span className="text-sm">Module (published only)</span>
@@ -118,47 +165,96 @@ export default async function NewAssignmentPage({
               ))}
             </select>
           </label>
-          <label className="space-y-1">
-            <span className="text-sm">Subject</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue=""
-              name="subject_id"
-              required
-            >
-              <option disabled value="">
-                {subjects.length === 0
-                  ? "No subjects — add one in Subjects"
-                  : "Pick a subject"}
-              </option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.full_name} · {s.email} ({s.type})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm">Expires in (days)</span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue="7"
-              max="90"
-              min="1"
-              name="expires_in_days"
-              required
-              type="number"
-            />
-          </label>
+
+          <fieldset className="space-y-2 rounded border border-border/40 bg-background/30 p-3">
+            <legend className="px-1 text-sm">Subjects</legend>
+            {subjects.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No subjects — add one in Subjects first.
+              </p>
+            ) : (
+              <ul className="grid max-h-72 gap-1 overflow-auto md:grid-cols-2">
+                {subjects.map((s) => (
+                  <li key={s.id}>
+                    <label className="flex cursor-pointer items-start gap-2 rounded p-1 hover:bg-muted/40">
+                      <input
+                        className="mt-1"
+                        name="subject_ids"
+                        type="checkbox"
+                        value={s.id}
+                      />
+                      <span className="min-w-0 flex-1 text-sm">
+                        <span className="block truncate font-medium">
+                          {s.full_name}
+                        </span>
+                        <span className="block truncate text-muted-foreground text-xs">
+                          {s.email} · {s.type}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </fieldset>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="space-y-1">
+              <span className="text-sm">Expires in (days)</span>
+              <input
+                className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+                defaultValue="7"
+                max="90"
+                min="1"
+                name="expires_in_days"
+                required
+                type="number"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input defaultChecked name="send_email" type="checkbox" />
+              <span>Send invite email via Resend</span>
+            </label>
+          </div>
+
           <button
             className="mt-1 rounded bg-emerald-500 px-3 py-2 text-emerald-950 text-sm hover:bg-emerald-400 disabled:opacity-50"
             disabled={publishable.length === 0 || subjects.length === 0}
             type="submit"
           >
-            Issue magic link
+            Issue magic links
           </button>
         </form>
       </div>
     </>
   );
+}
+
+function linkPair(link: AssignmentMagicLink) {
+  return {
+    assignment_id: link.assignment_id,
+    magic_link_url: link.magic_link_url,
+  };
+}
+
+function decodeIssuedLinks(
+  raw: string | undefined,
+): Array<{ assignment_id: string; magic_link_url: string }> {
+  if (!raw) return [];
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return [];
+  }
+}
+
+function decodeFailedRows(
+  raw: string | undefined,
+): Array<{ subject_id: string; detail: string }> {
+  if (!raw) return [];
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return [];
+  }
 }
