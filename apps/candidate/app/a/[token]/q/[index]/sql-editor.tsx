@@ -65,17 +65,17 @@ export function SqlRenderer({
       <input name="answer" type="hidden" value={JSON.stringify({ sql })} />
 
       {(config.schema_sql || config.seed_sql) && (
-        <details className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-3 text-xs">
-          <summary className="cursor-pointer text-emerald-200">
+        <details className="rounded-lg border border-border bg-card p-3 text-xs">
+          <summary className="cursor-pointer text-primary">
             Schema and seed
           </summary>
           {config.schema_sql && (
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
               {config.schema_sql}
             </pre>
           )}
           {config.seed_sql && (
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
               {config.seed_sql}
             </pre>
           )}
@@ -83,7 +83,7 @@ export function SqlRenderer({
       )}
 
       <div
-        className="overflow-hidden rounded-lg border border-emerald-900/60"
+        className="overflow-hidden rounded-lg border border-border"
         data-allow-paste="true"
       >
         <Editor
@@ -102,7 +102,7 @@ export function SqlRenderer({
       </div>
 
       <button
-        className="rounded border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm hover:bg-emerald-900/40 disabled:opacity-50"
+        className="rounded border border-border bg-card px-3 py-2 text-sm hover:bg-primary/10 disabled:opacity-50"
         disabled={running}
         onClick={runQuery}
         type="button"
@@ -111,7 +111,7 @@ export function SqlRenderer({
       </button>
 
       {networkError && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
           {networkError}
         </p>
       )}
@@ -126,32 +126,32 @@ export function SqlRenderer({
 function ResultPane({ result }: { result: SqlRunResult }) {
   if (result.error) {
     return (
-      <section className="rounded-lg border border-red-900/50 bg-red-950/30 p-3 text-xs">
-        <p className="font-medium text-red-200">Query error</p>
-        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-red-950/40 p-2 text-red-100">
+      <section className="rounded border border-destructive/50 bg-destructive/15 p-3 text-xs">
+        <p className="font-medium text-destructive">Query error</p>
+        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-destructive/15 p-2 text-destructive">
           {result.error}
         </pre>
-        <p className="mt-2 text-red-300/70">
+        <p className="mt-2 text-destructive/80">
           {result.timed_out ? "Timed out" : `${result.runtime_ms} ms`}
         </p>
       </section>
     );
   }
   return (
-    <section className="rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-3 text-xs">
+    <section className="rounded-lg border border-border bg-card p-3 text-xs">
       <header className="mb-2 flex items-center justify-between">
-        <p className="font-medium text-emerald-200">
+        <p className="font-medium text-primary">
           {result.rows.length} row{result.rows.length === 1 ? "" : "s"}
         </p>
-        <p className="text-emerald-300/60">{result.runtime_ms} ms</p>
+        <p className="text-muted-foreground">{result.runtime_ms} ms</p>
       </header>
-      <div className="max-h-72 overflow-auto rounded border border-emerald-900/40">
+      <div className="max-h-72 overflow-auto rounded border border-border">
         <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 bg-emerald-950/80 text-emerald-200">
+          <thead className="sticky top-0 bg-secondary text-foreground">
             <tr>
               {result.columns.map((c) => (
                 <th
-                  className="border-emerald-900/40 border-b px-2 py-1 font-medium"
+                  className="border-border border-b px-2 py-1 font-medium"
                   key={c}
                 >
                   {c}
@@ -161,10 +161,10 @@ function ResultPane({ result }: { result: SqlRunResult }) {
           </thead>
           <tbody>
             {result.rows.map((row, i) => (
-              <tr className="odd:bg-emerald-950/20" key={i}>
+              <tr className="odd:bg-secondary/30" key={i}>
                 {row.map((cell, j) => (
                   <td
-                    className="border-emerald-900/30 border-b px-2 py-1"
+                    className="border-border/60 border-b px-2 py-1"
                     key={j}
                   >
                     {formatCell(cell)}
@@ -175,7 +175,7 @@ function ResultPane({ result }: { result: SqlRunResult }) {
           </tbody>
         </table>
         {result.rows.length === 0 && (
-          <p className="px-2 py-3 text-emerald-300/60">No rows.</p>
+          <p className="px-2 py-3 text-muted-foreground">No rows.</p>
         )}
       </div>
     </section>

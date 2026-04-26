@@ -110,13 +110,13 @@ export function N8nRenderer({
       />
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-emerald-300/70">
+        <span className="text-muted-foreground">
           {workflowId
             ? `Workflow ${workflowId.slice(0, 10)}…`
             : "Provisioning n8n workspace…"}
         </span>
         <button
-          className="rounded border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 hover:bg-emerald-900/40 disabled:opacity-50"
+          className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10 disabled:opacity-50"
           disabled={!workflowId || busy !== "none"}
           onClick={exportWorkflow}
           type="button"
@@ -124,7 +124,7 @@ export function N8nRenderer({
           {busy === "export" ? "Exporting…" : "Export current state"}
         </button>
         <button
-          className="rounded border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 hover:bg-emerald-900/40 disabled:opacity-50"
+          className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10 disabled:opacity-50"
           disabled={busy !== "none"}
           onClick={provision}
           type="button"
@@ -134,21 +134,21 @@ export function N8nRenderer({
       </div>
 
       {error && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
           {error}
         </p>
       )}
 
       {embedUrl ? (
         <iframe
-          className="h-[640px] w-full overflow-hidden rounded-lg border border-emerald-900/60 bg-emerald-950/20"
+          className="h-[640px] w-full overflow-hidden rounded-lg border border-border bg-card/60"
           referrerPolicy="origin"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           src={embedUrl}
           title="n8n workflow editor"
         />
       ) : (
-        <div className="flex h-[300px] items-center justify-center rounded-lg border border-emerald-900/60 bg-emerald-950/20 text-emerald-300/70 text-sm">
+        <div className="flex h-[300px] items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground text-sm">
           {error
             ? "n8n workspace unavailable. The admin can rescore this attempt later."
             : "Loading n8n workspace…"}
@@ -156,17 +156,17 @@ export function N8nRenderer({
       )}
 
       {exportedWorkflow && (
-        <details className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-3 text-xs">
-          <summary className="cursor-pointer text-emerald-200">
+        <details className="rounded-lg border border-border bg-card p-3 text-xs">
+          <summary className="cursor-pointer text-primary">
             Captured workflow JSON ({Object.keys(exportedWorkflow).length} keys)
           </summary>
-          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
             {JSON.stringify(exportedWorkflow, null, 2)}
           </pre>
         </details>
       )}
 
-      <p className="text-emerald-300/60 text-xs">
+      <p className="text-muted-foreground text-xs">
         Build the workflow in the iframe. Click <em>Export current state</em>
         before submitting; it captures the workflow JSON the grader sees.
       </p>

@@ -120,13 +120,11 @@ function McqRenderer({ question }: { question: CandidateQuestionView }) {
     ?.selected;
 
   return (
-    <fieldset className="space-y-2 rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-4">
-      <legend className="px-1 text-emerald-300/70 text-xs uppercase tracking-wide">
-        Choose one
-      </legend>
+    <fieldset className="space-y-2 rounded border border-border bg-card p-4">
+      <legend className="eyebrow-label px-1">Choose one</legend>
       {options.map((opt, i) => (
         <label
-          className="flex cursor-pointer items-start gap-3 rounded border border-transparent px-2 py-2 hover:border-emerald-800/60 hover:bg-emerald-900/30"
+          className="flex cursor-pointer items-start gap-3 rounded border border-transparent px-2 py-2 hover:border-primary/40 hover:bg-primary/5"
           key={`${i}-${opt}`}
         >
           <input
@@ -156,7 +154,7 @@ function ShortAnswerRenderer({
   return (
     <input
       autoComplete="off"
-      className="w-full rounded border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+      className="w-full rounded border border-border bg-card px-3 py-2 text-sm focus:border-primary focus:outline-none"
       defaultValue={previous ?? ""}
       maxLength={300}
       name="answer"
@@ -176,7 +174,7 @@ function LongAnswerRenderer({
     ?.text;
   return (
     <textarea
-      className="h-48 w-full rounded border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm leading-6 focus:border-emerald-500 focus:outline-none"
+      className="h-48 w-full rounded border border-border bg-card px-3 py-2 text-sm leading-6 focus:border-primary focus:outline-none"
       defaultValue={previous ?? ""}
       maxLength={4000}
       name="answer"
@@ -192,9 +190,9 @@ function UnsupportedRenderer({
   question: CandidateQuestionView;
 }) {
   return (
-    <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 p-4 text-amber-100 text-sm">
+    <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 text-sm">
       <p className="font-medium">Renderer not yet wired</p>
-      <p className="mt-1 text-amber-100/80">
+      <p className="mt-1 text-amber-200/80">
         Question type <code>{question.type}</code> renders in a later phase.
         Submit a placeholder to advance.
       </p>

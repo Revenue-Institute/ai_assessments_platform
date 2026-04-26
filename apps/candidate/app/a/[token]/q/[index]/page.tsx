@@ -42,7 +42,7 @@ export default async function QuestionPage({
           <h1 className="font-semibold text-2xl">
             {error.status === 404 ? "Question not found" : "Something went wrong"}
           </h1>
-          <p className="text-emerald-100/70 text-sm">{error.message}</p>
+          <p className="text-muted-foreground text-sm">{error.message}</p>
         </main>
       );
     }
@@ -107,18 +107,18 @@ export default async function QuestionPage({
       <QuestionNavigator current={idx} token={token} total={question.total} />
 
       <header className="flex items-center justify-between">
-        <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
+        <p className="eyebrow-label">
           Question {idx + 1} of {question.total}
         </p>
         <CountdownTimer deadlineIso={question.expires_at} />
       </header>
 
       <article className="space-y-2">
-        <h1 className="whitespace-pre-wrap font-medium text-xl leading-relaxed">
+        <h1 className="whitespace-pre-wrap font-semibold text-2xl leading-relaxed">
           {question.rendered_prompt}
         </h1>
         {question.competency_tags.length > 0 && (
-          <p className="text-emerald-300/60 text-xs">
+          <p className="text-muted-foreground text-xs">
             {question.competency_tags.map((t) => `#${t}`).join("  ")}
           </p>
         )}
@@ -127,7 +127,7 @@ export default async function QuestionPage({
       {submitError && (
         <p
           aria-live="assertive"
-          className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm"
+          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
           role="alert"
         >
           {submitError}
@@ -148,10 +148,7 @@ export default async function QuestionPage({
 
 function SubmitButton({ last }: { last: boolean }) {
   return (
-    <button
-      className="w-full rounded bg-emerald-500 px-3 py-3 font-medium text-emerald-950 hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950"
-      type="submit"
-    >
+    <button className="btn-primary w-full" type="submit">
       {last ? "Submit and finish" : "Save and continue"}
     </button>
   );

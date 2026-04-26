@@ -66,72 +66,62 @@ export default async function CandidateLandingPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12 animate-reveal">
       <header className="space-y-2">
-        <p className="text-emerald-300/70 text-xs uppercase tracking-widest">
-          Revenue Institute
-        </p>
+        <p className="eyebrow-label">Revenue Institute</p>
         <h1 className="font-semibold text-3xl">{assignment.module.title}</h1>
-        <p className="text-emerald-100/70 text-sm">
+        <p className="text-muted-foreground text-sm">
           {assignment.module.description}
         </p>
       </header>
 
-      <dl className="grid grid-cols-2 gap-3 rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-5 text-sm">
+      <dl className="grid grid-cols-2 gap-3 rounded border border-border bg-card p-5 text-sm">
         <div>
-          <dt className="text-emerald-300/60 text-xs uppercase tracking-wide">
-            Candidate
-          </dt>
-          <dd className="font-medium">{assignment.subject.full_name}</dd>
+          <dt className="eyebrow-label">Candidate</dt>
+          <dd className="mt-1 font-medium">{assignment.subject.full_name}</dd>
         </div>
         <div>
-          <dt className="text-emerald-300/60 text-xs uppercase tracking-wide">
-            Time limit
-          </dt>
-          <dd className="font-medium">
+          <dt className="eyebrow-label">Time limit</dt>
+          <dd className="mt-1 font-medium">
             {assignment.module.target_duration_minutes} minutes
           </dd>
         </div>
         <div>
-          <dt className="text-emerald-300/60 text-xs uppercase tracking-wide">
-            Questions
-          </dt>
-          <dd className="font-medium">{assignment.module.question_count}</dd>
+          <dt className="eyebrow-label">Questions</dt>
+          <dd className="mt-1 font-medium">{assignment.module.question_count}</dd>
         </div>
         <div>
-          <dt className="text-emerald-300/60 text-xs uppercase tracking-wide">
-            Link expires
-          </dt>
-          <dd className="font-medium">
+          <dt className="eyebrow-label">Link expires</dt>
+          <dd className="mt-1 font-medium">
             {new Date(assignment.expires_at).toLocaleString()}
           </dd>
         </div>
       </dl>
 
-      <section className="space-y-3 rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-5 text-sm leading-6">
+      <section className="space-y-3 rounded border border-border bg-card p-5 text-sm leading-6">
         <p className="font-medium">During this session we monitor:</p>
-        <ul className="list-disc space-y-1 pl-5 text-emerald-100/80">
+        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>Tab focus, fullscreen state, and window size changes</li>
           <li>Copy, cut, and paste attempts outside the code editor</li>
           <li>Time spent active on each question</li>
         </ul>
-        <p className="text-emerald-100/60">
+        <p className="text-muted-foreground">
           Raw answers are stored permanently. AI scores them against a rubric
           and a human reviewer may re-score before final results are issued.
         </p>
       </section>
 
       {consentError && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p
+          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+          role="alert"
+        >
           {consentError}
         </p>
       )}
 
       <form action={handleConsent}>
-        <button
-          className="w-full rounded bg-emerald-500 px-3 py-3 font-medium text-emerald-950 hover:bg-emerald-400"
-          type="submit"
-        >
+        <button className="btn-primary w-full" type="submit">
           I understand and consent to begin
         </button>
       </form>
@@ -143,7 +133,7 @@ function NoticeView({ title, body }: { title: string; body: string }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
       <h1 className="font-semibold text-2xl">{title}</h1>
-      <p className="text-emerald-100/70 text-sm">{body}</p>
+      <p className="text-muted-foreground text-sm">{body}</p>
     </main>
   );
 }
@@ -166,8 +156,8 @@ function ErrorView({
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
       <h1 className="font-semibold text-2xl">{headline}</h1>
-      <p className="text-emerald-100/70 text-sm">{message}</p>
-      <p className="text-emerald-100/40 text-xs">
+      <p className="text-muted-foreground text-sm">{message}</p>
+      <p className="text-muted-foreground/60 text-xs">
         Reference: <code>{token.slice(0, 8)}…</code>
       </p>
     </main>

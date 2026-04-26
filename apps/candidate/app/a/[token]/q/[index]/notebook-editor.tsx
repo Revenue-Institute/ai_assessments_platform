@@ -117,11 +117,11 @@ export function NotebookRenderer({
       <input name="answer" type="hidden" value={JSON.stringify({ cells })} />
 
       {(config.dataset_urls?.length ?? 0) > 0 && (
-        <details className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-3 text-xs">
-          <summary className="cursor-pointer text-emerald-200">
+        <details className="rounded-lg border border-border bg-card p-3 text-xs">
+          <summary className="cursor-pointer text-primary">
             Datasets in /data/
           </summary>
-          <ul className="mt-2 space-y-1 text-emerald-100/80">
+          <ul className="mt-2 space-y-1 text-muted-foreground">
             {config.dataset_urls?.map((u) => (
               <li className="break-all" key={u}>
                 <code>{u}</code>
@@ -133,20 +133,20 @@ export function NotebookRenderer({
 
       <div className="flex items-center gap-2 text-xs">
         <button
-          className="rounded bg-emerald-500 px-3 py-2 text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
+          className="rounded bg-primary px-3 py-2 text-primary-foreground font-medium hover:bg-neon hover:text-deep-navy disabled:opacity-50"
           disabled={running}
           onClick={runAll}
           type="button"
         >
           {running ? "Running…" : "Run all"}
         </button>
-        <span className="text-emerald-300/60">
+        <span className="text-muted-foreground">
           Cells run in order in a stateful Python kernel.
         </span>
       </div>
 
       {networkError && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
           {networkError}
         </p>
       )}
@@ -154,15 +154,15 @@ export function NotebookRenderer({
       <ol className="space-y-3">
         {cells.map((cell, i) => (
           <li
-            className="space-y-2 rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-3"
+            className="space-y-2 rounded-lg border border-border bg-card p-3"
             key={i}
           >
             <div className="flex items-center gap-2 text-xs">
-              <span className="font-medium text-emerald-300/80">
+              <span className="font-medium text-muted-foreground">
                 Cell {i + 1}
               </span>
               <select
-                className="rounded border border-emerald-900/60 bg-emerald-950/40 px-2 py-1"
+                className="rounded border border-border bg-card px-2 py-1"
                 onChange={(e) => setCellType(i, e.target.value as Cell["type"])}
                 value={cell.type}
               >
@@ -171,21 +171,21 @@ export function NotebookRenderer({
               </select>
               <div className="ml-auto flex items-center gap-1">
                 <button
-                  className="rounded border border-emerald-900/60 px-2 py-0.5 text-[11px] hover:bg-emerald-900/40"
+                  className="rounded border border-border px-2 py-0.5 text-[11px] hover:bg-primary/10"
                   onClick={() => addCell(i, "code")}
                   type="button"
                 >
                   + code
                 </button>
                 <button
-                  className="rounded border border-emerald-900/60 px-2 py-0.5 text-[11px] hover:bg-emerald-900/40"
+                  className="rounded border border-border px-2 py-0.5 text-[11px] hover:bg-primary/10"
                   onClick={() => addCell(i, "markdown")}
                   type="button"
                 >
                   + markdown
                 </button>
                 <button
-                  className="rounded border border-red-900/40 bg-red-950/30 px-2 py-0.5 text-[11px] text-red-200 hover:bg-red-950/50 disabled:opacity-50"
+                  className="rounded border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive hover:bg-destructive/20 disabled:opacity-50"
                   disabled={cells.length === 1}
                   onClick={() => deleteCell(i)}
                   type="button"
@@ -197,7 +197,7 @@ export function NotebookRenderer({
 
             {cell.type === "code" ? (
               <div
-                className="overflow-hidden rounded border border-emerald-900/40"
+                className="overflow-hidden rounded border border-border"
                 data-allow-paste="true"
               >
                 <Editor
@@ -215,7 +215,7 @@ export function NotebookRenderer({
               </div>
             ) : (
               <textarea
-                className="h-32 w-full rounded border border-emerald-900/40 bg-emerald-950/40 p-2 text-sm leading-6"
+                className="h-32 w-full rounded border border-border bg-card p-2 text-sm leading-6"
                 onChange={(e) => updateCell(i, e.target.value)}
                 placeholder="# Markdown notes..."
                 value={cell.source}
@@ -235,7 +235,7 @@ export function NotebookRenderer({
 function CellOutputView({ output }: { output: CellOutput }) {
   if (!output.stdout && !output.stderr && !output.error) {
     return (
-      <p className="text-emerald-300/60 text-xs">
+      <p className="text-muted-foreground text-xs">
         No output. ({output.runtime_ms} ms)
       </p>
     );
@@ -243,21 +243,21 @@ function CellOutputView({ output }: { output: CellOutput }) {
   return (
     <div className="space-y-2 text-xs">
       {output.stdout && (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
           {output.stdout}
         </pre>
       )}
       {output.stderr && (
-        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-amber-950/40 p-2 text-amber-200">
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-amber-500/10 p-2 text-amber-300">
           {output.stderr}
         </pre>
       )}
       {output.error && (
-        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-red-950/40 p-2 text-red-200">
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-destructive/15 p-2 text-destructive">
           {output.error}
         </pre>
       )}
-      <p className="text-emerald-300/50">{output.runtime_ms} ms</p>
+      <p className="text-muted-foreground/70">{output.runtime_ms} ms</p>
     </div>
   );
 }

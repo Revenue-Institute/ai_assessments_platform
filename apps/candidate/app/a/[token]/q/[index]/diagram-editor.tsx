@@ -183,10 +183,10 @@ function DiagramCanvas({
         value={JSON.stringify({ diagram: serialized })}
       />
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="text-emerald-300/70">Add:</span>
+        <span className="text-muted-foreground">Add:</span>
         {palette.map((item) => (
           <button
-            className="rounded border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 hover:bg-emerald-900/40"
+            className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10"
             key={`${item.type}-${item.label}`}
             onClick={() => addNode(item)}
             type="button"
@@ -194,13 +194,13 @@ function DiagramCanvas({
             {item.label}
           </button>
         ))}
-        <span className="ml-auto text-emerald-300/60">
+        <span className="ml-auto text-muted-foreground">
           Drag to position · double-click to rename · drag from a node edge to connect
         </span>
       </div>
 
       <div
-        className="h-[420px] overflow-hidden rounded-lg border border-emerald-900/60 bg-emerald-950/20"
+        className="h-[420px] overflow-hidden rounded border border-border bg-card"
         data-allow-paste="true"
       >
         <ReactFlow
@@ -218,11 +218,11 @@ function DiagramCanvas({
       </div>
 
       {renaming && (
-        <div className="flex items-center gap-2 rounded border border-emerald-900/60 bg-emerald-950/40 p-2 text-xs">
-          <span className="text-emerald-300/70">Rename node:</span>
+        <div className="flex items-center gap-2 rounded border border-border bg-card p-2 text-xs">
+          <span className="text-muted-foreground">Rename node:</span>
           <input
             autoFocus
-            className="flex-1 rounded border border-emerald-900/60 bg-emerald-950/30 px-2 py-1"
+            className="flex-1 rounded border border-border bg-background px-2 py-1"
             onChange={(e) =>
               setRenaming({ id: renaming.id, label: e.target.value })
             }
@@ -233,7 +233,7 @@ function DiagramCanvas({
             value={renaming.label}
           />
           <button
-            className="rounded bg-emerald-500 px-2 py-1 text-emerald-950"
+            className="rounded bg-primary px-2 py-1 text-primary-foreground font-medium"
             onClick={commitRename}
             type="button"
           >

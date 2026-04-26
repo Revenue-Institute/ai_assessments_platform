@@ -145,14 +145,14 @@ export function CandidateMonitor({ token }: { token: string }) {
     <>
       {!isFullscreen && (
         <div
-          className="rounded border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-amber-200 text-xs"
+          className="flex items-center justify-between gap-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200 text-xs"
           role="status"
         >
-          <span className="mr-3">
+          <span>
             This assessment runs in fullscreen. Exits are logged.
           </span>
           <button
-            className="rounded bg-amber-500 px-2 py-1 font-medium text-amber-950 hover:bg-amber-400"
+            className="rounded bg-amber-400 px-2 py-1 font-medium text-amber-950 hover:bg-amber-300"
             onClick={enterFullscreen}
             type="button"
           >
@@ -168,20 +168,20 @@ export function CandidateMonitor({ token }: { token: string }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
           role="dialog"
         >
-          <div className="max-w-md rounded-xl border border-amber-900/60 bg-emerald-950/95 p-6 text-center shadow-xl">
+          <div className="max-w-md rounded border border-amber-500/40 bg-card p-6 text-center shadow-xl animate-reveal">
             <h2
               className="font-semibold text-amber-200 text-lg"
               id="fs-modal-title"
             >
               Return to fullscreen to continue
             </h2>
-            <p className="mt-2 text-sm text-emerald-100/70">
+            <p className="mt-2 text-muted-foreground text-sm">
               Your timer is still running and this exit has been logged.
               Re-enter fullscreen to dismiss this prompt.
             </p>
             <button
               autoFocus
-              className="mt-4 rounded bg-emerald-500 px-4 py-2 font-medium text-emerald-950 hover:bg-emerald-400"
+              className="btn-primary mt-4"
               onClick={enterFullscreen}
               type="button"
             >

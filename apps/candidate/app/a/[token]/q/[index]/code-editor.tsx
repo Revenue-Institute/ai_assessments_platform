@@ -122,7 +122,7 @@ export function CodeRenderer({
       {/* Monaco lives inside the allow-paste zone so the integrity monitor
           tolerates copy/paste/keyboard shortcuts there. */}
       <div
-        className="overflow-hidden rounded-lg border border-emerald-900/60"
+        className="overflow-hidden rounded-lg border border-border"
         data-allow-paste="true"
       >
         <Editor
@@ -142,7 +142,7 @@ export function CodeRenderer({
 
       <div className="flex flex-wrap gap-2">
         <button
-          className="rounded border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm hover:bg-emerald-900/40 disabled:opacity-50"
+          className="rounded border border-border bg-card px-3 py-2 text-sm hover:bg-primary/10 disabled:opacity-50"
           disabled={running !== "none"}
           onClick={runCode}
           type="button"
@@ -151,7 +151,7 @@ export function CodeRenderer({
         </button>
         {hasVisibleTests && (
           <button
-            className="rounded border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm hover:bg-emerald-900/40 disabled:opacity-50"
+            className="rounded border border-border bg-card px-3 py-2 text-sm hover:bg-primary/10 disabled:opacity-50"
             disabled={running !== "none"}
             onClick={runTests}
             type="button"
@@ -162,7 +162,7 @@ export function CodeRenderer({
       </div>
 
       {error && (
-        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
           {error}
         </p>
       )}
@@ -197,23 +197,23 @@ function ResultPane({
   exitCode: number;
 }) {
   return (
-    <section className="rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-3 text-xs">
+    <section className="rounded-lg border border-border bg-card p-3 text-xs">
       <header className="mb-2 flex items-center justify-between">
-        <p className="font-medium text-emerald-200">{title}</p>
-        <p className="text-emerald-300/60">exit {exitCode}</p>
+        <p className="font-medium text-primary">{title}</p>
+        <p className="text-muted-foreground">exit {exitCode}</p>
       </header>
       {stdout && (
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
           {stdout}
         </pre>
       )}
       {stderr && (
-        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-red-950/40 p-2 text-red-200">
+        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-destructive/15 p-2 text-destructive">
           {stderr}
         </pre>
       )}
       {!stdout && !stderr && (
-        <p className="text-emerald-300/60">No output.</p>
+        <p className="text-muted-foreground">No output.</p>
       )}
     </section>
   );
@@ -222,20 +222,20 @@ function ResultPane({
 function TestResultPane({ result }: { result: TestResult }) {
   const passed = result.passed === result.total && result.total > 0;
   return (
-    <section className="rounded-lg border border-emerald-900/60 bg-emerald-950/40 p-3 text-xs">
+    <section className="rounded-lg border border-border bg-card p-3 text-xs">
       <header className="mb-2 flex items-center justify-between">
-        <p className="font-medium text-emerald-200">Visible tests</p>
+        <p className="font-medium text-primary">Visible tests</p>
         <p
           className={
             passed
-              ? "font-medium text-emerald-200"
-              : "font-medium text-amber-200"
+              ? "font-medium text-primary"
+              : "font-medium text-amber-300"
           }
         >
           {result.passed}/{result.total} passed ({result.runtime_ms} ms)
         </p>
       </header>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-emerald-950/60 p-2 text-emerald-100">
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-secondary p-2 text-foreground">
         {result.output || "(no output)"}
       </pre>
     </section>

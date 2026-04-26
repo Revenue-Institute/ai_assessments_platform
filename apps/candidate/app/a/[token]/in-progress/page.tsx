@@ -29,7 +29,7 @@ export default async function InProgressGate({
           <h1 className="font-semibold text-2xl">
             {error.status === 410 ? "Link expired" : "Something went wrong"}
           </h1>
-          <p className="text-emerald-100/70 text-sm">{error.message}</p>
+          <p className="text-muted-foreground text-sm">{error.message}</p>
         </main>
       );
     }

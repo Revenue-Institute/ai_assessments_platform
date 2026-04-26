@@ -1,13 +1,9 @@
 @import "tailwindcss";
+@import "@repo/design-system/styles/globals.css";
 
+/* The candidate experience is dark by default (assessment focus mode).
+ * Force the .dark class on <html> so the design-system tokens flip to
+ * Deep Navy backgrounds + Light Base text. */
 :root {
   color-scheme: dark;
-}
-
-html,
-body {
-  background: #0b1411;
-  color: #e6f3ee;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
 }

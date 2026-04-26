@@ -20,10 +20,10 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   const expired = remainingMs === 0;
 
   const tone = expired
-    ? "border-red-900/60 bg-red-950/40 text-red-200"
+    ? "border-destructive/60 bg-destructive/15 text-destructive"
     : minutes < 5
-      ? "border-amber-900/60 bg-amber-950/40 text-amber-200"
-      : "border-emerald-900/60 bg-emerald-950/40 text-emerald-200";
+      ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
+      : "border-primary/40 bg-primary/10 text-primary";
 
   return (
     <p
