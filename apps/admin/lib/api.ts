@@ -386,3 +386,146 @@ export const reviseQuestion = (
       body: JSON.stringify({ ...body, preserve: body.preserve ?? [] }),
     }
   );
+
+// Benchmarks ---------------------------------------------------------------
+
+export type CompetencyScorePoint = {
+  competency_id: string;
+  score_pct: number;
+  point_total: number;
+  point_possible: number;
+  assignment_id: string;
+  computed_at: string;
+};
+
+export type SubjectCompetencyTrend = {
+  competency_id: string;
+  points: CompetencyScorePoint[];
+  latest_score_pct: number;
+  delta_vs_previous: number | null;
+};
+
+export type SubjectCompetencyResponse = {
+  subject_id: string;
+  trends: SubjectCompetencyTrend[];
+};
+
+export type CohortHeatmapCell = {
+  subject_id: string;
+  competency_id: string;
+  score_pct: number;
+  assignment_id: string;
+  computed_at: string;
+};
+
+export type CohortSubject = {
+  id: string;
+  full_name: string;
+  email: string;
+  type: SubjectType;
+};
+
+export type CohortHeatmapResponse = {
+  subjects: CohortSubject[];
+  competencies: string[];
+  cells: CohortHeatmapCell[];
+  team_average_pct: Record<string, number>;
+};
+
+export type WeakSpot = {
+  competency_id: string;
+  median_pct: number;
+  sample_size: number;
+};
+
+export type WeakSpotsResponse = {
+  threshold_pct: number;
+  weak_spots: WeakSpot[];
+};
+
+export const subjectCompetencyScores = (subjectId: string) =>
+  callApi<SubjectCompetencyResponse>(
+    `/api/subjects/${encodeURIComponent(subjectId)}/competency-scores`
+  );
+
+export const cohortHeatmap = (params: {
+  type?: SubjectType;
+  domain?: string;
+  days?: number;
+}) => {
+  const qs = new URLSearchParams();
+  if (params.type) qs.set("type", params.type);
+  if (params.domain) qs.set("domain", params.domain);
+  if (params.days) qs.set("days", String(params.days));
+  const q = qs.toString();
+  return callApi<CohortHeatmapResponse>(
+    `/api/cohorts/heatmap${q ? `?${q}` : ""}`
+  );
+};
+
+export const weakSpots = (params: {
+  type?: SubjectType;
+  threshold_pct?: number;
+}) => {
+  const qs = new URLSearchParams();
+  if (params.type) qs.set("type", params.type);
+  if (params.threshold_pct != null)
+    qs.set("threshold_pct", String(params.threshold_pct));
+  const q = qs.toString();
+  return callApi<WeakSpotsResponse>(
+    `/api/cohorts/weak-spots${q ? `?${q}` : ""}`
+  );
+};
+
+// Series -------------------------------------------------------------------
+
+export type SeriesAssignmentSummary = {
+  assignment_id: string;
+  sequence_number: number;
+  status: string;
+  final_score: number | null;
+  max_possible_score: number | null;
+  completed_at: string | null;
+};
+
+export type SeriesSummary = {
+  id: string;
+  subject_id: string;
+  subject_full_name: string | null;
+  subject_email: string | null;
+  name: string;
+  competency_focus: string[];
+  cadence_days: number | null;
+  next_due_at: string | null;
+  created_at: string;
+  assignment_count: number;
+};
+
+export type SeriesDetail = SeriesSummary & {
+  assignments: SeriesAssignmentSummary[];
+};
+
+export const listSeries = () => callApi<SeriesSummary[]>("/api/series");
+
+export const createSeries = (body: {
+  subject_id: string;
+  name: string;
+  competency_focus: string[];
+  cadence_days?: number | null;
+}) =>
+  callApi<SeriesSummary>("/api/series", {
+    method: "POST",
+    body: JSON.stringify({ cadence_days: null, ...body }),
+  });
+
+export const getSeriesDetail = (id: string) =>
+  callApi<SeriesDetail>(`/api/series/${encodeURIComponent(id)}`);
+
+export const attachAssignmentToSeries = (
+  seriesId: string,
+  assignmentId: string,
+) =>
+  callApi<SeriesDetail>(
+    `/api/series/${encodeURIComponent(seriesId)}/assignments/${encodeURIComponent(assignmentId)}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );

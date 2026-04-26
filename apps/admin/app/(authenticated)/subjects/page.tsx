@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ApiError,
@@ -121,11 +122,16 @@ export default async function SubjectsPage({
           ) : (
             subjects.map((s) => (
               <li className="flex items-center justify-between px-4 py-3" key={s.id}>
-                <div>
-                  <p className="font-medium">{s.full_name}</p>
-                  <p className="text-muted-foreground text-xs">{s.email}</p>
-                </div>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs">
+                <Link
+                  className="block min-w-0 flex-1 hover:underline"
+                  href={`/subjects/${s.id}`}
+                >
+                  <p className="truncate font-medium">{s.full_name}</p>
+                  <p className="truncate text-muted-foreground text-xs">
+                    {s.email}
+                  </p>
+                </Link>
+                <span className="ml-3 rounded bg-muted px-2 py-0.5 text-xs">
                   {s.type}
                 </span>
               </li>
