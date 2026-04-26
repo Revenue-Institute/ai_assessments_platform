@@ -143,3 +143,22 @@ def issue_next(
         send_email=send_email,
     )
     return SeriesIssueNextResponse(**result)
+
+
+@router.post("/api/series/dispatch-due")
+def dispatch_due(
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+    expires_in_days: int = Query(default=7, ge=1, le=90),
+    send_email: bool = Query(default=True),
+) -> dict:
+    """Walks every series with next_due_at <= now and issues the next
+    assignment for each. Designed for a Cloud Scheduler cron — idempotent
+    and partial-failure tolerant."""
+
+    return series_service.dispatch_due_series(
+        supabase,
+        principal,
+        expires_in_days=expires_in_days,
+        send_email=send_email,
+    )

@@ -4,6 +4,72 @@ How to stand up the Revenue Institute Assessments Platform end-to-end.
 Owner: ops + engineering. Last reviewed against `specs/requirements.md`
 phases 0–5.
 
+## Quickstart (production)
+
+```sh
+# 1. Clone + install local deps
+git clone https://github.com/Revenue-Institute/ai_assessments_platform
+cd ai_assessments_platform
+bun install
+cd apps/api && uv sync && cd ../..
+
+# 2. Provision Supabase (link, push migrations, seed taxonomy)
+SUPABASE_PROJECT_REF=<your-ref> bash scripts/setup-supabase.sh
+
+# 3. Fill the consolidated .env at repo root
+cp .env.example .env
+$EDITOR .env
+
+# 4. Verify every required variable is set
+bash scripts/check-env.sh all
+
+# 5. Deploy n8n to Cloud Run; paste the resulting URL into .env as N8N_HOST
+N8N_ENCRYPTION_KEY=$(openssl rand -hex 32) \
+N8N_HOSTNAME=ri-n8n-xxx.a.run.app \
+GCP_PROJECT=<id> GCP_REGION=us-central1 \
+bash infra/cloud-run/deploy-n8n.sh
+
+# 6. Deploy FastAPI to Cloud Run
+GCP_PROJECT=<id> GCP_REGION=us-central1 \
+bash infra/cloud-run/deploy-api.sh
+
+# 7. (Optional) Cron the series next-due dispatcher
+GCP_PROJECT=<id> GCP_REGION=us-central1 \
+API_URL=https://ri-assessments-api-xxx.a.run.app \
+ADMIN_JWT=<service-account JWT signed with SUPABASE_JWT_SECRET> \
+bash infra/scheduler/series-cron.sh
+
+# 8. Connect Vercel projects (one-time, dashboard):
+#    - Repo: this monorepo
+#    - Root Directory: apps/admin (and a second project for apps/candidate)
+#    - Env vars: copy from .env
+
+# 9. Set GitHub Actions secrets (see CI/CD section below); future pushes
+#    to main auto-deploy the API + both Vercel apps.
+```
+
+## CI/CD
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `.github/workflows/ci.yml` | PR + push to main | ruff + pytest on `apps/api`, bun typecheck on admin + candidate |
+| `.github/workflows/deploy-api.yml` | push to main (api / db / infra paths) | Cloud Build → Cloud Run deploy of FastAPI |
+| `.github/workflows/deploy-frontend.yml` | push to main (frontend paths) | Vercel `pull → build → deploy` for admin + candidate |
+
+Required GitHub repo secrets:
+
+```
+GCP_PROJECT, GCP_REGION
+GCP_WORKLOAD_IDENTITY        # workload-identity provider path
+GCP_SERVICE_ACCOUNT          # service account email with run.admin + storage.admin
+API_ENV_VARS                 # KEY=VALUE\n KEY=VALUE\n ... block for FastAPI
+
+VERCEL_TOKEN
+VERCEL_ORG_ID
+VERCEL_ADMIN_PROJECT_ID
+VERCEL_CANDIDATE_PROJECT_ID
+```
+
 ## 1. External services to provision
 
 | Service | Why | Notes |

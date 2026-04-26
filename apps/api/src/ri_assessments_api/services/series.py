@@ -131,6 +131,51 @@ def get_series_detail(supabase: Client, series_id: str) -> SeriesDetail:
     )
 
 
+def dispatch_due_series(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    expires_in_days: int = 7,
+    send_email: bool = True,
+) -> dict[str, Any]:
+    """Walks every series with next_due_at <= now and issues the next
+    assignment for each. Designed to be called from a Cloud Scheduler
+    cron — idempotent and partial-failure tolerant."""
+
+    _ensure_role(principal, "admin", "reviewer")
+
+    now = datetime.now(UTC).isoformat()
+    rows = (
+        supabase.table("assessment_series")
+        .select("id, next_due_at")
+        .lte("next_due_at", now)
+        .execute()
+    ).data or []
+
+    issued: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            result = issue_next_for_series(
+                supabase,
+                principal,
+                series_id=row["id"],
+                expires_in_days=expires_in_days,
+                send_email=send_email,
+            )
+            issued.append(result)
+        except HTTPException as exc:
+            skipped.append({"series_id": row["id"], "detail": str(exc.detail)})
+        except Exception as exc:
+            skipped.append({"series_id": row["id"], "detail": str(exc)})
+
+    return {
+        "checked": len(rows),
+        "issued": issued,
+        "skipped": skipped,
+    }
+
+
 def issue_next_for_series(
     supabase: Client,
     principal: AdminPrincipal,

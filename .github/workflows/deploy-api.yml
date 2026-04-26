@@ -1,0 +1,64 @@
+name: deploy-api
+
+# Deploys apps/api to Cloud Run on every push to main.
+#
+# Required repo secrets:
+#   GCP_PROJECT                Google Cloud project id
+#   GCP_REGION                 e.g. us-central1
+#   GCP_WORKLOAD_IDENTITY      projects/<num>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+#   GCP_SERVICE_ACCOUNT        service-account email with run.admin + storage.admin
+#   API_ENV_VARS               flat KEY=VALUE\n... for the FastAPI service env
+#                              (alternative: pull from Secret Manager and skip
+#                              this block; see DEPLOYMENT.md)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/db/**"
+      - ".github/workflows/deploy-api.yml"
+      - "infra/cloud-run/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build + push image
+        run: |
+          gcloud builds submit \
+            --project ${{ secrets.GCP_PROJECT }} \
+            --tag gcr.io/${{ secrets.GCP_PROJECT }}/ri-assessments-api:${{ github.sha }} \
+            apps/api
+
+      - name: Deploy to Cloud Run
+        run: |
+          # Materialize env vars from the API_ENV_VARS secret into a tmp
+          # file and pass via --env-vars-file.
+          printf '%s' "${{ secrets.API_ENV_VARS }}" > /tmp/api.env
+          gcloud run deploy ri-assessments-api \
+            --project ${{ secrets.GCP_PROJECT }} \
+            --region ${{ secrets.GCP_REGION }} \
+            --image gcr.io/${{ secrets.GCP_PROJECT }}/ri-assessments-api:${{ github.sha }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --concurrency 30 \
+            --timeout 300 \
+            --memory 1Gi \
+            --port 8000 \
+            --env-vars-file /tmp/api.env
