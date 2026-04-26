@@ -29,6 +29,7 @@ from ..models.candidate import (
     NotebookCellOutputView,
     NotebookRunRequest,
     NotebookRunResponse,
+    SaveAnswerResponse,
     SqlQueryRequest,
     SqlQueryResponse,
     SubmitAnswerRequest,
@@ -39,6 +40,7 @@ from ..services.attempts import (
     complete_assignment,
     get_assignment_for_token,
     get_or_create_attempt_view,
+    save_draft_answer,
     submit_answer,
 )
 from ..services.code_runner import run_test_suite, run_user_code
@@ -113,6 +115,23 @@ def submit_question(
 ) -> SubmitAnswerResponse:
     result = submit_answer(supabase, token, index, body.answer)
     return SubmitAnswerResponse(**result)
+
+
+@router.post(
+    "/{token}/questions/{index}/save",
+    response_model=SaveAnswerResponse,
+)
+def save_question(
+    token: str,
+    index: int,
+    body: SubmitAnswerRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SaveAnswerResponse:
+    """Autosave the candidate's draft answer without scoring or advancing.
+    Idempotent; the candidate can keep editing and call /submit later."""
+
+    result = save_draft_answer(supabase, token, index, body.answer)
+    return SaveAnswerResponse(**result)
 
 
 @router.post("/{token}/heartbeat", response_model=HeartbeatResponse)

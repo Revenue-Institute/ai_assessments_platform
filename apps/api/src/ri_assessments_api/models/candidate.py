@@ -81,6 +81,11 @@ class SubmitAnswerResponse(BaseModel):
     total: int
 
 
+class SaveAnswerResponse(BaseModel):
+    ok: Literal[True]
+    saved_at: datetime
+
+
 class HeartbeatRequest(BaseModel):
     focused_seconds_since_last: float = Field(ge=0, le=120)
 

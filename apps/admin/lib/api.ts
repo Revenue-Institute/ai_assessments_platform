@@ -309,6 +309,19 @@ export const cancelAssignment = (id: string) =>
     method: "POST",
     body: JSON.stringify({}),
   });
+export const resendAssignmentEmail = (
+  id: string,
+  options?: { expires_in_days?: number },
+) => {
+  const qs = new URLSearchParams();
+  if (options?.expires_in_days != null)
+    qs.set("expires_in_days", String(options.expires_in_days));
+  const q = qs.toString();
+  return callApi<AssignmentMagicLink>(
+    `/api/assignments/${id}/resend-email${q ? `?${q}` : ""}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+};
 export const rescoreAssignment = (id: string) =>
   callApi<AssignmentDetail>(`/api/assignments/${id}/rescore`, {
     method: "POST",

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # Email
     resend_api_key: str = ""
     resend_from_email: str = "assessments@revenueinstitute.com"
+    resend_webhook_secret: str = ""
 
     # Embeddings
     voyage_api_key: str = ""

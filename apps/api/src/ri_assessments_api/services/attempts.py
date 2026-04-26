@@ -201,6 +201,34 @@ def get_or_create_attempt_view(
     }
 
 
+def save_draft_answer(
+    supabase: Client,
+    raw_token: str,
+    index: int,
+    answer: dict[str, Any] | list[Any] | str | int | float | bool | None,
+) -> dict[str, Any]:
+    """Autosave the in-progress answer for a question without scoring or
+    advancing. `submitted_at` stays null so the attempt remains editable."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    _ensure_in_progress(assignment)
+    question = _question_at(assignment, index)
+
+    attempt = _existing_attempt(supabase, assignment["id"], question["id"])
+    if attempt is None:
+        attempt = _create_attempt(
+            supabase,
+            assignment_id=assignment["id"],
+            random_seed=int(assignment["random_seed"]),
+            question=question,
+        )
+
+    supabase.table("attempts").update(
+        {"raw_answer": {"value": answer}}
+    ).eq("id", attempt["id"]).execute()
+    return {"ok": True, "saved_at": datetime.now(UTC).isoformat()}
+
+
 def submit_answer(
     supabase: Client,
     raw_token: str,

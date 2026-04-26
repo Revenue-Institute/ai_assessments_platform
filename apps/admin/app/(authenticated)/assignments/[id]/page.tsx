@@ -5,6 +5,7 @@ import {
   cancelAssignment,
   getAssignment,
   listAssignmentEvents,
+  resendAssignmentEmail,
   rescoreAssignment,
   rescoreAttempt,
 } from "@/lib/api";
@@ -54,6 +55,19 @@ export default async function AssignmentDetailPage({
     "use server";
     try {
       await rescoreAssignment(id);
+      redirect(`/assignments/${id}`);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        redirect(`/assignments/${id}`);
+      }
+      throw e;
+    }
+  }
+
+  async function resendEmail(): Promise<void> {
+    "use server";
+    try {
+      await resendAssignmentEmail(id);
       redirect(`/assignments/${id}`);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -223,14 +237,24 @@ export default async function AssignmentDetailPage({
           {detail.status !== "completed" &&
             detail.status !== "cancelled" &&
             detail.status !== "expired" && (
-              <form action={cancel}>
-                <button
-                  className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm hover:bg-red-950/50"
-                  type="submit"
-                >
-                  Cancel assignment
-                </button>
-              </form>
+              <>
+                <form action={resendEmail}>
+                  <button
+                    className="rounded border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-emerald-200 text-sm hover:bg-emerald-950/50"
+                    type="submit"
+                  >
+                    Resend magic link
+                  </button>
+                </form>
+                <form action={cancel}>
+                  <button
+                    className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-red-200 text-sm hover:bg-red-950/50"
+                    type="submit"
+                  >
+                    Cancel assignment
+                  </button>
+                </form>
+              </>
             )}
         </div>
       </div>

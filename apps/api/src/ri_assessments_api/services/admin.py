@@ -395,6 +395,28 @@ def list_subjects(supabase: Client) -> list[SubjectSummary]:
     ]
 
 
+def get_subject(supabase: Client, subject_id: str) -> SubjectSummary:
+    res = (
+        supabase.table("subjects")
+        .select("id, type, full_name, email, metadata, created_at")
+        .eq("id", subject_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Subject not found.")
+    row = rows[0]
+    return SubjectSummary(
+        id=row["id"],
+        type=row["type"],
+        full_name=row["full_name"],
+        email=row["email"],
+        metadata=row.get("metadata") or {},
+        created_at=row["created_at"],
+    )
+
+
 def create_subject(
     supabase: Client,
     principal: AdminPrincipal,
@@ -689,6 +711,132 @@ def bulk_create_assignments(
         except Exception as exc:
             failed.append({"subject_id": subject_id, "detail": str(exc)})
     return {"created": created, "failed": failed}
+
+
+def resend_assignment_email(
+    supabase: Client,
+    principal: AdminPrincipal,
+    assignment_id: str,
+    *,
+    expires_in_days: int | None = None,
+) -> AssignmentMagicLink:
+    """Issue a fresh magic link for an existing assignment and email it
+    again. The previous token's hash is replaced, invalidating any stale
+    link the candidate may have. Refuses to resend on completed or
+    cancelled assignments."""
+
+    _ensure_role(principal, "admin", "reviewer")
+    settings = get_settings()
+    res = (
+        supabase.table("assignments")
+        .select(
+            "id, subject_id, module_id, module_snapshot, status, expires_at"
+        )
+        .eq("id", assignment_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    row = rows[0]
+    if row["status"] in ("completed", "cancelled"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot resend a {row['status']} assignment.",
+        )
+
+    if expires_in_days is not None:
+        new_expiry = datetime.now(UTC) + timedelta(days=expires_in_days)
+    else:
+        new_expiry = datetime.fromisoformat(
+            row["expires_at"].replace("Z", "+00:00")
+        )
+        if new_expiry <= datetime.now(UTC):
+            new_expiry = datetime.now(UTC) + timedelta(days=7)
+
+    token = issue_candidate_token(
+        assignment_id=assignment_id,
+        subject_id=row["subject_id"],
+        expires_at=new_expiry,
+    )
+    supabase.table("assignments").update(
+        {
+            "token_hash": hash_token(token),
+            "expires_at": new_expiry.isoformat(),
+        }
+    ).eq("id", assignment_id).execute()
+
+    magic_link_url = candidate_token_url(
+        settings.next_public_candidate_url, token
+    )
+
+    subj = (
+        supabase.table("subjects")
+        .select("full_name, email")
+        .eq("id", row["subject_id"])
+        .limit(1)
+        .execute()
+    )
+    subject_row = (subj.data or [{}])[0]
+    if subject_row.get("email"):
+        from .email import send_magic_link
+
+        send_magic_link(
+            to_email=subject_row["email"],
+            subject_full_name=subject_row.get("full_name") or "there",
+            module_title=(row.get("module_snapshot") or {}).get(
+                "title", "Assessment"
+            ),
+            magic_link_url=magic_link_url,
+            expires_at=new_expiry,
+        )
+
+    return AssignmentMagicLink(
+        assignment_id=assignment_id,
+        subject_id=row["subject_id"],
+        module_id=row["module_id"],
+        expires_at=new_expiry,
+        token=token,
+        magic_link_url=magic_link_url,
+    )
+
+
+def get_attempt(supabase: Client, attempt_id: str) -> dict[str, Any]:
+    res = (
+        supabase.table("attempts")
+        .select(
+            "id, assignment_id, question_template_id, rendered_prompt, "
+            "raw_answer, expected_answer, started_at, submitted_at, "
+            "score, max_score, score_rationale, scorer_model, "
+            "scorer_confidence, needs_review, active_time_seconds, "
+            "rubric_version"
+        )
+        .eq("id", attempt_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Attempt not found.")
+    return rows[0]
+
+
+def list_competencies(supabase: Client) -> list[dict[str, Any]]:
+    """Return the canonical competency catalog. Falls back to an empty list
+    if the table doesn't exist yet on a fresh database."""
+
+    try:
+        res = (
+            supabase.table("competencies")
+            .select("id, name, domain, description")
+            .order("domain")
+            .order("name")
+            .execute()
+        )
+        return list(res.data or [])
+    except Exception:
+        return []
 
 
 def list_attempt_events(

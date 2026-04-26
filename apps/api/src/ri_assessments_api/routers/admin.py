@@ -167,6 +167,24 @@ def create_subject(
     return admin_service.create_subject(supabase, principal, payload)
 
 
+@router.get("/subjects/{subject_id}", response_model=SubjectSummary)
+def get_subject(
+    subject_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SubjectSummary:
+    return admin_service.get_subject(supabase, subject_id)
+
+
+# Competencies catalog -------------------------------------------------------
+
+
+@router.get("/competencies")
+def list_competencies(
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> list[dict]:
+    return admin_service.list_competencies(supabase)
+
+
 # Assignments ----------------------------------------------------------------
 
 
@@ -243,6 +261,29 @@ def cancel_assignment(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssignmentDetail:
     return admin_service.cancel_assignment(supabase, principal, assignment_id)
+
+
+@router.post(
+    "/assignments/{assignment_id}/resend-email",
+    response_model=AssignmentMagicLink,
+)
+def resend_assignment_email(
+    assignment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+    expires_in_days: int | None = None,
+) -> AssignmentMagicLink:
+    return admin_service.resend_assignment_email(
+        supabase, principal, assignment_id, expires_in_days=expires_in_days
+    )
+
+
+@router.get("/attempts/{attempt_id}")
+def get_attempt(
+    attempt_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    return admin_service.get_attempt(supabase, attempt_id)
 
 
 @router.post(
