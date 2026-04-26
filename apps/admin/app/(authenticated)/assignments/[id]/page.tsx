@@ -1,12 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import {
   ApiError,
+  type AttemptEvent,
   cancelAssignment,
   getAssignment,
+  listAssignmentEvents,
   rescoreAssignment,
   rescoreAttempt,
 } from "@/lib/api";
 import { Header } from "../../components/header";
+import { IntegrityEventTimeline } from "./integrity-timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,13 @@ export default async function AssignmentDetailPage({
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
+  }
+
+  let events: AttemptEvent[] = [];
+  try {
+    events = await listAssignmentEvents(id);
+  } catch {
+    // Soft fail: timeline is auxiliary; the rest of the page still loads.
   }
 
   async function cancel(): Promise<void> {
@@ -192,6 +202,11 @@ export default async function AssignmentDetailPage({
               ))}
             </ol>
           )}
+        </section>
+
+        <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
+          <h2 className="mb-3 font-medium text-sm">Integrity timeline</h2>
+          <IntegrityEventTimeline events={events} />
         </section>
 
         <div className="flex flex-wrap gap-2">

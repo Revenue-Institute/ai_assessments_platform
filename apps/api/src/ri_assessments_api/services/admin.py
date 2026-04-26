@@ -208,6 +208,160 @@ def publish_module(
     return get_module(supabase, module_id)
 
 
+def create_question(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    module_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Append a question to a module. Position defaults to the next free
+    slot. Caller supplies the full QuestionTemplate shape (typically
+    JSON-edited in the admin UI)."""
+
+    _ensure_role(principal, "admin")
+    # Confirm the module exists and grab the next position.
+    existing = (
+        supabase.table("question_templates")
+        .select("position")
+        .eq("module_id", module_id)
+        .execute()
+    ).data or []
+    next_position = (
+        max((int(r.get("position") or 0) for r in existing), default=-1) + 1
+    )
+
+    row = {
+        "id": payload.get("id") or str(uuid.uuid4()),
+        "module_id": module_id,
+        "position": int(payload.get("position") or next_position),
+        "type": payload["type"],
+        "prompt_template": payload["prompt_template"],
+        "variable_schema": payload.get("variable_schema") or {},
+        "solver_code": payload.get("solver_code"),
+        "solver_language": payload.get("solver_language") or "python",
+        "interactive_config": payload.get("interactive_config"),
+        "rubric": payload["rubric"],
+        "competency_tags": payload.get("competency_tags") or [],
+        "time_limit_seconds": payload.get("time_limit_seconds"),
+        "max_points": float(payload.get("max_points") or 10),
+        "metadata": payload.get("metadata") or {},
+    }
+    inserted = supabase.table("question_templates").insert(row).execute()
+    if not inserted.data:
+        raise HTTPException(status_code=500, detail="Failed to create question.")
+    return inserted.data[0]
+
+
+def patch_question(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    module_id: str,
+    question_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    _ensure_role(principal, "admin")
+
+    allowed_keys = {
+        "position",
+        "type",
+        "prompt_template",
+        "variable_schema",
+        "solver_code",
+        "solver_language",
+        "interactive_config",
+        "rubric",
+        "competency_tags",
+        "time_limit_seconds",
+        "max_points",
+        "metadata",
+    }
+    update = {k: v for k, v in payload.items() if k in allowed_keys}
+    if not update:
+        raise HTTPException(
+            status_code=400, detail="No editable fields supplied."
+        )
+    update["updated_at"] = datetime.now(UTC).isoformat()
+
+    res = (
+        supabase.table("question_templates")
+        .update(update)
+        .eq("id", question_id)
+        .eq("module_id", module_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    return res.data[0]
+
+
+def delete_question(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    module_id: str,
+    question_id: str,
+) -> None:
+    _ensure_role(principal, "admin")
+    supabase.table("question_templates").delete().eq("id", question_id).eq(
+        "module_id", module_id
+    ).execute()
+
+
+def preview_module(
+    supabase: Client,
+    principal: AdminPrincipal,
+    module_id: str,
+) -> dict[str, Any]:
+    """Render every question in `module_id` with sampled variables and
+    return a candidate-shaped view. Used by the admin /preview page so
+    reviewers can walk the assessment exactly as a candidate would, with
+    answer-revealing fields stripped (spec §13.2)."""
+
+    _ensure_role(principal, "admin")
+
+    from .attempts import _sanitize_interactive_config
+    from .randomizer import question_seed, render_prompt, sample_variables
+
+    res = (
+        supabase.table("question_templates")
+        .select(
+            "id, position, type, prompt_template, variable_schema, "
+            "interactive_config, competency_tags, max_points, "
+            "time_limit_seconds, rubric"
+        )
+        .eq("module_id", module_id)
+        .order("position")
+        .execute()
+    )
+    rows = list(res.data or [])
+    seed = 1
+    questions = []
+    for q in rows:
+        variables = sample_variables(
+            q.get("variable_schema") or {},
+            question_seed(seed, q["id"]),
+        )
+        questions.append(
+            {
+                "question_template_id": q["id"],
+                "position": q["position"],
+                "type": q["type"],
+                "rendered_prompt": render_prompt(
+                    q["prompt_template"], variables
+                ),
+                "max_points": float(q.get("max_points") or 10),
+                "time_limit_seconds": q.get("time_limit_seconds"),
+                "competency_tags": q.get("competency_tags") or [],
+                "interactive_config": _sanitize_interactive_config(
+                    q["type"], q.get("interactive_config")
+                ),
+            }
+        )
+    return {"module_id": module_id, "questions": questions}
+
+
 def archive_module(
     supabase: Client, principal: AdminPrincipal, module_id: str
 ) -> ModuleSummary:
@@ -535,6 +689,25 @@ def bulk_create_assignments(
         except Exception as exc:
             failed.append({"subject_id": subject_id, "detail": str(exc)})
     return {"created": created, "failed": failed}
+
+
+def list_attempt_events(
+    supabase: Client, assignment_id: str, *, limit: int = 1000
+) -> list[dict[str, Any]]:
+    """Integrity event log for an assignment, chronological. Used by the
+    admin events timeline (spec §12.3)."""
+    res = (
+        supabase.table("attempt_events")
+        .select(
+            "id, attempt_id, event_type, payload, client_timestamp, "
+            "server_timestamp, user_agent"
+        )
+        .eq("assignment_id", assignment_id)
+        .order("server_timestamp")
+        .limit(limit)
+        .execute()
+    )
+    return list(res.data or [])
 
 
 def cancel_assignment(

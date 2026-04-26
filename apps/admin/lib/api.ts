@@ -173,6 +173,94 @@ export const archiveModule = (id: string) =>
     body: JSON.stringify({}),
   });
 
+export type QuestionPayload = {
+  id?: string;
+  position?: number;
+  type: string;
+  prompt_template: string;
+  variable_schema?: Record<string, unknown>;
+  solver_code?: string | null;
+  solver_language?: string;
+  interactive_config?: Record<string, unknown> | null;
+  rubric: Record<string, unknown>;
+  competency_tags?: string[];
+  time_limit_seconds?: number | null;
+  max_points?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type QuestionRow = {
+  id: string;
+  module_id: string;
+  position: number;
+  type: string;
+  prompt_template: string;
+  competency_tags: string[];
+  max_points: number;
+  time_limit_seconds: number | null;
+};
+
+export const createModuleQuestion = (
+  moduleId: string,
+  payload: QuestionPayload,
+) =>
+  callApi<QuestionRow>(
+    `/api/modules/${encodeURIComponent(moduleId)}/questions`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+
+export const patchModuleQuestion = (
+  moduleId: string,
+  questionId: string,
+  payload: Partial<QuestionPayload>,
+) =>
+  callApi<QuestionRow>(
+    `/api/modules/${encodeURIComponent(moduleId)}/questions/${encodeURIComponent(questionId)}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+
+export const deleteModuleQuestion = (moduleId: string, questionId: string) =>
+  callApi<void>(
+    `/api/modules/${encodeURIComponent(moduleId)}/questions/${encodeURIComponent(questionId)}`,
+    { method: "DELETE" }
+  );
+
+export type AttemptEvent = {
+  id: string;
+  attempt_id: string | null;
+  event_type: string;
+  payload: Record<string, unknown>;
+  client_timestamp: string | null;
+  server_timestamp: string;
+  user_agent: string | null;
+};
+
+export const listAssignmentEvents = (assignmentId: string) =>
+  callApi<AttemptEvent[]>(
+    `/api/assignments/${encodeURIComponent(assignmentId)}/events`
+  );
+
+export type ModulePreviewQuestion = {
+  question_template_id: string;
+  position: number;
+  type: string;
+  rendered_prompt: string;
+  max_points: number;
+  time_limit_seconds: number | null;
+  competency_tags: string[];
+  interactive_config: Record<string, unknown> | null;
+};
+
+export type ModulePreviewResponse = {
+  module_id: string;
+  questions: ModulePreviewQuestion[];
+};
+
+export const previewModule = (id: string) =>
+  callApi<ModulePreviewResponse>(
+    `/api/modules/${encodeURIComponent(id)}/preview`
+  );
+
 // Subjects
 export const listSubjects = () => callApi<SubjectSummary[]>("/api/subjects");
 export const createSubject = (body: {

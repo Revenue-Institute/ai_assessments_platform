@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
   ApiError,
   archiveModule,
+  deleteModuleQuestion,
   getModule,
   publishModule,
 } from "@/lib/api";
@@ -56,6 +58,25 @@ export default async function ModuleDetailPage({
     }
   }
 
+  async function removeQuestion(formData: FormData): Promise<void> {
+    "use server";
+    const questionId = formData.get("question_id");
+    if (typeof questionId !== "string" || questionId.length === 0) {
+      redirect(
+        `/modules/${id}?error=${encodeURIComponent("Missing question id.")}`
+      );
+    }
+    try {
+      await deleteModuleQuestion(id, questionId as string);
+      redirect(`/modules/${id}?ok=${encodeURIComponent("Question removed.")}`);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        redirect(`/modules/${id}?error=${encodeURIComponent(e.message)}`);
+      }
+      throw e;
+    }
+  }
+
   return (
     <>
       <Header page={detail.title} pages={["Modules"]} />
@@ -88,7 +109,15 @@ export default async function ModuleDetailPage({
         )}
 
         <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
-          <h2 className="mb-2 font-medium text-sm">Questions</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-medium text-sm">Questions</h2>
+            <Link
+              className="rounded border border-border/50 bg-background px-2 py-1 text-xs hover:bg-muted"
+              href={`/modules/${id}/preview`}
+            >
+              Preview as candidate
+            </Link>
+          </div>
           {detail.questions.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               No questions yet. Use the seed script (
@@ -103,9 +132,22 @@ export default async function ModuleDetailPage({
                     <p className="font-medium">
                       {i + 1}. {q.type}
                     </p>
-                    <p className="text-muted-foreground text-xs">
-                      {q.max_points} pts
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-muted-foreground text-xs">
+                        {q.max_points} pts
+                      </p>
+                      {detail.status === "draft" && (
+                        <form action={removeQuestion}>
+                          <input name="question_id" type="hidden" value={q.id} />
+                          <button
+                            className="rounded border border-red-900/40 px-2 py-0.5 text-red-300 text-xs hover:bg-red-950/40"
+                            type="submit"
+                          >
+                            Remove
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
                     {q.prompt_template}

@@ -78,6 +78,49 @@ def patch_module(
     return admin_service.patch_module(supabase, principal, module_id, payload)
 
 
+@router.post("/modules/{module_id}/questions", status_code=201)
+def create_question(
+    module_id: str,
+    payload: dict,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    return admin_service.create_question(
+        supabase, principal, module_id=module_id, payload=payload
+    )
+
+
+@router.patch("/modules/{module_id}/questions/{question_id}")
+def patch_question(
+    module_id: str,
+    question_id: str,
+    payload: dict,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    return admin_service.patch_question(
+        supabase,
+        principal,
+        module_id=module_id,
+        question_id=question_id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/modules/{module_id}/questions/{question_id}", status_code=204
+)
+def delete_question(
+    module_id: str,
+    question_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> None:
+    admin_service.delete_question(
+        supabase, principal, module_id=module_id, question_id=question_id
+    )
+
+
 @router.post("/modules/{module_id}/publish", response_model=ModuleSummary)
 def publish_module(
     module_id: str,
@@ -85,6 +128,15 @@ def publish_module(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> ModuleSummary:
     return admin_service.publish_module(supabase, principal, module_id)
+
+
+@router.get("/modules/{module_id}/preview")
+def preview_module(
+    module_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    return admin_service.preview_module(supabase, principal, module_id)
 
 
 @router.post("/modules/{module_id}/archive", response_model=ModuleSummary)
@@ -169,6 +221,17 @@ def get_assignment(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssignmentDetail:
     return admin_service.get_assignment_detail(supabase, assignment_id)
+
+
+@router.get("/assignments/{assignment_id}/events")
+def get_assignment_events(
+    assignment_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+    limit: int = 1000,
+) -> list[dict]:
+    return admin_service.list_attempt_events(
+        supabase, assignment_id, limit=limit
+    )
 
 
 @router.post(
