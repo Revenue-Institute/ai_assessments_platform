@@ -104,7 +104,7 @@ def _existing_attempt(
         supabase.table("attempts")
         .select(
             "id, raw_answer, started_at, submitted_at, rendered_prompt, "
-            "variables_used, expected_answer"
+            "variables_used, expected_answer, metadata"
         )
         .eq("assignment_id", assignment_id)
         .eq("question_template_id", question_template_id)
@@ -323,25 +323,32 @@ def submit_answer(
             except HTTPException:
                 pass
 
-    if (
-        qtype == "notebook"
-        and rubric.get("scoring_mode") == "test_cases"
-        and isinstance(answer, dict)
-    ):
+    if qtype == "notebook" and isinstance(answer, dict):
         notebook_cells = answer.get("cells")
         if isinstance(notebook_cells, list) and notebook_cells:
-            try:
-                update.update(
-                    grade_notebook_attempt(
-                        cells=notebook_cells,
-                        config=config,
-                        max_points=max_points,
+            from .notebook_export import export_notebook_ipynb
+
+            ipynb_path = export_notebook_ipynb(
+                supabase,
+                attempt_id=attempt["id"],
+                cells=notebook_cells,
+            )
+            if ipynb_path:
+                existing_meta = attempt.get("metadata") or {}
+                update["metadata"] = {**existing_meta, "ipynb_path": ipynb_path}
+            if rubric.get("scoring_mode") == "test_cases":
+                try:
+                    update.update(
+                        grade_notebook_attempt(
+                            cells=notebook_cells,
+                            config=config,
+                            max_points=max_points,
+                        )
                     )
-                )
-                if update.get("score_rationale"):
-                    update["rubric_version"] = rubric.get("version", "1")
-            except HTTPException:
-                pass
+                    if update.get("score_rationale"):
+                        update["rubric_version"] = rubric.get("version", "1")
+                except HTTPException:
+                    pass
 
     if (
         qtype == "n8n"

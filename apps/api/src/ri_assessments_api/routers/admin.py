@@ -286,6 +286,14 @@ def get_attempt(
     return admin_service.get_attempt(supabase, attempt_id)
 
 
+@router.get("/attempts/{attempt_id}/notebook-download")
+def attempt_notebook_download(
+    attempt_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    return admin_service.attempt_notebook_download_url(supabase, attempt_id)
+
+
 @router.post(
     "/assignments/{assignment_id}/rescore", response_model=AssignmentDetail
 )

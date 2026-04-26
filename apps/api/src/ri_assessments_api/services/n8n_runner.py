@@ -356,12 +356,35 @@ def grade_n8n_attempt(
     edge_pct = matched_edges / len(ref_pairs) if ref_pairs else 1.0
     overall = (node_pct + edge_pct) / 2 if ref_pairs else node_pct
 
-    # Optional behavioral diff — disabled by default for v1.
+    # Optional behavioral diff: when enabled and the question pins an
+    # `expected_execution_output`, provision the candidate workflow on the
+    # shared n8n instance, execute it once, and award a 10% bonus on a
+    # match (clamped at 1.0 overall). Failures of any kind fall through
+    # to structural-only — the candidate isn't penalized for sandbox
+    # outages.
+    behavioral_match = None
     if os.environ.get("N8N_BEHAVIORAL_DIFF") == "1":
-        log.info(
-            "n8n behavioral diff requested but not implemented in v1; "
-            "scoring on structural similarity only."
-        )
+        expected_output = config.get("expected_execution_output")
+        if expected_output is not None:
+            try:
+                provisioned = provision_workspace(
+                    starter_workflow=submission,
+                    title="behavioral-diff",
+                )
+                try:
+                    result = execute_workflow(
+                        provisioned.workflow_id,
+                        config.get("execution_payload") or {},
+                    )
+                finally:
+                    delete_workflow(provisioned.workflow_id)
+                actual = _last_node_output(result)
+                behavioral_match = _outputs_equivalent(actual, expected_output)
+            except Exception as exc:
+                log.info("n8n behavioral diff skipped: %s", exc)
+                behavioral_match = None
+        if behavioral_match is True:
+            overall = min(1.0, overall + 0.10)
 
     score = round(overall * max_points, 2)
     rationale_bits = [
@@ -375,6 +398,10 @@ def grade_n8n_attempt(
         rationale_bits.append(f"{missing_node_count} expected node(s) missing")
     if missing_edges:
         rationale_bits.append(f"{len(missing_edges)} expected connection(s) missing")
+    if behavioral_match is True:
+        rationale_bits.append("execution output matched expected (+10%)")
+    elif behavioral_match is False:
+        rationale_bits.append("execution output did not match expected")
 
     return {
         "score": score,
@@ -382,3 +409,44 @@ def grade_n8n_attempt(
         "scorer_model": "n8n-structural",
         "scorer_version": "1",
     }
+
+
+def _last_node_output(execution_result: dict[str, Any]) -> Any:
+    """Best-effort extraction of the last node's output from an n8n
+    execution payload. n8n's shape varies across versions; we walk the
+    common keys and stop at whatever resolves first."""
+
+    data = execution_result.get("data") or execution_result
+    result_data = data.get("resultData") or data
+    run_data = result_data.get("runData") or {}
+    if not isinstance(run_data, dict) or not run_data:
+        return data
+    last_node = list(run_data.keys())[-1]
+    runs = run_data.get(last_node) or []
+    if not runs:
+        return None
+    final = runs[-1]
+    return (
+        ((final.get("data") or {}).get("main") or [None])[0]
+        if isinstance(final, dict)
+        else final
+    )
+
+
+def _outputs_equivalent(actual: Any, expected: Any) -> bool:
+    """Stable JSON comparison: round-trip through json.dumps with sorted
+    keys so dict ordering doesn't matter. Strings are stripped to tolerate
+    trailing newlines from n8n nodes."""
+
+    import json
+
+    def _normalize(v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip()
+        if isinstance(v, dict):
+            return {k: _normalize(v[k]) for k in sorted(v)}
+        if isinstance(v, list):
+            return [_normalize(x) for x in v]
+        return v
+
+    return json.dumps(_normalize(actual)) == json.dumps(_normalize(expected))

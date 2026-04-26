@@ -810,7 +810,7 @@ def get_attempt(supabase: Client, attempt_id: str) -> dict[str, Any]:
             "raw_answer, expected_answer, started_at, submitted_at, "
             "score, max_score, score_rationale, scorer_model, "
             "scorer_confidence, needs_review, active_time_seconds, "
-            "rubric_version"
+            "rubric_version, metadata"
         )
         .eq("id", attempt_id)
         .limit(1)
@@ -820,6 +820,29 @@ def get_attempt(supabase: Client, attempt_id: str) -> dict[str, Any]:
     if not rows:
         raise HTTPException(status_code=404, detail="Attempt not found.")
     return rows[0]
+
+
+def attempt_notebook_download_url(
+    supabase: Client, attempt_id: str
+) -> dict[str, Any]:
+    """Return a short-lived signed URL for the .ipynb artifact bound to
+    this attempt. 404s when the attempt has no exported notebook."""
+
+    attempt = get_attempt(supabase, attempt_id)
+    metadata = attempt.get("metadata") or {}
+    path = metadata.get("ipynb_path")
+    if not path:
+        raise HTTPException(
+            status_code=404, detail="No notebook export found for attempt."
+        )
+    from .notebook_export import signed_notebook_url
+
+    url = signed_notebook_url(supabase, path=path)
+    if not url:
+        raise HTTPException(
+            status_code=502, detail="Storage service rejected signing request."
+        )
+    return {"signed_url": url, "path": path}
 
 
 def list_competencies(supabase: Client) -> list[dict[str, Any]]:
