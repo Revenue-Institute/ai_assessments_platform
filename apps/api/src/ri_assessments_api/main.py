@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import admin, candidate, health
+from .routers import admin, candidate, generator, health
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(admin.router, prefix="/api")
+    app.include_router(generator.router, prefix="/api")
     app.include_router(candidate.router, prefix="/a")
 
     return app

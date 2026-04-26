@@ -203,3 +203,96 @@ export const cancelAssignment = (id: string) =>
   });
 
 export const fetchAdminMe = () => callApi<AdminMe>("/api/me");
+
+// Generator
+export type GenerationBriefIn = {
+  role_title: string;
+  responsibilities: string;
+  target_duration_minutes: number;
+  difficulty: Difficulty;
+  domains: string[];
+  question_mix: {
+    mcq_pct: number;
+    short_pct: number;
+    long_pct: number;
+    code_pct: number;
+    interactive_pct: number;
+  };
+  reference_document_ids: string[];
+  required_competencies: string[];
+  notes?: string;
+};
+
+export type OutlineTopic = {
+  name: string;
+  competency_tags: string[];
+  weight_pct: number;
+  question_count: number;
+  recommended_types: string[];
+  rationale: string;
+};
+
+export type GeneratedOutline = {
+  title: string;
+  description: string;
+  topics: OutlineTopic[];
+  total_points: number;
+  estimated_duration_minutes: number;
+};
+
+export type OutlineRunResponse = {
+  run_id: string;
+  outline: GeneratedOutline;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  latency_ms: number;
+};
+
+export type GenerationRunRow = {
+  id: string;
+  stage: "outline" | "full" | "single_question" | "revision";
+  status: "pending" | "success" | "failed";
+  model: string;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  latency_ms: number | null;
+  error: string | null;
+  parent_run_id: string | null;
+  input_brief: GenerationBriefIn | Record<string, unknown>;
+  output: Record<string, unknown>;
+  outline?: GeneratedOutline;
+  created_at: string;
+};
+
+export type QuestionGenerationResponse = {
+  module_id: string;
+  module_run_ids: string[];
+  questions_generated: number;
+  model: string;
+  total_tokens_in: number;
+  total_tokens_out: number;
+};
+
+export const generateOutline = (body: GenerationBriefIn) =>
+  callApi<OutlineRunResponse>("/api/generator/outline", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const fetchGenerationRun = (runId: string) =>
+  callApi<GenerationRunRow>(
+    `/api/generator/runs/${encodeURIComponent(runId)}`
+  );
+
+export const generateQuestions = (body: {
+  outline_run_id: string;
+  brief: GenerationBriefIn;
+  outline: GeneratedOutline;
+  slug: string;
+  domain: string;
+}) =>
+  callApi<QuestionGenerationResponse>("/api/generator/questions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
