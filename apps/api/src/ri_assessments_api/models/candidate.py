@@ -161,3 +161,28 @@ class DiagramSubmitRequest(BaseModel):
     question_index: int = Field(ge=0)
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
+
+
+class NotebookCell(BaseModel):
+    type: Literal["code", "markdown"]
+    source: str = Field(default="", max_length=200_000)
+
+
+class NotebookRunRequest(BaseModel):
+    question_index: int = Field(ge=0)
+    cells: list[NotebookCell]
+
+
+class NotebookCellOutputView(BaseModel):
+    index: int
+    type: str
+    stdout: str = ""
+    stderr: str = ""
+    error: str | None = None
+    runtime_ms: int = 0
+
+
+class NotebookRunResponse(BaseModel):
+    cells: list[NotebookCellOutputView]
+    runtime_ms: int
+    timed_out: bool

@@ -22,6 +22,9 @@ from ..models.candidate import (
     EventsResponse,
     HeartbeatRequest,
     HeartbeatResponse,
+    NotebookCellOutputView,
+    NotebookRunRequest,
+    NotebookRunResponse,
     SqlQueryRequest,
     SqlQueryResponse,
     SubmitAnswerRequest,
@@ -36,6 +39,7 @@ from ..services.attempts import (
 )
 from ..services.code_runner import run_test_suite, run_user_code
 from ..services.integrity import record_events, record_heartbeat
+from ..services.notebook_runner import run_notebook
 from ..services.sql_runner import run_sql
 
 router = APIRouter(tags=["candidate"])
@@ -259,5 +263,55 @@ def sql_query(
         rows=result.rows,
         runtime_ms=result.runtime_ms,
         error=result.error,
+        timed_out=result.timed_out,
+    )
+
+
+# Notebook runner ----------------------------------------------------------
+
+
+def _config_for_notebook_question(
+    supabase: Client, token: str, index: int
+) -> dict:
+    assignment = get_assignment_for_token(supabase, token)
+    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    if index < 0 or index >= len(questions):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question index out of range.",
+        )
+    question = questions[index]
+    if question["type"] != "notebook":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Endpoint is only valid for notebook questions.",
+        )
+    return question.get("interactive_config") or {}
+
+
+@router.post("/{token}/notebook/run", response_model=NotebookRunResponse)
+def notebook_run(
+    token: str,
+    body: NotebookRunRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> NotebookRunResponse:
+    config = _config_for_notebook_question(supabase, token, body.question_index)
+    result = run_notebook(
+        cells=[c.model_dump() for c in body.cells],
+        dataset_urls=list(config.get("dataset_urls") or []),
+    )
+    return NotebookRunResponse(
+        cells=[
+            NotebookCellOutputView(
+                index=row.index,
+                type=row.type,
+                stdout=row.stdout,
+                stderr=row.stderr,
+                error=row.error,
+                runtime_ms=row.runtime_ms,
+            )
+            for row in result.cells
+        ],
+        runtime_ms=result.runtime_ms,
         timed_out=result.timed_out,
     )

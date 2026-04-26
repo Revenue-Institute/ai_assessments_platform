@@ -1,6 +1,7 @@
 import type { CandidateQuestionView } from "@/lib/api";
 import { CodeRenderer } from "./code-editor";
 import { DiagramRenderer } from "./diagram-editor";
+import { NotebookRenderer } from "./notebook-editor";
 import { SqlRenderer } from "./sql-editor";
 
 export function QuestionRenderer({
@@ -76,6 +77,23 @@ export function QuestionRenderer({
         | { diagram?: Parameters<typeof DiagramRenderer>[0]["initialAnswer"] }
         | undefined)?.diagram;
       return <DiagramRenderer config={config} initialAnswer={previous} />;
+    }
+    case "notebook": {
+      const config = (question.interactive_config ?? {}) as {
+        dataset_urls?: string[];
+        starter_cells?: Array<{ type: "code" | "markdown"; source: string }>;
+      };
+      const previous = (question.raw_answer?.value as
+        | { cells?: Array<{ type: "code" | "markdown"; source: string }> }
+        | undefined)?.cells;
+      return (
+        <NotebookRenderer
+          config={config}
+          initialCells={previous}
+          questionIndex={question.index}
+          token={token}
+        />
+      );
     }
     default:
       return <UnsupportedRenderer question={question} />;

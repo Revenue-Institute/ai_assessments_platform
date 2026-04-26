@@ -11,6 +11,7 @@ from supabase import Client
 
 from .code_runner import grade_code_attempt
 from .diagram_runner import grade_diagram_attempt
+from .notebook_runner import grade_notebook_attempt
 from .randomizer import question_seed, render_prompt, sample_variables
 from .sql_runner import grade_sql_attempt
 
@@ -270,6 +271,26 @@ def submit_answer(
                 update.update(
                     grade_diagram_attempt(
                         submission=diagram_payload,
+                        config=config,
+                        max_points=max_points,
+                    )
+                )
+                if update.get("score_rationale"):
+                    update["rubric_version"] = rubric.get("version", "1")
+            except HTTPException:
+                pass
+
+    if (
+        qtype == "notebook"
+        and rubric.get("scoring_mode") == "test_cases"
+        and isinstance(answer, dict)
+    ):
+        notebook_cells = answer.get("cells")
+        if isinstance(notebook_cells, list) and notebook_cells:
+            try:
+                update.update(
+                    grade_notebook_attempt(
+                        cells=notebook_cells,
                         config=config,
                         max_points=max_points,
                     )
