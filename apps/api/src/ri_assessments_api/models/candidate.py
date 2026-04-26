@@ -178,6 +178,16 @@ class NotebookRunRequest(BaseModel):
     cells: list[NotebookCell]
 
 
+class NotebookCellRunRequest(BaseModel):
+    """Run a single cell against a fresh kernel with the dataset_urls
+    materialized. v1 doesn't keep kernels alive across calls — the
+    candidate UI is responsible for sending the cell's preceding context
+    when relevant."""
+
+    question_index: int = Field(ge=0)
+    cell: NotebookCell
+
+
 class NotebookCellOutputView(BaseModel):
     index: int
     type: str

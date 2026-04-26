@@ -39,3 +39,28 @@ jobs:
           bun-version: 1.3.10
       - run: bun install --frozen-lockfile
       - run: bun run --filter admin --filter candidate typecheck
+
+  schemas-codegen:
+    name: zod -> pydantic codegen drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - working-directory: apps/api
+        run: uv sync --frozen
+      - name: Regenerate Pydantic models
+        run: bash apps/api/scripts/gen_schemas.sh
+      - name: Verify generated tree is gitignored (no drift to commit)
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::gen_schemas produced changes outside the gitignored output dir."
+            git status --porcelain
+            git --no-pager diff
+            exit 1
+          fi

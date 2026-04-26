@@ -97,8 +97,13 @@ canonical list.
 - `E2B_API_KEY`
 - `VOYAGE_API_KEY`, `EMBEDDING_MODEL=voyage-3`, `EMBEDDING_DIMS=1024`
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL=assessments@revenueinstitute.com`
-- `N8N_HOST`, `N8N_ADMIN_API_KEY`
+- `RESEND_WEBHOOK_SECRET` (HMAC for `POST /webhooks/resend` — paste the
+  same value into Resend's webhook signing-secret field)
+- `N8N_HOST`, `N8N_ADMIN_API_KEY`, `N8N_WEBHOOK_SECRET`
 - `NEXT_PUBLIC_CANDIDATE_URL` (used to build magic-link URLs in emails)
+- `SUPABASE_STORAGE_BUCKET_ARTIFACTS` (default `ri-artifacts`; holds
+  per-attempt `.ipynb` exports surfaced via
+  `GET /api/attempts/{id}/notebook-download`)
 
 **`apps/admin/.env.example`** — Next.js admin (Vercel). Critical:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -116,12 +121,14 @@ canonical list.
 ```sh
 # Supabase project, vector extension enabled.
 cd apps/api
-bun run migrate    # applies packages/db/migrations/0001..0004
+bun run migrate    # applies packages/db/migrations/0001..0005
 bun run seed       # optional: prints a magic-link URL for smoke testing
 ```
 
 Migrations are idempotent (tracked in `public._migrations`). Re-running
-is safe.
+is safe. `0005_retention.sql` installs the `prune_integrity_events(days)`
+function used by `scripts/prune-integrity-events.sh` (wire this into
+Cloud Scheduler weekly to enforce the 12-month TTL — spec §11.4).
 
 ## 4. Local dev (no Docker)
 
@@ -238,6 +245,47 @@ own auth in production.
 - `attempts.needs_review = true` flags low-confidence rubric_ai scores
   (`scorer_confidence < 0.6`). Surface in admin via the per-attempt pill
   on `/assignments/[id]`.
+
+### Resend webhook (delivery / bounce / complaint)
+
+- Endpoint: `POST /webhooks/resend` on the FastAPI service. Verifies
+  `svix-signature` (or `resend-signature`) HMAC against
+  `RESEND_WEBHOOK_SECRET`.
+- Configure in the Resend dashboard: add a webhook with the production
+  Cloud Run URL `https://<api-host>/webhooks/resend`, paste the same
+  secret, and enable the `email.bounced`, `email.complained`,
+  `email.delivered`, `email.opened` events.
+- Effect: the most recent assignment per recipient gets the event
+  appended to `assignments.metadata.email_delivery` (last 50). Surface
+  via the admin assignment detail page if needed.
+
+### Integrity event retention (12-month TTL — spec §11.4)
+
+- `packages/db/migrations/0005_retention.sql` installs
+  `prune_integrity_events(days)`.
+- `scripts/prune-integrity-events.sh` calls the function via either
+  `DATABASE_URL` or the Supabase CLI. Schedule it in Cloud Scheduler
+  (suggested: Sunday 03:00 UTC, weekly):
+
+  ```sh
+  gcloud scheduler jobs create http ri-prune-integrity-events \
+    --schedule "0 3 * * 0" \
+    --uri "https://<api-host>/internal/prune-events" \
+    --http-method POST --oidc-service-account-email <sa>
+  ```
+
+  (Or invoke the script directly from a Cloud Run job.) Override with
+  `RETENTION_DAYS=180` for a tighter window if compliance changes.
+
+### Schema codegen
+
+- TypeScript Zod schemas in `packages/schemas` are the single source of
+  truth. Pydantic v2 models for FastAPI are generated from them.
+- Run `bash apps/api/scripts/gen_schemas.sh` to regenerate after editing
+  any `packages/schemas/src/*.ts` file. Output lands in
+  `apps/api/src/ri_assessments_api/generated/` (gitignored).
+- CI should run the same command and fail on a non-empty diff so the
+  generated tree never drifts behind the canonical Zod source.
 
 ### Sentry / Axiom
 

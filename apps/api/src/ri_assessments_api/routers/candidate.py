@@ -27,6 +27,7 @@ from ..models.candidate import (
     N8nExportRequest,
     N8nExportResponse,
     NotebookCellOutputView,
+    NotebookCellRunRequest,
     NotebookRunRequest,
     NotebookRunResponse,
     SaveAnswerResponse,
@@ -159,6 +160,29 @@ def events(
         ip_hash=_ip_hash_from_request(request),
     )
     return EventsResponse(ok=True, accepted=accepted)
+
+
+@router.post("/{token}/start")
+def start(
+    token: str,
+    request: Request,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict:
+    """Spec §14.2: explicit start signal. Records consent (idempotent) and
+    returns the assignment's started_at. The first question fetch already
+    flips status to in_progress; this endpoint just gives the candidate
+    UI a hook for the consent -> start transition."""
+
+    consent = record_consent(
+        supabase, token, ip_hash=_ip_hash_from_request(request)
+    )
+    return {
+        "ok": True,
+        "assignment_id": consent.assignment_id,
+        "status": consent.status,
+        "started_at": consent.started_at.isoformat(),
+        "server_deadline": consent.server_deadline.isoformat(),
+    }
 
 
 @router.post("/{token}/complete", response_model=CompleteResponse)
@@ -344,6 +368,90 @@ def notebook_run(
     )
 
 
+@router.post("/{token}/notebook/run-cell", response_model=NotebookRunResponse)
+def notebook_run_cell(
+    token: str,
+    body: NotebookCellRunRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> NotebookRunResponse:
+    """Spec §14.3: run a single cell. Reuses run_notebook with a one-cell
+    list since the v1 sandbox is fresh-per-call."""
+
+    config = _config_for_notebook_question(supabase, token, body.question_index)
+    result = run_notebook(
+        cells=[body.cell.model_dump()],
+        dataset_urls=list(config.get("dataset_urls") or []),
+    )
+    return NotebookRunResponse(
+        cells=[
+            NotebookCellOutputView(
+                index=row.index,
+                type=row.type,
+                stdout=row.stdout,
+                stderr=row.stderr,
+                error=row.error,
+                runtime_ms=row.runtime_ms,
+            )
+            for row in result.cells
+        ],
+        runtime_ms=result.runtime_ms,
+        timed_out=result.timed_out,
+    )
+
+
+@router.post("/{token}/notebook/save", response_model=SaveAnswerResponse)
+def notebook_save(
+    token: str,
+    body: SubmitAnswerRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SaveAnswerResponse:
+    """Spec §14.3 alias for autosaving a notebook answer. Body should
+    include `question_index` plus the {cells: [...]} payload — we forward
+    to save_draft_answer."""
+
+    payload = body.answer
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="notebook/save expects an object body with question_index.",
+        )
+    qi = payload.get("question_index")
+    if not isinstance(qi, int):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="question_index is required.",
+        )
+    answer = {k: v for k, v in payload.items() if k != "question_index"}
+    result = save_draft_answer(supabase, token, qi, answer)
+    return SaveAnswerResponse(**result)
+
+
+@router.post("/{token}/diagram/save", response_model=SaveAnswerResponse)
+def diagram_save(
+    token: str,
+    body: SubmitAnswerRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SaveAnswerResponse:
+    """Spec §14.3 alias for autosaving a diagram answer. Body shape:
+    {"question_index": N, "diagram": {nodes, edges}}."""
+
+    payload = body.answer
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="diagram/save expects an object body with question_index.",
+        )
+    qi = payload.get("question_index")
+    if not isinstance(qi, int):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="question_index is required.",
+        )
+    answer = {k: v for k, v in payload.items() if k != "question_index"}
+    result = save_draft_answer(supabase, token, qi, answer)
+    return SaveAnswerResponse(**result)
+
+
 # n8n runner --------------------------------------------------------------
 
 
@@ -364,13 +472,10 @@ def _config_for_n8n_question(supabase: Client, token: str, index: int) -> dict:
     return question.get("interactive_config") or {}
 
 
-@router.post("/{token}/n8n/embed", response_model=N8nEmbedResponse)
-def n8n_embed(
-    token: str,
-    body: N8nEmbedRequest,
-    supabase: Annotated[Client, Depends(get_supabase)],
+def _provision_n8n(
+    supabase: Client, token: str, question_index: int
 ) -> N8nEmbedResponse:
-    config = _config_for_n8n_question(supabase, token, body.question_index)
+    config = _config_for_n8n_question(supabase, token, question_index)
     starter = config.get("starter_workflow") or {}
     assignment = get_assignment_for_token(supabase, token)
     title = (
@@ -378,6 +483,28 @@ def n8n_embed(
     )
     result = provision_workspace(starter_workflow=starter, title=str(title))
     return N8nEmbedResponse(workflow_id=result.workflow_id, embed_url=result.embed_url)
+
+
+@router.post("/{token}/n8n/embed", response_model=N8nEmbedResponse)
+def n8n_embed(
+    token: str,
+    body: N8nEmbedRequest,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> N8nEmbedResponse:
+    return _provision_n8n(supabase, token, body.question_index)
+
+
+@router.get("/{token}/n8n/embed", response_model=N8nEmbedResponse)
+def n8n_embed_get(
+    token: str,
+    question_index: int,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> N8nEmbedResponse:
+    """Spec §14.3 alias: GET form takes question_index as a query
+    parameter. Provisioning is a side effect, so POST is preferred for
+    new clients, but GET matches the literal spec."""
+
+    return _provision_n8n(supabase, token, question_index)
 
 
 @router.post("/{token}/n8n/export", response_model=N8nExportResponse)
