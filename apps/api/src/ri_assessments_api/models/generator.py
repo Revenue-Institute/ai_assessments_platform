@@ -123,3 +123,57 @@ class GenerationRunSummary(BaseModel):
     error: str | None = None
     created_at: datetime
     parent_run_id: str | None = None
+
+
+class ReviseQuestionRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=4000)
+    preserve: list[
+        Literal[
+            "type",
+            "competency_tags",
+            "max_points",
+            "difficulty",
+            "time_limit_seconds",
+            "rubric",
+        ]
+    ] = Field(default_factory=list)
+
+
+class ReviseQuestionResponse(BaseModel):
+    question_id: str
+    run_id: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    latency_ms: int
+    revised: dict[str, Any]
+
+
+# Reference library ----------------------------------------------------------
+
+
+class ReferenceTextUploadRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    content: str = Field(min_length=1, max_length=2_000_000)
+    domain: str | None = Field(default=None, max_length=80)
+    source_url: str | None = None
+
+
+class ReferenceUrlUploadRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+    title: str | None = Field(default=None, max_length=300)
+    domain: str | None = Field(default=None, max_length=80)
+
+
+class ReferenceDocumentSummary(BaseModel):
+    id: str
+    title: str
+    source_url: str | None = None
+    domain: str | None = None
+    chunk_count: int
+    created_at: datetime
+
+
+class ReferenceUploadResponse(BaseModel):
+    document: ReferenceDocumentSummary
+    chunks_inserted: int

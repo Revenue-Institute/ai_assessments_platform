@@ -296,3 +296,80 @@ export const generateQuestions = (body: {
     method: "POST",
     body: JSON.stringify(body),
   });
+
+// References
+export type ReferenceDocumentSummary = {
+  id: string;
+  title: string;
+  source_url: string | null;
+  domain: string | null;
+  chunk_count: number;
+  created_at: string;
+};
+
+export type ReferenceUploadResponse = {
+  document: ReferenceDocumentSummary;
+  chunks_inserted: number;
+};
+
+export const listReferences = () =>
+  callApi<ReferenceDocumentSummary[]>("/api/references");
+
+export const uploadReferenceText = (body: {
+  title: string;
+  content: string;
+  domain?: string | null;
+  source_url?: string | null;
+}) =>
+  callApi<ReferenceUploadResponse>("/api/references", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const uploadReferenceUrl = (body: {
+  url: string;
+  title?: string | null;
+  domain?: string | null;
+}) =>
+  callApi<ReferenceUploadResponse>("/api/references/url", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const deleteReference = (id: string) =>
+  callApi<void>(`/api/references/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+// Question revision
+export type ReviseQuestionResponse = {
+  question_id: string;
+  run_id: string;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  latency_ms: number;
+  revised: Record<string, unknown>;
+};
+
+export const reviseQuestion = (
+  questionId: string,
+  body: {
+    instruction: string;
+    preserve?: Array<
+      | "type"
+      | "competency_tags"
+      | "max_points"
+      | "difficulty"
+      | "time_limit_seconds"
+      | "rubric"
+    >;
+  },
+) =>
+  callApi<ReviseQuestionResponse>(
+    `/api/generator/question/${encodeURIComponent(questionId)}/revise`,
+    {
+      method: "POST",
+      body: JSON.stringify({ ...body, preserve: body.preserve ?? [] }),
+    }
+  );

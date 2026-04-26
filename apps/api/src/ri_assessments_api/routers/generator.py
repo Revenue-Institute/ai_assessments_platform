@@ -18,6 +18,8 @@ from ..models.generator import (
     PreviewVariantsResponse,
     QuestionGenerationRequest,
     QuestionGenerationResponse,
+    ReviseQuestionRequest,
+    ReviseQuestionResponse,
 )
 from ..services import generator as generator_service
 
@@ -71,6 +73,26 @@ def get_run(
         except Exception:
             pass
     return row
+
+
+@router.post(
+    "/question/{question_id}/revise",
+    response_model=ReviseQuestionResponse,
+)
+def revise_question(
+    question_id: str,
+    payload: ReviseQuestionRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> ReviseQuestionResponse:
+    result = generator_service.revise_question(
+        supabase,
+        principal,
+        question_id=question_id,
+        instruction=payload.instruction,
+        preserve=payload.preserve,
+    )
+    return ReviseQuestionResponse(**result)
 
 
 @router.post("/preview-variants", response_model=PreviewVariantsResponse)

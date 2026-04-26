@@ -27,6 +27,8 @@ from ..models.generator import (
 )
 from ..prompts.outline import OUTLINE_SYSTEM_PROMPT, SUBMIT_OUTLINE_TOOL
 from ..prompts.questions import QUESTIONS_SYSTEM_PROMPT, SUBMIT_QUESTIONS_TOOL
+from ..prompts.revision import REVISION_SYSTEM_PROMPT, SUBMIT_REVISED_QUESTION_TOOL
+from . import references as references_service
 from .randomizer import question_seed, render_prompt, sample_variables
 
 log = logging.getLogger(__name__)
@@ -253,21 +255,53 @@ def generate_outline(
 
 
 def _questions_user_prompt(
-    brief: GenerationBriefIn, topic: dict[str, Any]
+    brief: GenerationBriefIn,
+    topic: dict[str, Any],
+    reference_chunks: list[dict[str, Any]] | None = None,
 ) -> str:
-    return (
-        "Generate question templates for the following outline topic.\n"
-        f"\nRole title: {brief.role_title}"
-        f"\nDefault difficulty: {brief.difficulty}"
-        f"\n\nTopic:"
-        f"\n  name: {topic['name']}"
-        f"\n  competency_tags: {', '.join(topic['competency_tags'])}"
-        f"\n  weight_pct: {topic['weight_pct']}"
-        f"\n  question_count: {topic['question_count']}"
-        f"\n  recommended_types: {', '.join(topic['recommended_types'])}"
-        f"\n  rationale: {topic['rationale']}"
-        "\n\nReturn the questions via the submit_questions tool."
+    parts = [
+        "Generate question templates for the following outline topic.\n",
+        f"Role title: {brief.role_title}",
+        f"Default difficulty: {brief.difficulty}",
+        "",
+        "Topic:",
+        f"  name: {topic['name']}",
+        f"  competency_tags: {', '.join(topic['competency_tags'])}",
+        f"  weight_pct: {topic['weight_pct']}",
+        f"  question_count: {topic['question_count']}",
+        f"  recommended_types: {', '.join(topic['recommended_types'])}",
+        f"  rationale: {topic['rationale']}",
+    ]
+    if reference_chunks:
+        parts.extend(["", "<reference_material>"])
+        for chunk in reference_chunks:
+            sim = chunk.get("similarity")
+            sim_str = f" (similarity {sim:.2f})" if isinstance(sim, (int, float)) else ""
+            parts.append(
+                f"<chunk document_id=\"{chunk['document_id']}\" "
+                f"position=\"{chunk['position']}\"{sim_str}>"
+            )
+            parts.append(chunk["content"])
+            parts.append("</chunk>")
+        parts.append("</reference_material>")
+        parts.append(
+            "Use the reference material above to ground your questions. "
+            "Cite document_ids you used in metadata.sources on each question."
+        )
+    parts.append("\nReturn the questions via the submit_questions tool.")
+    return "\n".join(parts)
+
+
+def _document_title_lookup(supabase: Client, document_ids: list[str]) -> dict[str, str]:
+    if not document_ids:
+        return {}
+    res = (
+        supabase.table("reference_documents")
+        .select("id, title")
+        .in_("id", document_ids)
+        .execute()
     )
+    return {row["id"]: row.get("title", "") for row in res.data or []}
 
 
 def _normalize_question_row(
@@ -275,7 +309,14 @@ def _normalize_question_row(
     *,
     module_id: str,
     position: int,
+    cited_document_titles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"generated_difficulty": raw.get("difficulty")}
+    if cited_document_titles:
+        metadata["sources"] = [
+            {"document_id": doc_id, "title": title}
+            for doc_id, title in cited_document_titles.items()
+        ]
     return {
         "id": str(uuid.uuid4()),
         "module_id": module_id,
@@ -290,9 +331,7 @@ def _normalize_question_row(
         "competency_tags": raw.get("competency_tags") or [],
         "time_limit_seconds": raw.get("time_limit_seconds"),
         "max_points": float(raw.get("max_points") or 10),
-        "metadata": {
-            "generated_difficulty": raw.get("difficulty"),
-        },
+        "metadata": metadata,
     }
 
 
@@ -341,8 +380,39 @@ def generate_questions(
     questions_generated = 0
     position = 0
 
+    document_titles: dict[str, str] = {}
+    if brief.reference_document_ids:
+        document_titles = _document_title_lookup(supabase, brief.reference_document_ids)
+
     for topic in outline.topics:
         topic_dict = topic.model_dump()
+
+        # Per spec §6.4: retrieve top-k chunks per topic when references are
+        # attached. Failures are non-fatal — generation falls back to no
+        # reference material rather than aborting the whole module.
+        reference_chunks: list[dict[str, Any]] = []
+        cited_titles: dict[str, str] = {}
+        if brief.reference_document_ids:
+            try:
+                query = f"{topic.name} - {' '.join(topic.competency_tags)}"
+                reference_chunks = references_service.retrieve_top_k(
+                    supabase,
+                    query=query,
+                    document_ids=brief.reference_document_ids,
+                    k=10,
+                )
+                cited_doc_ids = {c["document_id"] for c in reference_chunks}
+                cited_titles = {
+                    doc_id: document_titles.get(doc_id, "")
+                    for doc_id in cited_doc_ids
+                }
+            except HTTPException as exc:
+                log.warning(
+                    "reference retrieval failed for topic %s: %s",
+                    topic.name,
+                    exc.detail,
+                )
+
         started = time.monotonic()
         try:
             response = client.messages.create(
@@ -356,7 +426,9 @@ def generate_questions(
                 messages=[
                     {
                         "role": "user",
-                        "content": _questions_user_prompt(brief, topic_dict),
+                        "content": _questions_user_prompt(
+                            brief, topic_dict, reference_chunks
+                        ),
                     }
                 ],
             )
@@ -406,7 +478,14 @@ def generate_questions(
 
         rows = []
         for raw_q in raw_questions:
-            rows.append(_normalize_question_row(raw_q, module_id=module_id, position=position))
+            rows.append(
+                _normalize_question_row(
+                    raw_q,
+                    module_id=module_id,
+                    position=position,
+                    cited_document_titles=cited_titles,
+                )
+            )
             position += 1
 
         if rows:
@@ -444,6 +523,143 @@ def _stringify_text(response: Any) -> str:
         if getattr(block, "type", None) == "text":
             out.append(block.text)
     return "\n".join(out)
+
+
+# -- Revision ---------------------------------------------------------------
+
+
+_PRESERVABLE_FIELDS: frozenset[str] = frozenset(
+    {"type", "competency_tags", "max_points", "difficulty", "time_limit_seconds", "rubric"}
+)
+
+
+def _question_row(supabase: Client, question_id: str) -> dict[str, Any]:
+    res = (
+        supabase.table("question_templates")
+        .select(
+            "id, module_id, position, type, prompt_template, variable_schema, "
+            "solver_code, solver_language, interactive_config, rubric, "
+            "competency_tags, time_limit_seconds, max_points, metadata"
+        )
+        .eq("id", question_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question template not found.",
+        )
+    return rows[0]
+
+
+def revise_question(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    question_id: str,
+    instruction: str,
+    preserve: list[str],
+) -> dict[str, Any]:
+    _ensure_role(principal, "admin")
+    current = _question_row(supabase, question_id)
+    bad = [f for f in preserve if f not in _PRESERVABLE_FIELDS]
+    if bad:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported preserve fields: {bad}",
+        )
+
+    user_prompt = (
+        "Revise the following question template. The admin's instruction is "
+        "the authoritative ask; honor the preserve list strictly.\n\n"
+        f"Admin instruction:\n<instruction>\n{instruction}\n</instruction>\n\n"
+        f"Preserve list (do NOT change these fields): {preserve or 'none'}\n\n"
+        "Current question (JSON):\n<current>\n"
+        f"{json.dumps(_strip_for_prompt(current), indent=2)}\n"
+        "</current>\n\n"
+        "Return the revised QuestionTemplate via the submit_revised_question tool."
+    )
+
+    started = time.monotonic()
+    client = _client()
+    response = client.messages.create(
+        model=GENERATION_MODEL,
+        max_tokens=10_000,
+        thinking={"type": "adaptive"},
+        output_config={"effort": "high"},
+        system=_system_blocks(REVISION_SYSTEM_PROMPT),
+        tools=[SUBMIT_REVISED_QUESTION_TOOL],
+        tool_choice={"type": "tool", "name": "submit_revised_question"},
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    latency_ms = int((time.monotonic() - started) * 1000)
+
+    raw = _extract_tool_input(response, "submit_revised_question")
+
+    # Apply preserve list — overwrite revised fields with the originals.
+    for field in preserve:
+        if field in current:
+            raw[field] = current[field]
+
+    update_payload: dict[str, Any] = {
+        "type": raw["type"],
+        "prompt_template": raw["prompt_template"],
+        "variable_schema": raw.get("variable_schema") or {},
+        "solver_code": raw.get("solver_code"),
+        "interactive_config": raw.get("interactive_config"),
+        "rubric": raw["rubric"],
+        "competency_tags": raw.get("competency_tags") or current.get("competency_tags") or [],
+        "time_limit_seconds": raw.get("time_limit_seconds"),
+        "max_points": float(raw.get("max_points") or current.get("max_points") or 10),
+        "metadata": {
+            **(current.get("metadata") or {}),
+            "last_revision_instruction": instruction,
+        },
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    supabase.table("question_templates").update(update_payload).eq("id", question_id).execute()
+
+    parent_run_id = (current.get("metadata") or {}).get("source_generation_id")
+    run_id = _record_run(
+        supabase,
+        stage="revision",
+        input_brief={
+            "question_id": question_id,
+            "instruction": instruction,
+            "preserve": preserve,
+            "before": _strip_for_prompt(current),
+        },
+        output={"after": raw},
+        model=GENERATION_MODEL,
+        tokens_in=response.usage.input_tokens,
+        tokens_out=response.usage.output_tokens,
+        latency_ms=latency_ms,
+        status_value="success",
+        parent_run_id=parent_run_id,
+        created_by=principal.user_id,
+    )
+
+    return {
+        "question_id": question_id,
+        "run_id": run_id,
+        "model": GENERATION_MODEL,
+        "tokens_in": response.usage.input_tokens,
+        "tokens_out": response.usage.output_tokens,
+        "latency_ms": latency_ms,
+        "revised": update_payload,
+    }
+
+
+def _strip_for_prompt(row: dict[str, Any]) -> dict[str, Any]:
+    """Drop heavy or DB-internal fields when sending the current question to
+    the model — keeps the prompt focused on user-meaningful template state."""
+    return {
+        k: v
+        for k, v in row.items()
+        if k not in {"id", "module_id", "position", "solver_language"}
+    }
 
 
 # -- Run lookup --------------------------------------------------------------
