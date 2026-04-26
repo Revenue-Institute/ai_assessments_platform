@@ -267,6 +267,10 @@ $RECYCLE.BIN/
 # Database
 packages/database/generated
 
+# Zod -> Pydantic codegen output (apps/api/scripts/gen_schemas.py)
+apps/api/src/ri_assessments_api/generated/
+packages/schemas/schemas-out/
+
 # react.email
 .react-email
 

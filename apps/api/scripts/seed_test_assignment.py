@@ -21,13 +21,13 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from ri_assessments_api.auth import issue_candidate_token  # noqa: E402
 from ri_assessments_api.config import get_settings  # noqa: E402
 from ri_assessments_api.db import get_supabase  # noqa: E402
 from ri_assessments_api.services.tokens import (  # noqa: E402
     candidate_token_url,
     hash_token,
 )
-from ri_assessments_api.auth import issue_candidate_token  # noqa: E402
 
 TEST_ADMIN_EMAIL = "seed-admin@revenueinstitute.local"
 TEST_SUBJECT_EMAIL = "seed-candidate@revenueinstitute.local"

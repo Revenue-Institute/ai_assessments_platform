@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "clean": "git clean -xdf .cache .turbo dist node_modules",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "emit-json-schema": "bun scripts/emit-json-schema.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

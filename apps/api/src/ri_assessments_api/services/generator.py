@@ -404,22 +404,15 @@ def generate_questions(
         )
     module_id = module_insert.data[0]["id"]
 
-    run_ids: list[str] = []
-    total_tokens_in = 0
-    total_tokens_out = 0
-    questions_generated = 0
-    position = 0
-
     document_titles: dict[str, str] = {}
     if brief.reference_document_ids:
         document_titles = _document_title_lookup(supabase, brief.reference_document_ids)
 
-    for topic in outline.topics:
-        topic_dict = topic.model_dump()
+    def _generate_for_topic(topic: Any) -> dict[str, Any]:
+        """Worker: retrieve refs, call Claude, parse + verify questions.
+        Returns a dict the main thread folds into the aggregate result."""
 
-        # Per spec §6.4: retrieve top-k chunks per topic when references are
-        # attached. Failures are non-fatal — generation falls back to no
-        # reference material rather than aborting the whole module.
+        topic_dict = topic.model_dump()
         reference_chunks: list[dict[str, Any]] = []
         cited_titles: dict[str, str] = {}
         if brief.reference_document_ids:
@@ -462,71 +455,102 @@ def generate_questions(
                     }
                 ],
             )
-        except Exception as exc:  # network / 429 / 5xx
+        except Exception as exc:
             log.exception("question generation failed for topic %s", topic.name)
-            run_id = _record_run(
-                supabase,
-                stage="full",
-                input_brief={"brief": brief.model_dump(), "topic": topic_dict},
-                output={"error": str(exc)},
-                model=GENERATION_MODEL,
-                tokens_in=0,
-                tokens_out=0,
-                latency_ms=int((time.monotonic() - started) * 1000),
-                status_value="failed",
-                error=str(exc),
-                parent_run_id=outline_run_id,
-                created_by=principal.user_id,
-            )
-            run_ids.append(run_id)
-            continue
+            return {
+                "topic_dict": topic_dict,
+                "status": "failed",
+                "error": str(exc),
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "latency_ms": int((time.monotonic() - started) * 1000),
+                "raw_questions": [],
+                "verified_questions": [],
+                "cited_titles": {},
+            }
 
         latency_ms = int((time.monotonic() - started) * 1000)
-        total_tokens_in += response.usage.input_tokens
-        total_tokens_out += response.usage.output_tokens
-
         try:
             raw_output = _extract_tool_input(response, "submit_questions")
             raw_questions = list(raw_output.get("questions") or [])
         except HTTPException as exc:
+            return {
+                "topic_dict": topic_dict,
+                "status": "failed",
+                "error": exc.detail,
+                "tokens_in": response.usage.input_tokens,
+                "tokens_out": response.usage.output_tokens,
+                "latency_ms": latency_ms,
+                "raw_response_text": _stringify_text(response),
+                "raw_questions": [],
+                "verified_questions": [],
+                "cited_titles": {},
+            }
+
+        verified = [q for q in raw_questions if _self_verify_question(q)]
+        return {
+            "topic_dict": topic_dict,
+            "status": "success",
+            "tokens_in": response.usage.input_tokens,
+            "tokens_out": response.usage.output_tokens,
+            "latency_ms": latency_ms,
+            "raw_questions": raw_questions,
+            "verified_questions": verified,
+            "cited_titles": cited_titles,
+        }
+
+    # Run per-topic generation calls in parallel. Cap concurrency so we
+    # don't blow past Anthropic rate limits - each topic request streams
+    # 16K tokens and takes 10-30s; 4 in flight gets us a 4x speedup
+    # without tripping the org-level RPS cap.
+    from concurrent.futures import ThreadPoolExecutor
+
+    max_workers = min(len(outline.topics), 4) or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        topic_results = list(pool.map(_generate_for_topic, outline.topics))
+
+    run_ids: list[str] = []
+    total_tokens_in = 0
+    total_tokens_out = 0
+    questions_generated = 0
+    position = 0
+    for outcome in topic_results:
+        topic_dict = outcome["topic_dict"]
+        total_tokens_in += int(outcome.get("tokens_in") or 0)
+        total_tokens_out += int(outcome.get("tokens_out") or 0)
+
+        if outcome["status"] == "failed":
             run_id = _record_run(
                 supabase,
                 stage="full",
                 input_brief={"brief": brief.model_dump(), "topic": topic_dict},
-                output={"raw_response_text": _stringify_text(response)},
+                output={
+                    "error": outcome.get("error"),
+                    "raw_response_text": outcome.get("raw_response_text"),
+                },
                 model=GENERATION_MODEL,
-                tokens_in=response.usage.input_tokens,
-                tokens_out=response.usage.output_tokens,
-                latency_ms=latency_ms,
+                tokens_in=int(outcome.get("tokens_in") or 0),
+                tokens_out=int(outcome.get("tokens_out") or 0),
+                latency_ms=int(outcome.get("latency_ms") or 0),
                 status_value="failed",
-                error=exc.detail,
+                error=str(outcome.get("error") or ""),
                 parent_run_id=outline_run_id,
                 created_by=principal.user_id,
             )
             run_ids.append(run_id)
             continue
 
-        rows = []
-        for raw_q in raw_questions:
-            # Spec §6.3 rule 10: self-verify by running the solver on 3
-            # sampled variable sets. If the solver doesn't parse / run /
-            # produce a dict, skip the question and add a note in the
-            # generation_run output so the admin can review.
-            if not _self_verify_question(raw_q):
-                log.warning(
-                    "self-verification failed for generated question; skipping"
-                )
-                continue
+        rows: list[dict[str, Any]] = []
+        for raw_q in outcome["verified_questions"]:
             rows.append(
                 _normalize_question_row(
                     raw_q,
                     module_id=module_id,
                     position=position,
-                    cited_document_titles=cited_titles,
+                    cited_document_titles=outcome["cited_titles"],
                 )
             )
             position += 1
-
         if rows:
             supabase.table("question_templates").insert(rows).execute()
             questions_generated += len(rows)
@@ -535,11 +559,11 @@ def generate_questions(
             supabase,
             stage="full",
             input_brief={"brief": brief.model_dump(), "topic": topic_dict},
-            output={"questions": raw_questions},
+            output={"questions": outcome["raw_questions"]},
             model=GENERATION_MODEL,
-            tokens_in=response.usage.input_tokens,
-            tokens_out=response.usage.output_tokens,
-            latency_ms=latency_ms,
+            tokens_in=int(outcome.get("tokens_in") or 0),
+            tokens_out=int(outcome.get("tokens_out") or 0),
+            latency_ms=int(outcome.get("latency_ms") or 0),
             status_value="success",
             parent_run_id=outline_run_id,
             created_by=principal.user_id,
