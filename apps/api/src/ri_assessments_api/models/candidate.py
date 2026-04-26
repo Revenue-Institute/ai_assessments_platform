@@ -140,3 +140,24 @@ class CodeTestResponse(BaseModel):
     output: str
     runtime_ms: int
     timed_out: bool
+
+
+class SqlQueryRequest(BaseModel):
+    sql: str = Field(max_length=20_000)
+    question_index: int = Field(ge=0)
+
+
+class SqlQueryResponse(BaseModel):
+    columns: list[str]
+    rows: list[list[Any]]
+    runtime_ms: int
+    error: str | None = None
+    timed_out: bool
+
+
+class DiagramSubmitRequest(BaseModel):
+    """React Flow JSON exported by the candidate."""
+
+    question_index: int = Field(ge=0)
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]

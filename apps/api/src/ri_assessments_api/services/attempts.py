@@ -10,7 +10,9 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from .code_runner import grade_code_attempt
+from .diagram_runner import grade_diagram_attempt
 from .randomizer import question_seed, render_prompt, sample_variables
+from .sql_runner import grade_sql_attempt
 
 
 def _parse_ts(value: str | None) -> datetime | None:
@@ -211,11 +213,16 @@ def submit_answer(
         "submitted_at": datetime.now(UTC).isoformat(),
     }
 
-    # test_cases scoring on code questions runs synchronously here. Other
-    # scoring modes wait for the BullMQ worker (Phase 3).
+    # Synchronous grading on submit for the runner-backed types we can
+    # score deterministically. Everything else (rubric_ai, structural_match
+    # for n8n) lands later via score_assignment when the candidate completes.
     rubric = question.get("rubric") or {}
+    qtype = question["type"]
+    config = question.get("interactive_config") or {}
+    max_points = float(question.get("max_points") or 10)
+
     if (
-        question["type"] == "code"
+        qtype == "code"
         and rubric.get("scoring_mode") == "test_cases"
         and isinstance(answer, dict)
     ):
@@ -225,8 +232,8 @@ def submit_answer(
                 update.update(
                     grade_code_attempt(
                         code=candidate_code,
-                        config=question.get("interactive_config") or {},
-                        max_points=float(question.get("max_points") or 10),
+                        config=config,
+                        max_points=max_points,
                     )
                 )
                 if update.get("score_rationale"):
@@ -234,6 +241,42 @@ def submit_answer(
             except HTTPException:
                 # Sandbox is unavailable; keep the answer but leave score null.
                 # An admin rescore picks this up later (spec §9.3).
+                pass
+
+    if qtype == "sql" and isinstance(answer, dict):
+        candidate_sql = answer.get("sql") or answer.get("text")
+        if isinstance(candidate_sql, str) and candidate_sql.strip():
+            try:
+                update.update(
+                    grade_sql_attempt(
+                        query_sql=candidate_sql,
+                        config=config,
+                        max_points=max_points,
+                    )
+                )
+                if update.get("score_rationale"):
+                    update["rubric_version"] = rubric.get("version", "1")
+            except HTTPException:
+                pass
+
+    if (
+        qtype == "diagram"
+        and rubric.get("scoring_mode") in ("structural_match", "test_cases")
+        and isinstance(answer, dict)
+    ):
+        diagram_payload = answer.get("diagram")
+        if isinstance(diagram_payload, dict):
+            try:
+                update.update(
+                    grade_diagram_attempt(
+                        submission=diagram_payload,
+                        config=config,
+                        max_points=max_points,
+                    )
+                )
+                if update.get("score_rationale"):
+                    update["rubric_version"] = rubric.get("version", "1")
+            except HTTPException:
                 pass
 
     supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()

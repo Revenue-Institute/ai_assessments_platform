@@ -1,5 +1,7 @@
 import type { CandidateQuestionView } from "@/lib/api";
 import { CodeRenderer } from "./code-editor";
+import { DiagramRenderer } from "./diagram-editor";
+import { SqlRenderer } from "./sql-editor";
 
 export function QuestionRenderer({
   question,
@@ -34,6 +36,46 @@ export function QuestionRenderer({
           token={token}
         />
       );
+    }
+    case "sql": {
+      const config = (question.interactive_config ?? {}) as {
+        schema_sql?: string;
+        seed_sql?: string;
+        starter_sql?: string;
+      };
+      const previousSql = (question.raw_answer?.value as { sql?: string } | undefined)
+        ?.sql;
+      const initial =
+        previousSql ?? config.starter_sql ?? "-- Write your SQL here\nSELECT 1;";
+      return (
+        <SqlRenderer
+          config={config}
+          initialSql={initial}
+          questionIndex={question.index}
+          token={token}
+        />
+      );
+    }
+    case "diagram": {
+      const config = (question.interactive_config ?? {}) as {
+        starter_nodes?: Array<{
+          id?: string;
+          label?: string;
+          type?: string;
+          position?: { x: number; y: number };
+        }>;
+        starter_edges?: Array<{
+          id?: string;
+          source: string;
+          target: string;
+          label?: string;
+        }>;
+        palette?: Array<{ type: string; label: string }>;
+      };
+      const previous = (question.raw_answer?.value as
+        | { diagram?: Parameters<typeof DiagramRenderer>[0]["initialAnswer"] }
+        | undefined)?.diagram;
+      return <DiagramRenderer config={config} initialAnswer={previous} />;
     }
     default:
       return <UnsupportedRenderer question={question} />;
