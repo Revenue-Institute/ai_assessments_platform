@@ -139,10 +139,22 @@ export default async function OutlineReviewPage({
           </p>
           <p className="mt-2 text-muted-foreground text-xs">
             {outline.topics.length} topics · {totalQuestions} questions · est.{" "}
-            {outline.estimated_duration_minutes} min · weight sum {totalWeight}%
-            · model {run.model} · {run.tokens_in} → {run.tokens_out} tokens ·{" "}
-            {run.latency_ms} ms
+            {outline.estimated_duration_minutes} min · weight sum{" "}
+            <span
+              className={
+                Math.abs(totalWeight - 100) > 1 ? "text-warning" : undefined
+              }
+            >
+              {totalWeight}%
+            </span>
           </p>
+          <details className="mt-2 text-muted-foreground text-xs">
+            <summary className="cursor-pointer">Generation stats</summary>
+            <p className="mt-1">
+              Model {run.model} · {run.tokens_in} → {run.tokens_out} tokens ·{" "}
+              {run.latency_ms} ms
+            </p>
+          </details>
         </section>
 
         {error && (

@@ -14,6 +14,20 @@ import { CountdownTimer } from "./timer";
 type Params = { token: string; index: string };
 type SearchParams = Promise<{ error?: string }>;
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}) {
+  const { index } = await params;
+  const idx = Number.parseInt(index, 10);
+  return {
+    title: Number.isNaN(idx)
+      ? "Question · RI Assessment"
+      : `Question ${idx + 1} · RI Assessment`,
+  };
+}
+
 export default async function QuestionPage({
   params,
   searchParams,
@@ -102,11 +116,20 @@ export default async function QuestionPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12">
+    <main
+      className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12"
+      id="main"
+    >
+      <a
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground focus:font-medium"
+        href="#answer-form"
+      >
+        Skip to answer form
+      </a>
       <CandidateMonitor token={token} />
       <QuestionNavigator current={idx} token={token} total={question.total} />
 
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <p className="eyebrow-label">
           Question {idx + 1} of {question.total}
         </p>
@@ -138,6 +161,7 @@ export default async function QuestionPage({
         action={handleSubmit}
         aria-label={`Question ${idx + 1} answer form`}
         className="space-y-3"
+        id="answer-form"
       >
         <QuestionRenderer question={question} token={token} />
         <SubmitButton last={idx === question.total - 1} />

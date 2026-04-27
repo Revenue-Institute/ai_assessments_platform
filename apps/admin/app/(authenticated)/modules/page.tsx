@@ -40,9 +40,14 @@ export default async function ModulesPage() {
         )}
 
         {modules.length === 0 && !error ? (
-          <p className="text-muted-foreground text-sm">
-            No modules yet. Create a draft to get started.
-          </p>
+          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
+            <p className="text-muted-foreground text-sm">
+              No modules yet.
+            </p>
+            <Link className="btn-primary mt-3 text-sm" href="/modules/new">
+              Create your first module
+            </Link>
+          </div>
         ) : (
           <ul className="divide-y divide-border/40 rounded-xl border border-border/50 bg-muted/20">
             {modules.map((m) => (

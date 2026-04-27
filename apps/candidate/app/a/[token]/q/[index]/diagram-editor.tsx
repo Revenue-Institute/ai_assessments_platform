@@ -13,7 +13,8 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 type DiagramConfig = {
   starter_nodes?: Array<{
@@ -103,14 +104,17 @@ function DiagramCanvas({
   config: DiagramConfig;
   initialAnswer: Saved;
 }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(
-    bootstrapNodes(config, initialAnswer)
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
-    bootstrapEdges(config, initialAnswer)
-  );
+  const initialNodes = useMemo(() => bootstrapNodes(config, initialAnswer), [config, initialAnswer]);
+  const initialEdges = useMemo(() => bootstrapEdges(config, initialAnswer), [config, initialAnswer]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
   const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(
     null
+  );
+
+  useUnsavedChangesWarning(
+    JSON.stringify({ nodes, edges }) !==
+      JSON.stringify({ nodes: initialNodes, edges: initialEdges })
   );
 
   const palette = config.palette?.length ? config.palette : FALLBACK_PALETTE;

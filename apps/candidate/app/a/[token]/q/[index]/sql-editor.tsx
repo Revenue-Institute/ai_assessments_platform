@@ -3,6 +3,7 @@
 import Editor from "@monaco-editor/react";
 import { useState } from "react";
 import { env } from "@/env";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 type SqlConfig = {
   schema_sql?: string;
@@ -32,6 +33,8 @@ export function SqlRenderer({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SqlRunResult | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
+
+  useUnsavedChangesWarning(sql !== initialSql);
 
   const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
 

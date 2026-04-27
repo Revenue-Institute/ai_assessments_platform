@@ -145,9 +145,9 @@ export default async function NewModuleWizardPage({
             placeholder="hubspot, marketing, ops"
           />
           <Field
-            label="Required competencies (taxonomy ids, comma-separated)"
+            label="Required competencies"
             name="required_competencies"
-            placeholder="hubspot.workflows, marketing.analytics"
+            placeholder="e.g. hubspot.workflows, marketing.analytics"
           />
 
           <fieldset className="grid grid-cols-5 gap-3 rounded border border-border/40 bg-background/30 p-3">

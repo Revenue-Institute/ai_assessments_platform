@@ -1,8 +1,9 @@
 "use client";
 
 import Editor from "@monaco-editor/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { env } from "@/env";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 type Cell = { type: "code" | "markdown"; source: string };
 
@@ -43,12 +44,18 @@ export function NotebookRenderer({
   config: { dataset_urls?: string[]; starter_cells?: Cell[] };
   initialCells: Cell[] | undefined;
 }) {
-  const [cells, setCells] = useState<Cell[]>(
-    bootstrapCells(initialCells, config.starter_cells)
+  const initialBootstrapped = useMemo(
+    () => bootstrapCells(initialCells, config.starter_cells),
+    [initialCells, config.starter_cells]
   );
+  const [cells, setCells] = useState<Cell[]>(initialBootstrapped);
   const [outputs, setOutputs] = useState<Record<number, CellOutput>>({});
   const [running, setRunning] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
+
+  useUnsavedChangesWarning(
+    JSON.stringify(cells) !== JSON.stringify(initialBootstrapped)
+  );
 
   const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
 
@@ -73,6 +80,15 @@ export function NotebookRenderer({
   }
 
   function deleteCell(i: number) {
+    const cell = cells[i];
+    const hasContent = cell?.source?.trim().length > 0;
+    if (
+      hasContent &&
+      typeof window !== "undefined" &&
+      !window.confirm("Delete this cell? Its contents won't be recoverable.")
+    ) {
+      return;
+    }
     setCells((current) =>
       current.length === 1 ? current : current.filter((_, idx) => idx !== i)
     );

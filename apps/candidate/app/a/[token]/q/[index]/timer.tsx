@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 
 /** Live countdown driven by the server's expires_at — the timer is a
- * display only; deadline enforcement happens server-side per spec §10.1. */
+ * display only; deadline enforcement happens server-side per spec §10.1.
+ *
+ * Accessibility: the visible countdown is `aria-hidden` so it doesn't
+ * spam screen readers every second. A separate `aria-live="polite"`
+ * region announces remaining time only on minute boundaries above 5 min,
+ * every 30 s under 5 min, and on each second in the final minute, plus
+ * an `aria-live="assertive"` announcement when the deadline elapses. */
 export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   const deadline = new Date(deadlineIso).getTime();
   const [now, setNow] = useState(() => Date.now());
@@ -25,19 +31,39 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
       ? "border-warning/60 bg-warning/15 text-warning"
       : "border-primary/40 bg-primary/10 text-primary";
 
+  // Quantize for the screen-reader announcement. Above 5 min: announce
+  // each whole minute. Under 5 min: announce every 30 s. Final minute:
+  // announce each second. This avoids per-second SR spam while keeping
+  // candidates informed as time gets tight.
+  let spokenLabel: string | null = null;
+  if (expired) {
+    spokenLabel = "Time has expired";
+  } else if (minutes >= 5 && seconds === 0) {
+    spokenLabel = `${minutes} minutes remaining`;
+  } else if (minutes >= 1 && minutes < 5 && seconds % 30 === 0) {
+    spokenLabel = `${minutes} minutes ${seconds} seconds remaining`;
+  } else if (minutes === 0) {
+    spokenLabel = `${seconds} seconds remaining`;
+  }
+
+  const visible = expired
+    ? "00:00 — time up"
+    : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} left`;
+
   return (
-    <p
-      aria-live="polite"
-      aria-label={
-        expired
-          ? "Time has expired"
-          : `${minutes} minutes and ${seconds} seconds remaining`
-      }
-      className={`rounded border px-2 py-1 font-mono text-xs tabular-nums ${tone}`}
-    >
-      {expired
-        ? "00:00 — time up"
-        : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} left`}
-    </p>
+    <>
+      <p
+        aria-hidden="true"
+        className={`whitespace-nowrap rounded border px-2 py-1 font-mono text-xs tabular-nums ${tone}`}
+      >
+        {visible}
+      </p>
+      <span
+        aria-live={expired || minutes === 0 ? "assertive" : "polite"}
+        className="sr-only"
+      >
+        {spokenLabel ?? ""}
+      </span>
+    </>
   );
 }

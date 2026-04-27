@@ -116,12 +116,21 @@ export function N8nRenderer({
             : "Provisioning n8n workspace…"}
         </span>
         <button
-          className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10 disabled:opacity-50"
+          aria-describedby="n8n-export-help"
+          className={
+            exportedWorkflow
+              ? "rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary hover:bg-primary/20 disabled:opacity-50"
+              : "btn-primary text-xs disabled:opacity-50"
+          }
           disabled={!workflowId || busy !== "none"}
           onClick={exportWorkflow}
           type="button"
         >
-          {busy === "export" ? "Exporting…" : "Export current state"}
+          {busy === "export"
+            ? "Saving workflow…"
+            : exportedWorkflow
+              ? "Re-save workflow"
+              : "Save workflow to answer"}
         </button>
         <button
           className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10 disabled:opacity-50"
@@ -132,6 +141,29 @@ export function N8nRenderer({
           {busy === "embed" ? "Provisioning…" : "Reset workspace"}
         </button>
       </div>
+
+      {!exportedWorkflow && workflowId && busy !== "embed" && (
+        <p
+          aria-live="polite"
+          className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
+          role="status"
+        >
+          You haven&apos;t saved this workflow yet. Click{" "}
+          <strong>Save workflow to answer</strong> after each set of edits, and
+          again right before you submit. Without a save, the grader won&apos;t
+          see your latest changes.
+        </p>
+      )}
+
+      {exportedWorkflow && (
+        <p
+          aria-live="polite"
+          className="rounded border border-primary/40 bg-primary/10 px-3 py-2 text-primary text-xs"
+          role="status"
+        >
+          Workflow saved. Re-save if you keep editing.
+        </p>
+      )}
 
       {error && (
         <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
@@ -148,10 +180,22 @@ export function N8nRenderer({
           title="n8n workflow editor"
         />
       ) : (
-        <div className="flex h-[300px] items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground text-sm">
-          {error
-            ? "n8n workspace unavailable. The admin can rescore this attempt later."
-            : "Loading n8n workspace…"}
+        <div
+          aria-busy={!error}
+          className="flex h-[300px] flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card/60 text-muted-foreground text-sm"
+          role="status"
+        >
+          {error ? (
+            "n8n workspace unavailable. The admin can rescore this attempt later."
+          ) : (
+            <>
+              <span
+                aria-hidden="true"
+                className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"
+              />
+              <span>Setting up your workspace (10–15 seconds)…</span>
+            </>
+          )}
         </div>
       )}
 
@@ -166,9 +210,11 @@ export function N8nRenderer({
         </details>
       )}
 
-      <p className="text-muted-foreground text-xs">
-        Build the workflow in the iframe. Click <em>Export current state</em>
-        before submitting; it captures the workflow JSON the grader sees.
+      <p className="text-muted-foreground text-xs" id="n8n-export-help">
+        Build the workflow in the iframe above, then click{" "}
+        <em>Save workflow to answer</em> whenever you reach a checkpoint. The
+        grader scores the most recent saved version, so re-save right before
+        you submit.
       </p>
     </div>
   );

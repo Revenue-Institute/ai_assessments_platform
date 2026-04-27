@@ -28,6 +28,7 @@ export function CandidateMonitor({ token }: { token: string }) {
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
+  const modalReturnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -140,6 +141,32 @@ export function CandidateMonitor({ token }: { token: string }) {
       // event log will record either way.
     }
   };
+
+  // Spec §10.3 + WCAG 2.1.2: when the blocking modal opens, capture the
+  // previously focused element so we can restore focus on close, and
+  // intercept Escape so the user can re-enter fullscreen via keyboard
+  // alone. Tab is intercepted to keep focus on the single button (focus
+  // trap; the modal has only one focusable element).
+  useEffect(() => {
+    if (!showExitModal) return;
+    if (typeof document !== "undefined") {
+      modalReturnFocusRef.current = (document.activeElement as HTMLElement) ?? null;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        void enterFullscreen();
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      modalReturnFocusRef.current?.focus?.();
+    };
+  }, [showExitModal]);
 
   return (
     <>

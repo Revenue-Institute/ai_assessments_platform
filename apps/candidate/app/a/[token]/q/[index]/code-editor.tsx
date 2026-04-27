@@ -3,6 +3,7 @@
 import Editor from "@monaco-editor/react";
 import { useState } from "react";
 import { env } from "@/env";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 type CodeConfig = {
   language?: string;
@@ -62,6 +63,8 @@ export function CodeRenderer({
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useUnsavedChangesWarning(code !== initialCode);
 
   const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
 

@@ -44,7 +44,12 @@ export default async function AssignmentsPage() {
         )}
 
         {assignments.length === 0 && !error ? (
-          <p className="text-muted-foreground text-sm">No assignments yet.</p>
+          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
+            <p className="text-muted-foreground text-sm">No assignments yet.</p>
+            <Link className="btn-primary mt-3 text-sm" href="/assignments/new">
+              Issue magic links
+            </Link>
+          </div>
         ) : (
           <table className="w-full overflow-hidden rounded-xl border border-border/50 bg-muted/20 text-sm">
             <thead className="bg-muted/40 text-left text-muted-foreground text-xs uppercase">

@@ -8,6 +8,7 @@ import {
   type ModuleSummary,
   type SubjectSummary,
 } from "@/lib/api";
+import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
 
 export const dynamic = "force-dynamic";
@@ -116,12 +117,15 @@ export default async function NewAssignmentPage({
             <p className="mt-1 text-muted-foreground text-xs">
               Tokens are not retrievable later. Copy what you need now.
             </p>
-            <ul className="mt-2 space-y-1 text-xs">
+            <ul className="mt-2 space-y-2 text-xs">
               {issuedLinks.map((row, i) => (
                 <li className="flex flex-col gap-1" key={i}>
-                  <span className="text-muted-foreground">
-                    Assignment <code>{row.assignment_id.slice(0, 8)}…</code>
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">
+                      Assignment <code>{row.assignment_id.slice(0, 8)}…</code>
+                    </span>
+                    <CopyButton label="Copy link" value={row.magic_link_url} />
+                  </div>
                   <code className="break-all rounded bg-secondary p-2 text-foreground">
                     {row.magic_link_url}
                   </code>

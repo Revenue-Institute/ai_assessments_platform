@@ -106,8 +106,8 @@ export default async function CandidateLandingPage({
           <li>Time spent active on each question</li>
         </ul>
         <p className="text-muted-foreground">
-          Raw answers are stored permanently. AI scores them against a rubric
-          and a human reviewer may re-score before final results are issued.
+          Your answers are saved to your record. We review every submission
+          before sending you final results.
         </p>
       </section>
 

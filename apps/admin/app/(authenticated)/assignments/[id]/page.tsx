@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import {
   ApiError,
   type AttemptEvent,
@@ -96,7 +97,29 @@ export default async function AssignmentDetailPage({
     <>
       <Header page={detail.subject_full_name ?? "Assignment"} pages={["Assignments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <section className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 md:grid-cols-4">
+        <nav
+          aria-label="Related entities"
+          className="flex flex-wrap gap-3 text-muted-foreground text-xs"
+        >
+          {detail.subject_id && (
+            <Link
+              className="hover:text-primary hover:underline"
+              href={`/subjects/${detail.subject_id}`}
+            >
+              ↗ Subject: {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
+            </Link>
+          )}
+          {detail.module_id && (
+            <Link
+              className="hover:text-primary hover:underline"
+              href={`/modules/${detail.module_id}`}
+            >
+              ↗ Module: {detail.module_title ?? detail.module_id.slice(0, 8)}
+            </Link>
+          )}
+        </nav>
+
+        <section className="grid grid-cols-1 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 sm:grid-cols-2 md:grid-cols-4">
           <Stat label="Status" value={detail.status} />
           <Stat label="Module" value={detail.module_title ?? "—"} />
           <Stat
@@ -173,9 +196,14 @@ export default async function AssignmentDetailPage({
                     {a.rendered_prompt}
                   </p>
                   {a.raw_answer && (
-                    <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted/40 p-2 text-xs">
-                      {JSON.stringify(a.raw_answer, null, 2)}
-                    </pre>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-muted-foreground text-xs hover:text-primary">
+                        View raw answer
+                      </summary>
+                      <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted/40 p-2 text-xs">
+                        {JSON.stringify(a.raw_answer, null, 2)}
+                      </pre>
+                    </details>
                   )}
                   {a.score_rationale && (
                     <p className="mt-2 rounded border border-border/40 bg-muted/30 p-2 text-muted-foreground text-xs">
