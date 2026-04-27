@@ -148,8 +148,21 @@ Cloud Scheduler weekly to enforce the 12-month TTL — spec §11.4).
 
 ## 4. Local dev (no Docker)
 
+**One-shot.** After step 2 (env file + symlinks), run all three services
+together with a single command:
+
 ```sh
 bun install
+bun run dev:full              # api :8000 · admin :3000 · candidate :3001
+```
+
+`dev:full` re-runs the symlink wiring, validates required env vars,
+checks for `bun` + `uv`, then hands off to `turbo dev` (which runs each
+app's `dev` script in a tabbed TUI). Hit `Ctrl-C` once to stop all three.
+
+**Per-service** (when you only want one running):
+
+```sh
 bun --filter api dev          # FastAPI on :8000 (uv-managed)
 bun --filter admin dev        # Next.js on :3000
 bun --filter candidate dev    # Next.js on :3001

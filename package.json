@@ -18,6 +18,9 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:full": "bash scripts/dev-all.sh",
+    "env:link": "bash scripts/link-env.sh",
+    "env:check": "bash scripts/check-env.sh all",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "test": "turbo test",
