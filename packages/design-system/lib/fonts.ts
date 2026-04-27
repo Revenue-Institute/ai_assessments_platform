@@ -1,10 +1,12 @@
-// Brand fonts (/specs/brand.md): Plus Jakarta Sans for headings,
-// Satoshi for body, Menlo for code. `next/font/google` is a Next.js
-// runtime API and must be invoked from the consuming app, so each
-// Next app sets up its own font instances and forwards the variable
-// classNames to the <html> element. This module just exposes the
-// shared tail of utility classes (touch + antialiasing) so both apps
-// stay in lockstep.
+// Brand fonts (/specs/brand.md): Plus Jakarta Sans for headings
+// (Google Fonts), Satoshi for body (self-hosted variable .ttf at each
+// app's `app/fonts/Satoshi-Variable.ttf`), Menlo for code. The
+// `next/font/google` and `next/font/local` APIs are Next.js
+// compile-time hooks and must be invoked from the consuming app, so
+// each Next app sets up its own font instances and forwards the
+// variable classNames to the <html> element. This module just exposes
+// the shared tail of utility classes (touch + antialiasing) so both
+// apps stay in lockstep.
 
 import { cn } from '@repo/design-system/lib/utils';
 

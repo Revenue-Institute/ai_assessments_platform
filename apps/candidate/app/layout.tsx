@@ -1,6 +1,7 @@
 import { brandFontShell } from "@repo/design-system/lib/fonts";
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -11,11 +12,14 @@ const headingFont = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-const bodyFont = Inter({
-  subsets: ["latin"],
+// Satoshi (variable) — licensed self-hosted file at
+// app/fonts/Satoshi-Variable.ttf. Convert to woff2 for ~30% smaller
+// payload when there's time (`brew install woff2; woff2_compress ...`).
+const bodyFont = localFont({
+  src: "./fonts/Satoshi-Variable.ttf",
   variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
   display: "swap",
+  weight: "300 900",
 });
 
 export const metadata: Metadata = {
