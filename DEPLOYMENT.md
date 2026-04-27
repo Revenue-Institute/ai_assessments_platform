@@ -86,8 +86,24 @@ VERCEL_CANDIDATE_PROJECT_ID
 
 ## 2. Required env vars
 
-Copy each `.env.example` to `.env.local` and fill in. Spec §16 has the
-canonical list.
+**Local dev — single source of truth.** Copy `.env.example` at the repo
+root to `.env.local`, fill in your values, then run:
+
+```sh
+cp .env.example .env.local
+bash scripts/link-env.sh
+```
+
+That symlinks `apps/admin/.env.local`, `apps/candidate/.env.local`, and
+`apps/api/.env` to the root file. Edit one file, all three apps see the
+update. Re-run the script if you ever clone fresh or if a symlink gets
+overwritten.
+
+**Production deploy** — set vars per service in the host (Vercel
+project settings for admin/candidate, Cloud Run service env for the
+API). Don't ship `.env.local` to production.
+
+Spec §16 has the canonical variable list. Highlights below.
 
 **`apps/api/.env.example`** — FastAPI (Cloud Run). Critical:
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`,
