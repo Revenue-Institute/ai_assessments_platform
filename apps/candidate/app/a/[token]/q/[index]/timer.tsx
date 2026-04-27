@@ -51,19 +51,22 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
     : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} left`;
 
   return (
-    <>
-      <p
+    // Wrap both elements so the parent flex container sees a single
+    // child — fragmenting them would split the timer into two flex items
+    // and break the question header's justify-between layout.
+    <span className="inline-flex">
+      <span
         aria-hidden="true"
         className={`whitespace-nowrap rounded border px-2 py-1 font-mono text-xs tabular-nums ${tone}`}
       >
         {visible}
-      </p>
+      </span>
       <span
         aria-live={expired || minutes === 0 ? "assertive" : "polite"}
         className="sr-only"
       >
         {spokenLabel ?? ""}
       </span>
-    </>
+    </span>
   );
 }

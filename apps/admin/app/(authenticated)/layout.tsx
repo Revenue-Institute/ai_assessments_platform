@@ -34,7 +34,13 @@ export default async function AuthenticatedLayout({
           ""
         }
       >
-        <div id="admin-main">{children}</div>
+        {/* `display: contents` keeps the skip-link anchor present in the
+            accessibility tree without inserting a real layout box, so the
+            <SidebarInset> flex column still propagates flex-1 to the page
+            outer wrappers below. */}
+        <div className="contents" id="admin-main">
+          {children}
+        </div>
       </GlobalSidebar>
     </SidebarProvider>
   );
