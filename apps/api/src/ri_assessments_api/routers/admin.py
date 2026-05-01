@@ -145,6 +145,20 @@ def preview_module(
     return admin_service.preview_module(supabase, principal, module_id)
 
 
+@router.post(
+    "/modules/{module_id}/preview-magic-link",
+    response_model=AssignmentMagicLink,
+)
+def module_preview_magic_link(
+    module_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentMagicLink:
+    return admin_service.create_preview_magic_link(
+        supabase, principal, module_id=module_id
+    )
+
+
 @router.post("/modules/{module_id}/archive", response_model=ModuleSummary)
 def archive_module(
     module_id: str,
@@ -254,6 +268,20 @@ def publish_assessment(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssessmentSummary:
     return admin_service.publish_assessment(supabase, principal, assessment_id)
+
+
+@router.post(
+    "/assessments/{assessment_id}/preview-magic-link",
+    response_model=AssignmentMagicLink,
+)
+def assessment_preview_magic_link(
+    assessment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentMagicLink:
+    return admin_service.create_preview_magic_link(
+        supabase, principal, assessment_id=assessment_id
+    )
 
 
 @router.post(

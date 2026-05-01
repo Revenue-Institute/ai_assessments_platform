@@ -203,6 +203,11 @@ export const publishModule = (id: string) =>
     method: "POST",
     body: JSON.stringify({}),
   });
+export const createModulePreviewMagicLink = (id: string) =>
+  callApi<AssignmentMagicLink>(
+    `/api/modules/${id}/preview-magic-link`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
 export const archiveModule = (id: string) =>
   callApi<ModuleSummary>(`/api/modules/${id}/archive`, {
     method: "POST",
@@ -341,6 +346,11 @@ export const reorderAssessment = (id: string, moduleIds: string[]) =>
 export const publishAssessment = (id: string) =>
   callApi<AssessmentSummary>(
     `/api/assessments/${encodeURIComponent(id)}/publish`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+export const createAssessmentPreviewMagicLink = (id: string) =>
+  callApi<AssignmentMagicLink>(
+    `/api/assessments/${encodeURIComponent(id)}/preview-magic-link`,
     { method: "POST", body: JSON.stringify({}) }
   );
 export const archiveAssessment = (id: string) =>

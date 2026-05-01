@@ -1231,6 +1231,75 @@ def create_assignment(
     )
 
 
+def create_preview_magic_link(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    module_id: str | None = None,
+    assessment_id: str | None = None,
+) -> AssignmentMagicLink:
+    """Mint a one-hour candidate magic link pointed at the admin's own
+    `Admin Preview` subject. The admin clicks "Open as candidate" on a
+    module / assessment preview page, the FE calls this, and the URL
+    returned drops them straight into the live candidate UI (Monaco,
+    Run / Test, timer, integrity monitor).
+
+    The preview subject is a real `subjects` row keyed on the admin's
+    user id so each reviewer gets their own. Re-using the row across
+    sessions keeps the assignment list tidy."""
+
+    _ensure_role(principal, "admin", "reviewer")
+    if not module_id and not assessment_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Either module_id or assessment_id is required.",
+        )
+
+    preview_email = f"preview+{principal.user_id}@admin.local"
+    full_name = principal.full_name or principal.email or "Admin Preview"
+
+    existing = (
+        supabase.table("subjects")
+        .select("id, full_name, email, type")
+        .eq("email", preview_email)
+        .eq("type", "candidate")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        subject_id = existing.data[0]["id"]
+    else:
+        inserted = (
+            supabase.table("subjects")
+            .insert(
+                {
+                    "type": "candidate",
+                    "full_name": f"{full_name} (preview)",
+                    "email": preview_email,
+                    "metadata": {"preview_for_admin_user_id": principal.user_id},
+                }
+            )
+            .execute()
+        )
+        if not inserted.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create preview subject.",
+            )
+        subject_id = inserted.data[0]["id"]
+
+    payload = AssignmentCreateRequest(
+        subject_id=subject_id,
+        module_id=module_id,
+        assessment_id=assessment_id,
+        # 1 hour is enough to walk the assessment; expires_in_days is the
+        # only knob the API exposes today, so we pass the equivalent.
+        expires_in_days=1,
+        send_email=False,
+    )
+    return create_assignment(supabase, principal, payload, send_email=False)
+
+
 def bulk_create_assignments(
     supabase: Client,
     principal: AdminPrincipal,

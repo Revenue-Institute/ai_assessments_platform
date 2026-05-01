@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ApiError, getModule, previewModule } from "@/lib/api";
+import { notFound, redirect } from "next/navigation";
+import {
+  ApiError,
+  createModulePreviewMagicLink,
+  getModule,
+  previewModule,
+} from "@/lib/api";
 import { Header } from "../../../components/header";
 import { QuestionPreviewRenderer } from "../../../components/question-preview-renderer";
 
@@ -24,6 +29,12 @@ export default async function ModulePreviewPage({
     throw e;
   }
 
+  async function openAsCandidate(): Promise<void> {
+    "use server";
+    const link = await createModulePreviewMagicLink(id);
+    redirect(link.magic_link_url);
+  }
+
   return (
     <>
       <Header
@@ -31,14 +42,22 @@ export default async function ModulePreviewPage({
         pages={["Modules", detail.title]}
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <p
-          className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
-          role="status"
-        >
-          Admin preview. Variables are sampled deterministically and
-          answer-revealing fields are stripped, matching the candidate view.
-          Answers are not graded here.
-        </p>
+        <section className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="eyebrow-label">Read-only review</p>
+            <p className="text-muted-foreground text-sm">
+              Variables are sampled deterministically and answer-revealing
+              fields are stripped. To drive the live experience (Monaco
+              run / test, server timer, integrity monitor), open as a
+              candidate.
+            </p>
+          </div>
+          <form action={openAsCandidate}>
+            <button className="btn-primary text-sm" type="submit">
+              Open as candidate
+            </button>
+          </form>
+        </section>
 
         <div>
           <Link

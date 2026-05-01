@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ApiError,
   type AssessmentDetail,
+  createAssessmentPreviewMagicLink,
   getAssessment,
   type ModulePreviewResponse,
   previewModule,
@@ -34,6 +35,12 @@ export default async function AssessmentPreviewPage({
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
+  }
+
+  async function openAsCandidate(): Promise<void> {
+    "use server";
+    const link = await createAssessmentPreviewMagicLink(id);
+    redirect(link.magic_link_url);
   }
 
   const blocks: ModulePreviewBlock[] = await Promise.all(
@@ -73,14 +80,22 @@ export default async function AssessmentPreviewPage({
         pages={["Assessments", detail.title]}
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <p
-          className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
-          role="status"
-        >
-          Admin preview. Variables are sampled deterministically and
-          answer-revealing fields are stripped, matching the candidate view.
-          Answers are not graded here.
-        </p>
+        <section className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="eyebrow-label">Read-only review</p>
+            <p className="text-muted-foreground text-sm">
+              Variables are sampled deterministically and answer-revealing
+              fields are stripped. To drive the live experience (Monaco
+              run / test, server timer, integrity monitor), open as a
+              candidate.
+            </p>
+          </div>
+          <form action={openAsCandidate}>
+            <button className="btn-primary text-sm" type="submit">
+              Open as candidate
+            </button>
+          </form>
+        </section>
 
         <div>
           <Link
