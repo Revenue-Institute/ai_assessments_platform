@@ -254,7 +254,7 @@ def generate_outline(
     )
     latency_ms = int((time.monotonic() - started) * 1000)
 
-    raw_output = _extract_tool_input(response, "submit_outline")
+    raw_output = _sanitize_text(_extract_tool_input(response, "submit_outline"))
     try:
         outline = GeneratedOutline.model_validate(raw_output)
     except Exception as exc:
@@ -353,6 +353,25 @@ def _document_title_lookup(supabase: Client, document_ids: list[str]) -> dict[st
     return {row["id"]: row.get("title", "") for row in res.data or []}
 
 
+_EMDASH = "—"
+_ENDASH = "–"
+
+
+def _sanitize_text(value: Any) -> Any:
+    """Strip em / en dashes from generated copy (spec §2 codebase rule).
+    Recurses into dicts and lists so we cover prompt_template, rubric
+    text, interactive_config option labels, and any other free-form
+    strings the model might emit."""
+
+    if isinstance(value, str):
+        return value.replace(_EMDASH, ", ").replace(_ENDASH, "-")
+    if isinstance(value, list):
+        return [_sanitize_text(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_text(v) for k, v in value.items()}
+    return value
+
+
 def _self_verify_question(raw_q: dict[str, Any]) -> bool:
     """Spec §6.3 rule 10. Returns True when the question's solver works
     on 3 sampled variable sets, or when there is no solver to run.
@@ -401,12 +420,12 @@ def _normalize_question_row(
         "module_id": module_id,
         "position": position,
         "type": raw["type"],
-        "prompt_template": raw["prompt_template"],
+        "prompt_template": _sanitize_text(raw["prompt_template"]),
         "variable_schema": raw.get("variable_schema") or {},
         "solver_code": raw.get("solver_code"),
         "solver_language": "python",
-        "interactive_config": raw.get("interactive_config"),
-        "rubric": raw["rubric"],
+        "interactive_config": _sanitize_text(raw.get("interactive_config")),
+        "rubric": _sanitize_text(raw["rubric"]),
         "competency_tags": raw.get("competency_tags") or [],
         "time_limit_seconds": raw.get("time_limit_seconds"),
         "max_points": float(raw.get("max_points") or 10),
@@ -715,11 +734,11 @@ def revise_question(
 
     update_payload: dict[str, Any] = {
         "type": raw["type"],
-        "prompt_template": raw["prompt_template"],
+        "prompt_template": _sanitize_text(raw["prompt_template"]),
         "variable_schema": raw.get("variable_schema") or {},
         "solver_code": raw.get("solver_code"),
-        "interactive_config": raw.get("interactive_config"),
-        "rubric": raw["rubric"],
+        "interactive_config": _sanitize_text(raw.get("interactive_config")),
+        "rubric": _sanitize_text(raw["rubric"]),
         "competency_tags": raw.get("competency_tags") or current.get("competency_tags") or [],
         "time_limit_seconds": raw.get("time_limit_seconds"),
         "max_points": float(raw.get("max_points") or current.get("max_points") or 10),

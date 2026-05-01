@@ -439,11 +439,24 @@ def _compute_integrity_score(
     active_time_seconds: int | None,
     total_time_seconds: int | None,
 ) -> float:
-    """Spec §10.4 formula: base 100, deductions per event class, floor 0."""
+    """Spec §10.4 formula: base 100, deductions per event class, floor 0.
+
+    Pastes only count when the browser monitor flagged them as
+    disallowed (payload.allowed === false). Pastes inside Monaco /
+    other code editors carry payload.allowed === true and are excluded.
+    Window resizes only count for shrink events (the monitor only
+    emits when the new width drops below 70 percent of the previous
+    width). Other events have no payload-dependent gating."""
 
     counts: dict[str, int] = {}
+    paste_disallowed = 0
     for ev in events:
-        counts[ev.get("event_type", "")] = counts.get(ev.get("event_type", ""), 0) + 1
+        evt = ev.get("event_type", "")
+        counts[evt] = counts.get(evt, 0) + 1
+        if evt == "paste_attempted":
+            payload = ev.get("payload") or {}
+            if payload.get("allowed") is False:
+                paste_disallowed += 1
 
     score = 100.0
     visibility_hidden = counts.get("visibility_hidden", 0)
@@ -453,7 +466,7 @@ def _compute_integrity_score(
     if focus_lost > 5:
         score -= (focus_lost - 5) * 2
     score -= counts.get("fullscreen_exited", 0) * 8
-    score -= counts.get("paste_attempted", 0) * 5
+    score -= paste_disallowed * 5
     score -= counts.get("copy_attempted", 0) * 2
     if counts.get("devtools_opened", 0) > 0:
         score -= 15
@@ -522,7 +535,7 @@ def score_assignment(
 
     events = (
         supabase.table("attempt_events")
-        .select("event_type")
+        .select("event_type, payload")
         .eq("assignment_id", assignment_id)
         .execute()
     ).data or []
