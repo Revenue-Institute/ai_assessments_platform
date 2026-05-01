@@ -65,7 +65,9 @@ def _load_taxonomy_text() -> str:
     global _CACHED_TAXONOMY
     if _CACHED_TAXONOMY is not None:
         return _CACHED_TAXONOMY
-    repo_root = Path(__file__).resolve().parents[4]
+    # __file__ -> apps/api/src/ri_assessments_api/services/generator.py
+    # parents[0..4] climb to apps/, parents[5] is the repo root.
+    repo_root = Path(__file__).resolve().parents[5]
     path = repo_root / "packages" / "competencies" / "src" / "taxonomy.json"
     if not path.exists():
         raise RuntimeError(f"Competency taxonomy not found at {path}")

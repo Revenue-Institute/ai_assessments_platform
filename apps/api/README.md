@@ -28,7 +28,8 @@ apps/api/
 ├── Dockerfile                        Cloud Run image
 ├── scripts/
 │   ├── apply_migrations.py           Applies packages/db/migrations/*.sql
-│   └── seed_test_assignment.py      Creates a test assignment, prints magic-link URL
+│   ├── gen_schemas.py                Zod -> JSON Schema -> Pydantic codegen
+│   └── seed_test_assignment.py       Creates a test assignment, prints magic-link URL
 └── src/ri_assessments_api/
     ├── main.py                       FastAPI app entrypoint
     ├── config.py                     pydantic-settings, all env vars from spec §16
