@@ -9,15 +9,15 @@
 /*
  * Revenue Institute brand tokens (/specs/brand.md).
  *
- * Forest Green (#0A8F5D) — primary base / solid buttons.
- * Neon Green  (#12D68E) — accent / hover / focus rings (HSL primary).
- * Deep Navy   (#020617) — dark section backgrounds.
- * Slate Navy  (#0F172A) — dark text on light, outlines.
- * Light Base  (#F8FAFC) — soft section backgrounds in light mode.
- * Eyebrow     (#64748B) — uppercase eyebrow / section labels.
+ * Forest Green (#0A8F5D), primary base / solid buttons.
+ * Neon Green  (#12D68E), accent / hover / focus rings (HSL primary).
+ * Deep Navy   (#020617), dark section backgrounds.
+ * Slate Navy  (#0F172A), dark text on light, outlines.
+ * Light Base  (#F8FAFC), soft section backgrounds in light mode.
+ * Eyebrow     (#64748B), uppercase eyebrow / section labels.
  */
 :root {
-  /* Brand palette — raw values, exposed as utilities via @theme below. */
+  /* Brand palette, raw values, exposed as utilities via @theme below. */
   --brand-forest: #0A8F5D;
   --brand-neon: #12D68E;
   --brand-deep-navy: #020617;
@@ -28,7 +28,7 @@
   --brand-border-mid: #CBD5E1;
   --brand-border-dark: #94A3B8;
 
-  /* Semantic tokens — light mode default. */
+  /* Semantic tokens, light mode default. */
   --background: var(--brand-light-base);
   --foreground: var(--brand-slate-navy);
   --card: #FFFFFF;
@@ -229,7 +229,7 @@
 }
 
 /* Brand component utilities (/specs/brand.md §UI Components).
- * These are utility classes — pair them with layout / sizing utilities
+ * These are utility classes, pair them with layout / sizing utilities
  * as needed. */
 @utility eyebrow-label {
   font-family: var(--font-sans);

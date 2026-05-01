@@ -1,19 +1,24 @@
 import { z } from "zod";
 import { DifficultyEnum } from "./question.js";
 
+export const QuestionMix = z.object({
+  mcq_pct: z.number().min(0).max(100).nullish(),
+  short_pct: z.number().min(0).max(100).nullish(),
+  long_pct: z.number().min(0).max(100).nullish(),
+  code_pct: z.number().min(0).max(100).nullish(),
+  interactive_pct: z.number().min(0).max(100).nullish(),
+});
+export type QuestionMix = z.infer<typeof QuestionMix>;
+
 export const GenerationBrief = z.object({
   role_title: z.string(),
   responsibilities: z.string(),
   target_duration_minutes: z.number(),
   difficulty: DifficultyEnum,
   domains: z.array(z.string()),
-  question_mix: z.object({
-    mcq_pct: z.number(),
-    short_pct: z.number(),
-    long_pct: z.number(),
-    code_pct: z.number(),
-    interactive_pct: z.number(),
-  }),
+  /** Optional. Each percentage is independently optional, so the admin can
+   * leave the whole mix to the AI or constrain just a subset. */
+  question_mix: QuestionMix.nullish(),
   reference_document_ids: z.array(z.string().uuid()).default([]),
   required_competencies: z.array(z.string()),
   notes: z.string().optional(),

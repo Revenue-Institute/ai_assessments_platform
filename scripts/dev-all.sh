@@ -32,7 +32,7 @@ bash scripts/link-env.sh
 
 # 3. Preflight env validation. Warnings don't block dev; missing
 # REQUIRED keys do.
-if ! bash scripts/check-env.sh all; then
+if ! ENV_FILE=.env.local bash scripts/check-env.sh all; then
   echo
   echo "error: required env vars missing. Edit .env.local and re-run." >&2
   exit 1
