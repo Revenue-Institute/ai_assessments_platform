@@ -4,7 +4,12 @@ import { type NextRequest, NextResponse } from "next/server";
 const PUBLIC_PATHS = ["/sign-in", "/sign-in/callback"];
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // Forward the pathname to the (authenticated) layout so role-based
+  // redirects don't have to re-parse the URL via next/headers gymnastics.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
@@ -14,11 +19,13 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
           for (const { name, value } of cookiesToSet) {
             request.cookies.set(name, value);
           }
-          response = NextResponse.next({ request });
+          response = NextResponse.next({
+            request: { headers: requestHeaders },
+          });
           for (const { name, value, options } of cookiesToSet) {
             response.cookies.set(name, value, options);
           }

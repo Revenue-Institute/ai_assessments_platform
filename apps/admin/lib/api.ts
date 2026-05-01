@@ -47,11 +47,43 @@ export type SubjectSummary = {
   created_at: string;
 };
 
+export type AssessmentStatus = ModuleStatus;
+
+export type AssessmentSummary = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  status: AssessmentStatus;
+  version: number;
+  module_count: number;
+  question_count: number;
+  total_duration_minutes: number;
+  created_at: string;
+  published_at: string | null;
+};
+
+export type AssessmentModuleEntry = {
+  module_id: string;
+  position: number;
+  title: string;
+  domain: string;
+  difficulty: Difficulty;
+  target_duration_minutes: number;
+  question_count: number;
+};
+
+export type AssessmentDetail = AssessmentSummary & {
+  modules: AssessmentModuleEntry[];
+};
+
 export type AssignmentSummary = {
   id: string;
   subject_id: string;
   subject_full_name: string | null;
   subject_email: string | null;
+  assessment_id: string | null;
+  assessment_title: string | null;
   module_id: string | null;
   module_title: string | null;
   status: AssignmentStatus;
@@ -88,17 +120,20 @@ export type AssignmentDetail = AssignmentSummary & {
 export type AssignmentMagicLink = {
   assignment_id: string;
   subject_id: string;
-  module_id: string;
+  assessment_id: string | null;
+  module_id: string | null;
   expires_at: string;
   magic_link_url: string;
   token: string;
 };
 
+export type AdminRole = "admin" | "reviewer" | "viewer";
+
 export type AdminMe = {
   user_id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "reviewer" | "viewer";
+  role: AdminRole;
 };
 
 export class ApiError extends Error {
@@ -261,6 +296,58 @@ export const previewModule = (id: string) =>
     `/api/modules/${encodeURIComponent(id)}/preview`
   );
 
+// Assessments
+export const listAssessments = () =>
+  callApi<AssessmentSummary[]>("/api/assessments");
+export const getAssessment = (id: string) =>
+  callApi<AssessmentDetail>(`/api/assessments/${encodeURIComponent(id)}`);
+export const createAssessment = (body: {
+  slug: string;
+  title: string;
+  description?: string | null;
+  module_ids?: string[];
+}) =>
+  callApi<AssessmentSummary>("/api/assessments", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+export const patchAssessment = (
+  id: string,
+  body: { title?: string; description?: string | null }
+) =>
+  callApi<AssessmentSummary>(`/api/assessments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+export const addAssessmentModule = (
+  id: string,
+  body: { module_id: string; position?: number | null }
+) =>
+  callApi<AssessmentDetail>(
+    `/api/assessments/${encodeURIComponent(id)}/modules`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+export const removeAssessmentModule = (id: string, moduleId: string) =>
+  callApi<AssessmentDetail>(
+    `/api/assessments/${encodeURIComponent(id)}/modules/${encodeURIComponent(moduleId)}`,
+    { method: "DELETE" }
+  );
+export const reorderAssessment = (id: string, moduleIds: string[]) =>
+  callApi<AssessmentDetail>(
+    `/api/assessments/${encodeURIComponent(id)}/reorder`,
+    { method: "POST", body: JSON.stringify({ module_ids: moduleIds }) }
+  );
+export const publishAssessment = (id: string) =>
+  callApi<AssessmentSummary>(
+    `/api/assessments/${encodeURIComponent(id)}/publish`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+export const archiveAssessment = (id: string) =>
+  callApi<AssessmentSummary>(
+    `/api/assessments/${encodeURIComponent(id)}/archive`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+
 // Subjects
 export const listSubjects = () => callApi<SubjectSummary[]>("/api/subjects");
 export const createSubject = (body: {
@@ -279,7 +366,8 @@ export const listAssignments = () =>
 export const getAssignment = (id: string) =>
   callApi<AssignmentDetail>(`/api/assignments/${id}`);
 export const createAssignment = (body: {
-  module_id: string;
+  assessment_id?: string;
+  module_id?: string;
   subject_id: string;
   expires_in_days: number;
   send_email?: boolean;
@@ -295,7 +383,8 @@ export type AssignmentBulkResult = {
 };
 
 export const bulkCreateAssignments = (body: {
-  module_id: string;
+  assessment_id?: string;
+  module_id?: string;
   subject_ids: string[];
   expires_in_days: number;
   send_email?: boolean;
@@ -336,19 +425,22 @@ export const rescoreAttempt = (attemptId: string) =>
 export const fetchAdminMe = () => callApi<AdminMe>("/api/me");
 
 // Generator
+export type QuestionMix = {
+  mcq_pct?: number | null;
+  short_pct?: number | null;
+  long_pct?: number | null;
+  code_pct?: number | null;
+  interactive_pct?: number | null;
+};
+
 export type GenerationBriefIn = {
   role_title: string;
   responsibilities: string;
   target_duration_minutes: number;
   difficulty: Difficulty;
   domains: string[];
-  question_mix: {
-    mcq_pct: number;
-    short_pct: number;
-    long_pct: number;
-    code_pct: number;
-    interactive_pct: number;
-  };
+  /** Optional. Omit entirely (or set fields to null) to let the AI choose. */
+  question_mix?: QuestionMix | null;
   reference_document_ids: string[];
   required_competencies: string[];
   notes?: string;

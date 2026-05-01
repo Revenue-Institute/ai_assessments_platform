@@ -1,4 +1,4 @@
-# `apps/api` — RI Assessments FastAPI service
+# `apps/api`: RI Assessments FastAPI service
 
 FastAPI backend for the Revenue Institute Assessments Platform. Serves admin endpoints (Supabase JWT auth) and candidate magic-link endpoints (signed-token auth) per spec §14.
 
@@ -28,17 +28,15 @@ apps/api/
 ├── Dockerfile                        Cloud Run image
 ├── scripts/
 │   ├── apply_migrations.py           Applies packages/db/migrations/*.sql
-│   ├── seed_test_assignment.py       Creates a test assignment, prints magic-link URL
-│   └── gen_schemas.py                Zod → Pydantic codegen (TODO)
+│   └── seed_test_assignment.py      Creates a test assignment, prints magic-link URL
 └── src/ri_assessments_api/
     ├── main.py                       FastAPI app entrypoint
     ├── config.py                     pydantic-settings, all env vars from spec §16
     ├── db.py                         Supabase service-role client
     ├── auth.py                       Supabase JWT + signed magic-link tokens
-    ├── models/                       Hand-written Pydantic (until codegen lands)
+    ├── models/                       Hand-written Pydantic, kept in sync with @repo/schemas
     ├── services/                     Token, assignment, etc. business logic
-    ├── routers/                      one file per route group
-    └── generated/                    Pydantic generated from @repo/schemas (gitignored)
+    └── routers/                      one file per route group
 ```
 
 ## End-to-end smoke test (candidate flow)
@@ -72,6 +70,18 @@ apps/api/
 
 5. Open the magic-link URL. You should see the assessment landing page with subject name, module title, time limit, and a consent button. Clicking consent flips the assignment to `in_progress` server-side and redirects to the in-progress placeholder page.
 
-## Schema codegen
+## Schema policy
 
-Pydantic models for shared types are generated from `packages/schemas` (Zod) per spec §5. The generator is not yet implemented (TODO); `src/ri_assessments_api/generated/` is intentionally empty until the Zod → JSON Schema → Pydantic pipeline lands. Hand-written Pydantic models live in `src/ri_assessments_api/models/` until then.
+Spec §5 originally proposed generating Pydantic from `packages/schemas` (Zod) via JSON Schema. For v1 we deliberately keep Pydantic hand-authored under `src/ri_assessments_api/models/`. Reasons:
+
+- Pydantic generated from JSON Schema produces awkward discriminated unions (the spec uses several `discriminatedUnion` calls).
+- Hand-authored models let us add Pydantic-only validators, defaults, and computed fields without fighting the generator.
+- Drift is caught at runtime by FastAPI's request validation and at review time by the schema-parity checklist below.
+
+Sync discipline when changing a shared type:
+
+1. Edit the canonical Zod model in `packages/schemas`.
+2. Mirror the change in the matching Pydantic model under `apps/api/src/ri_assessments_api/models/`.
+3. Note the spec section in the commit message so reviewers can confirm coverage.
+
+Revisit this decision once the runner packages move out of `apps/api/services/` (spec §3) - at that point a generated Pydantic distributed alongside `@repo/schemas` becomes more attractive.

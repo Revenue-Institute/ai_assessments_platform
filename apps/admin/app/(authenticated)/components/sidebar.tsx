@@ -17,6 +17,7 @@ import {
 import {
   BookOpenIcon,
   ClipboardListIcon,
+  FilesIcon,
   GaugeIcon,
   LayersIcon,
   LayoutDashboardIcon,
@@ -30,11 +31,14 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import type { AdminRole } from "@/lib/api";
+import { canAccessPath } from "@/lib/role-policy";
 import { signOut } from "../../(unauthenticated)/sign-in/actions";
 
 const NAV_PRIMARY = [
   { title: "Dashboard", href: "/", icon: LayoutDashboardIcon },
   { title: "Modules", href: "/modules", icon: BookOpenIcon },
+  { title: "Assessments", href: "/assessments", icon: FilesIcon },
   { title: "Subjects", href: "/subjects", icon: UsersIcon },
   { title: "Assignments", href: "/assignments", icon: ClipboardListIcon },
   { title: "Cohorts", href: "/cohorts", icon: GaugeIcon },
@@ -54,16 +58,27 @@ type GlobalSidebarProps = {
   children: ReactNode;
   userEmail: string;
   userName: string;
+  userRole: AdminRole;
 };
 
 export function GlobalSidebar({
   children,
   userEmail,
   userName,
+  userRole,
 }: GlobalSidebarProps) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname?.startsWith(href);
+  const visiblePrimary = NAV_PRIMARY.filter((item) =>
+    canAccessPath(userRole, item.href),
+  );
+  const visibleLibrary = NAV_LIBRARY.filter((item) =>
+    canAccessPath(userRole, item.href),
+  );
+  const visibleSettings = NAV_SETTINGS.filter((item) =>
+    canAccessPath(userRole, item.href),
+  );
 
   async function handleSignOut() {
     await signOut();
@@ -83,7 +98,7 @@ export function GlobalSidebar({
           <SidebarGroup>
             <SidebarGroupLabel>Operate</SidebarGroupLabel>
             <SidebarMenu>
-              {NAV_PRIMARY.map((item) => (
+              {visiblePrimary.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
@@ -100,45 +115,49 @@ export function GlobalSidebar({
             </SidebarMenu>
           </SidebarGroup>
 
-          <SidebarGroup>
-            <SidebarGroupLabel>Library</SidebarGroupLabel>
-            <SidebarMenu>
-              {NAV_LIBRARY.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    tooltip={item.title}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+          {visibleLibrary.length > 0 && (
+            <SidebarGroup>
+              <SidebarGroupLabel>Library</SidebarGroupLabel>
+              <SidebarMenu>
+                {visibleLibrary.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href)}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
 
-          <SidebarGroup className="mt-auto">
-            <SidebarGroupLabel>Settings</SidebarGroupLabel>
-            <SidebarMenu>
-              {NAV_SETTINGS.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    tooltip={item.title}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+          {visibleSettings.length > 0 && (
+            <SidebarGroup className="mt-auto">
+              <SidebarGroupLabel>Settings</SidebarGroupLabel>
+              <SidebarMenu>
+                {visibleSettings.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href)}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
         </SidebarContent>
         <SidebarFooter>
           <div className="flex flex-col gap-2 px-2 py-1.5">
