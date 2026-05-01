@@ -8,6 +8,7 @@ import {
   previewModule,
 } from "@/lib/api";
 import { Header } from "../../../components/header";
+import { QuestionPreviewRenderer } from "../../../components/question-preview-renderer";
 
 export const dynamic = "force-dynamic";
 
@@ -159,23 +160,14 @@ export default async function AssessmentPreviewPage({
                           </h3>
 
                           {q.competency_tags.length > 0 && (
-                            <p className="mb-2 text-muted-foreground text-xs">
+                            <p className="mb-3 text-muted-foreground text-xs">
                               {q.competency_tags
                                 .map((t) => `#${t}`)
                                 .join("  ")}
                             </p>
                           )}
 
-                          {q.interactive_config && (
-                            <details className="rounded border border-border/40 bg-background/40 p-2 text-xs">
-                              <summary className="cursor-pointer text-muted-foreground">
-                                Interactive config (sanitized)
-                              </summary>
-                              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">
-                                {JSON.stringify(q.interactive_config, null, 2)}
-                              </pre>
-                            </details>
-                          )}
+                          <QuestionPreviewRenderer question={q} />
                         </li>
                       ))}
                     </ol>
