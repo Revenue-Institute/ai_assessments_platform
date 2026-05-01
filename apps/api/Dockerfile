@@ -12,13 +12,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.0 /uv /uvx /usr/local/bin/
 
+# Build context is the repo root so the API can read shared data files
+# (e.g. packages/competencies/src/taxonomy.json) at runtime. The runtime
+# image keeps /app as the service root and bundles the few shared
+# packages it reads at runtime under /repo so the path-resolution
+# helpers (which expect a repo-shaped layout) keep working.
+
 WORKDIR /app
 
-COPY pyproject.toml ./
+COPY apps/api/pyproject.toml /app/pyproject.toml
 RUN uv sync --no-install-project --no-dev
 
-COPY src ./src
+COPY apps/api/src /app/src
 RUN uv sync --no-dev
+
+# Generator's _load_taxonomy_text() walks Path(__file__).parents[4],
+# which resolves to "/" inside the image; place shared data at /packages
+# to match.
+COPY packages/competencies /packages/competencies
 
 ENV PATH="/app/.venv/bin:$PATH"
 

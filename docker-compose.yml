@@ -14,20 +14,36 @@
 services:
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     env_file:
       - apps/api/.env.local
     environment:
       APP_ENV: local
       INTERNAL_API_URL: http://api:8000
       N8N_HOST: http://n8n:5678
-      UPSTASH_REDIS_URL: http://redis:6379
+      UPSTASH_REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     depends_on:
       - n8n
       - redis
+
+  scoring-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - apps/api/.env.local
+    environment:
+      APP_ENV: local
+      INTERNAL_API_URL: http://api:8000
+      N8N_HOST: http://n8n:5678
+      UPSTASH_REDIS_URL: redis://redis:6379/0
+    command: ["python", "-m", "ri_assessments_api.worker"]
+    depends_on:
+      - redis
+      - api
 
   admin:
     build:
