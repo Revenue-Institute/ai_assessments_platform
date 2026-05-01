@@ -3,13 +3,11 @@
 # and issues the next assignment for any series whose next_due_at has
 # passed.
 #
-# v1 approach: the scheduler hits a single dispatcher endpoint, which
-# walks every series with cadence_days set and issues_next on the ones
-# whose next_due_at <= now. We don't have that dispatcher endpoint yet
-# (it's a thin wrapper around services/series.issue_next_for_series), so
-# this script also generates a one-line patch you can drop into the
-# benchmarks router. Until then the scheduler can hit /api/series/{id}/
-# issue-next per series via separate jobs.
+# v1 approach: the scheduler hits POST /api/series/dispatch-due, which
+# walks every series whose next_due_at <= now and issues the next
+# assignment for each. Idempotent and partial-failure tolerant. Admins
+# can also force-issue per series via POST /api/series/{id}/issue-next
+# from the admin UI.
 #
 # Prereqs:
 #   - gcloud authenticated, project + region set
@@ -53,8 +51,3 @@ gcloud scheduler jobs create http "$job_name" \
 echo
 echo "==> Done. Test with:"
 echo "    gcloud scheduler jobs run $job_name --project $GCP_PROJECT --location $GCP_REGION"
-echo
-echo "Note: the dispatch-due endpoint walks every series whose next_due_at"
-echo "has passed and issues the next assignment. If you haven't added that"
-echo "endpoint yet, point the scheduler at individual series instead:"
-echo "  ${API_URL}/api/series/<series_id>/issue-next"

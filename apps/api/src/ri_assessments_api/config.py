@@ -48,8 +48,9 @@ class Settings(BaseSettings):
     resend_from_email: str = "assessments@revenueinstitute.com"
     resend_webhook_secret: str = ""
 
-    # Embeddings
-    voyage_api_key: str = ""
+    # Embeddings (v1 uses OpenAI text-embedding-3-small @ 1024 dims via
+    # the dimensions parameter; reference_chunks.embedding is vector(1024)
+    # per migration 0004).
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
     embedding_dims: int = 1024
