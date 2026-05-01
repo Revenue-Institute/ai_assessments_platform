@@ -56,7 +56,7 @@ gcloud run services describe ri-n8n \
 cat <<'NEXT'
 
 Next steps:
-  1. Open the service URL — n8n will print a one-time signup URL.
+  1. Open the service URL: n8n will print a one-time signup URL.
   2. Sign up to bootstrap an owner account.
   3. Settings → API → create a Personal API Key.
   4. Set N8N_ADMIN_API_KEY in your .env (and the FastAPI Cloud Run env vars).
