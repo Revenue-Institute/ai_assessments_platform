@@ -123,8 +123,8 @@ export default async function SeriesPage({
             >
               <option disabled value="">
                 {subjects.length === 0
-                  ? "No subjects, add one in Subjects"
-                  : "Pick a subject"}
+                  ? "No candidates, add one in Candidates"
+                  : "Pick a candidate"}
               </option>
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>

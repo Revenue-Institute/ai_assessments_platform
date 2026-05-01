@@ -14,7 +14,7 @@ const ROUTE_MIN_ROLE: Array<{ prefix: string; role: AdminRole }> = [
   { prefix: "/modules", role: "viewer" },
   { prefix: "/assessments", role: "viewer" },
   { prefix: "/assignments", role: "viewer" },
-  { prefix: "/subjects", role: "viewer" },
+  { prefix: "/candidates", role: "viewer" },
   { prefix: "/competencies", role: "viewer" },
 ];
 

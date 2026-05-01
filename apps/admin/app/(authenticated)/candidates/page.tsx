@@ -13,17 +13,17 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{ error?: string; ok?: string }>;
 
-export default async function SubjectsPage({
+export default async function CandidatesPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
   const { error, ok } = await searchParams;
 
-  let subjects: SubjectSummary[] = [];
+  let candidates: SubjectSummary[] = [];
   let loadError: string | null = null;
   try {
-    subjects = await listSubjects();
+    candidates = await listSubjects();
   } catch (e) {
     if (e instanceof ApiError) loadError = e.message;
     else throw e;
@@ -35,14 +35,19 @@ export default async function SubjectsPage({
     const full_name = String(formData.get("full_name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     if (!full_name || !email) {
-      redirect("/subjects?error=" + encodeURIComponent("Name and email are required."));
+      redirect(
+        "/candidates?error=" +
+          encodeURIComponent("Name and email are required."),
+      );
     }
     try {
       await createSubject({ type, full_name, email });
-      redirect("/subjects?ok=" + encodeURIComponent("Subject created."));
+      redirect(
+        "/candidates?ok=" + encodeURIComponent("Candidate created."),
+      );
     } catch (e) {
       if (e instanceof ApiError) {
-        redirect("/subjects?error=" + encodeURIComponent(e.message));
+        redirect("/candidates?error=" + encodeURIComponent(e.message));
       }
       throw e;
     }
@@ -50,12 +55,12 @@ export default async function SubjectsPage({
 
   return (
     <>
-      <Header page="Subjects" pages={[]} />
+      <Header page="Candidates" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Subjects</h1>
+          <h1 className="font-semibold text-xl">Candidates</h1>
           <p className="text-muted-foreground text-sm">
-            Candidates and employees who can be assigned assessments.
+            People who can be assigned assessments.
           </p>
         </section>
 
@@ -107,30 +112,33 @@ export default async function SubjectsPage({
           </label>
           <div className="md:col-span-3">
             <button className="btn-primary text-sm" type="submit">
-              Add subject
+              Add candidate
             </button>
           </div>
         </form>
 
         <ul className="divide-y divide-border/40 rounded-xl border border-border/50 bg-muted/20">
-          {subjects.length === 0 ? (
+          {candidates.length === 0 ? (
             <li className="px-4 py-3 text-muted-foreground text-sm">
-              No subjects yet.
+              No candidates yet.
             </li>
           ) : (
-            subjects.map((s) => (
-              <li className="flex items-center justify-between px-4 py-3" key={s.id}>
+            candidates.map((c) => (
+              <li
+                className="flex items-center justify-between px-4 py-3"
+                key={c.id}
+              >
                 <Link
                   className="block min-w-0 flex-1 hover:underline"
-                  href={`/subjects/${s.id}`}
+                  href={`/candidates/${c.id}`}
                 >
-                  <p className="truncate font-medium">{s.full_name}</p>
+                  <p className="truncate font-medium">{c.full_name}</p>
                   <p className="truncate text-muted-foreground text-xs">
-                    {s.email}
+                    {c.email}
                   </p>
                 </Link>
                 <span className="ml-3 rounded bg-muted px-2 py-0.5 text-xs">
-                  {s.type}
+                  {c.type}
                 </span>
               </li>
             ))

@@ -39,7 +39,7 @@ const NAV_PRIMARY = [
   { title: "Dashboard", href: "/", icon: LayoutDashboardIcon },
   { title: "Modules", href: "/modules", icon: BookOpenIcon },
   { title: "Assessments", href: "/assessments", icon: FilesIcon },
-  { title: "Subjects", href: "/subjects", icon: UsersIcon },
+  { title: "Candidates", href: "/candidates", icon: UsersIcon },
   { title: "Assignments", href: "/assignments", icon: ClipboardListIcon },
   { title: "Cohorts", href: "/cohorts", icon: GaugeIcon },
   { title: "Series", href: "/series", icon: RepeatIcon },

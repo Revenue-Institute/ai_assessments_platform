@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export default async function SubjectDetailPage({
+export default async function CandidateDetailPage({
   params,
 }: {
   params: Params;
@@ -65,7 +65,10 @@ export default async function SubjectDetailPage({
 
   return (
     <>
-      <Header page={subjectDisplayName(allAssignments)} pages={["Subjects"]} />
+      <Header
+        page={candidateDisplayName(allAssignments)}
+        pages={["Candidates"]}
+      />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {error && (
           <p
@@ -87,11 +90,11 @@ export default async function SubjectDetailPage({
   );
 }
 
-function subjectDisplayName(assignments: AssignmentSummary[]): string {
+function candidateDisplayName(assignments: AssignmentSummary[]): string {
   for (const a of assignments) {
     if (a.subject_full_name) return a.subject_full_name;
   }
-  return "Subject";
+  return "Candidate";
 }
 
 function CompetencyTrendList({

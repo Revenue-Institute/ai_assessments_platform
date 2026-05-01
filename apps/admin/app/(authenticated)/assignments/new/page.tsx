@@ -184,10 +184,10 @@ export default async function NewAssignmentPage({
           </label>
 
           <fieldset className="space-y-2 rounded border border-border/40 bg-background/30 p-3">
-            <legend className="px-1 text-sm">Subjects</legend>
+            <legend className="px-1 text-sm">Candidates</legend>
             {subjects.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No subjects, add one in Subjects first.
+                No candidates, add one in Candidates first.
               </p>
             ) : (
               <ul className="grid max-h-72 gap-1 overflow-auto md:grid-cols-2">

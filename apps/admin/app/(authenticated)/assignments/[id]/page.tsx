@@ -104,9 +104,10 @@ export default async function AssignmentDetailPage({
           {detail.subject_id && (
             <Link
               className="hover:text-primary hover:underline"
-              href={`/subjects/${detail.subject_id}`}
+              href={`/candidates/${detail.subject_id}`}
             >
-              ↗ Subject: {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
+              {"↗ Candidate: "}
+              {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
             </Link>
           )}
           {detail.assessment_id ? (
