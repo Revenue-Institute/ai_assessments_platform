@@ -9,7 +9,7 @@ v1 scope: a shared self-hosted n8n instance with admin API access.
   set equality after the node mapping).
 
 Behavioral execution diff (spec §7.2 'compare execution outputs to
-reference execution outputs') is wired but optional — set
+reference execution outputs') is wired but optional, set
 N8N_BEHAVIORAL_DIFF=1 to enable; otherwise we score on structural
 similarity alone, which is plenty for v1.
 
@@ -144,7 +144,7 @@ def export_workflow(workflow_id: str) -> dict[str, Any]:
 
 
 def delete_workflow(workflow_id: str) -> None:
-    """Best-effort teardown. We log on failure but don't raise — leaving
+    """Best-effort teardown. We log on failure but don't raise, leaving
     a stale workflow on the n8n instance is preferable to failing the
     candidate's submission."""
 
@@ -208,7 +208,7 @@ def _node_signature(node: dict[str, Any]) -> dict[str, Any]:
         "raw_name": node.get("name"),
         "type": _norm(node.get("type")),
         "name": _norm(node.get("name")),
-        # parameters are typically deeply nested — we hash the flattened
+        # parameters are typically deeply nested, we hash the flattened
         # JSON to compare structure without comparing positions.
         "params_keys": sorted(params.keys()) if isinstance(params, dict) else [],
     }
@@ -318,7 +318,7 @@ def grade_n8n_attempt(
             missing_edges.append(ref_pair)
 
     # Required-nodes / required-connections checks from the spec config:
-    # we treat them as a hard floor — a missing required item drops the score
+    # we treat them as a hard floor, a missing required item drops the score
     # to 0 to mirror "the candidate didn't build the workflow we asked for".
     required_nodes = set(_norm(n) for n in (config.get("required_nodes") or []))
     if required_nodes and not required_nodes.issubset(
@@ -360,7 +360,7 @@ def grade_n8n_attempt(
     # `expected_execution_output`, provision the candidate workflow on the
     # shared n8n instance, execute it once, and award a 10% bonus on a
     # match (clamped at 1.0 overall). Failures of any kind fall through
-    # to structural-only — the candidate isn't penalized for sandbox
+    # to structural-only, the candidate isn't penalized for sandbox
     # outages.
     behavioral_match = None
     if os.environ.get("N8N_BEHAVIORAL_DIFF") == "1":

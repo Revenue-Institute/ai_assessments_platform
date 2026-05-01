@@ -4,12 +4,12 @@ Solvers are short Python snippets defined per question template. We
 execute them in an E2B sandbox to compute a deterministic
 `expected_answer` for the sampled variables. Three callsites:
 
-  1. Lazy attempt creation — populates attempts.expected_answer the
+  1. Lazy attempt creation, populates attempts.expected_answer the
      first time the candidate views a question (so exact_match /
      numeric_tolerance scoring has something to compare against).
-  2. Module publish (§8.4 fairness validation) — runs the solver on
+  2. Module publish (§8.4 fairness validation), runs the solver on
      50 sampled variable sets and rejects publish if any error.
-  3. Generation stage 2 self-verification (§6.3 rule 10) — runs the
+  3. Generation stage 2 self-verification (§6.3 rule 10), runs the
      solver on 3 sampled variable sets to confirm it parses + executes.
 
 Fails soft when E2B_API_KEY is unset: callers get None back and the
@@ -77,7 +77,7 @@ def execute_solver(
     )
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=timeout_s + 10) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=timeout_s + 10) as sandbox:
             sandbox.files.write("/home/user/solver.py", driver)
             result = sandbox.commands.run(
                 "python /home/user/solver.py",

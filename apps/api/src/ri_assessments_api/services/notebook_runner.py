@@ -5,7 +5,7 @@ source: str}` cells. We provision a fresh E2B sandbox, optionally pull
 dataset_urls into /data/, run each code cell through a stateful Python
 kernel via Sandbox.run_code (state carries across calls), and capture
 per-cell outputs. For grading we append the question's validation_script
-in the same kernel and parse its JSON line — the spec format is
+in the same kernel and parse its JSON line, the spec format is
 `{pass: bool, details: {...}}`.
 
 Skipped for v1 (lands when we wire jupyter-lite or @nteract/core):
@@ -71,7 +71,7 @@ def _sandbox_or_503():
 
 
 def _safe_url(url: str) -> str:
-    """Whitelist http/https URLs only — `wget` shells out, so anything else is
+    """Whitelist http/https URLs only, `wget` shells out, so anything else is
     a vector. Keeps it boring."""
     if not url.startswith(("https://", "http://")):
         raise HTTPException(
@@ -152,7 +152,7 @@ def run_notebook(
     outputs: list[NotebookCellOutput] = []
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=overall_timeout_s) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=overall_timeout_s) as sandbox:
             _materialize_datasets(sandbox, dataset_urls or [])
             for i, cell in enumerate(cells):
                 ctype = (cell.get("type") or "code").lower()
@@ -215,7 +215,7 @@ def grade_notebook_attempt(
     details: dict[str, Any] = {}
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=240) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=240) as sandbox:
             _materialize_datasets(sandbox, dataset_urls)
             for i, cell in enumerate(cells):
                 if (cell.get("type") or "code").lower() != "code":

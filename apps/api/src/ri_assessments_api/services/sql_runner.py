@@ -2,7 +2,7 @@
 
 Each call provisions a fresh E2B sandbox, installs duckdb, applies the
 question's schema_sql + seed_sql, runs the candidate query, returns the
-result set. We don't persist sandboxes between calls — keeps the service
+result set. We don't persist sandboxes between calls, keeps the service
 stateless and avoids cross-attempt leakage.
 
 Grading is column-order-agnostic set equality (per spec) plus optional
@@ -89,7 +89,7 @@ def run_sql(
     error: str | None = None
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=timeout_s + 15) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=timeout_s + 15) as sandbox:
             sandbox.commands.run("pip install --quiet duckdb", timeout=120)
             sandbox.files.write("/home/user/schema.sql", schema_sql or "")
             sandbox.files.write("/home/user/seed.sql", seed_sql or "")
@@ -157,10 +157,19 @@ def _normalize_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
 def _normalize_cell(cell: Any) -> Any:
     if cell is None:
         return None
-    if isinstance(cell, float):
-        return round(cell, 6)
-    if isinstance(cell, (int, bool, str)):
+    if isinstance(cell, bool):
         return cell
+    if isinstance(cell, (int, float)):
+        # int / float share a comparison key so 760000 == 760000.0
+        return ("num", round(float(cell), 6))
+    if isinstance(cell, str):
+        # DuckDB NUMERIC + DECIMAL come back as strings ("760000.000"). Try
+        # to coerce stringy numbers so int 760000 and "760000.000" match.
+        stripped = cell.strip()
+        try:
+            return ("num", round(float(stripped), 6))
+        except ValueError:
+            return cell
     return str(cell)
 
 
@@ -176,7 +185,7 @@ def compare_results(
     """
 
     if expected is None:
-        return False, "No expected_query_result on the question — cannot grade."
+        return False, "No expected_query_result on the question, cannot grade."
 
     if isinstance(expected, list):
         expected_columns = actual_columns

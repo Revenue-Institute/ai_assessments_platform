@@ -2,7 +2,7 @@
 
 Each call provisions a fresh sandbox, writes the candidate's solution and
 the test files, runs pytest (Python) or the JS test runner, parses results,
-then tears down. We don't persist sandbox handles between calls — keeps the
+then tears down. We don't persist sandbox handles between calls, keeps the
 service stateless and avoids cross-attempt leakage.
 
 Fails soft when E2B_API_KEY is unset: callers see a 503 so the candidate's
@@ -88,7 +88,7 @@ def run_user_code(
     exit_code = 1
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=timeout_s + 10) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=timeout_s + 10) as sandbox:
             if packages:
                 sandbox.commands.run(
                     f"pip install --quiet {' '.join(_safe_pkg(p) for p in packages)}",
@@ -174,7 +174,7 @@ def run_test_suite(
     timed_out = False
 
     try:
-        with sandbox_cls(api_key=api_key, timeout=timeout_s + 15) as sandbox:
+        with sandbox_cls.create(api_key=api_key, timeout=timeout_s + 15) as sandbox:
             if packages:
                 sandbox.commands.run(
                     f"pip install --quiet {' '.join(_safe_pkg(p) for p in packages)}",
@@ -220,7 +220,7 @@ _PKG_RE = re.compile(r"^[A-Za-z0-9_.\-]+(?:[<>=!~]+[A-Za-z0-9_.\-]+)?$")
 
 
 def _safe_pkg(name: str) -> str:
-    """Allow only well-formed package specifiers — guards against shell injection
+    """Allow only well-formed package specifiers, guards against shell injection
     when we shell-out to pip."""
     if not _PKG_RE.match(name):
         raise HTTPException(
