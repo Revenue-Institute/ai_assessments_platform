@@ -13,9 +13,18 @@ export default async function AuthenticatedLayout({
   children: ReactNode;
 }) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Defensive try/catch: Supabase logs AuthApiError to stderr on stale
+  // refresh-token cookies even though the call returns user=null. Trap
+  // it here so the dev console stays clean; the !user redirect handles
+  // the not-signed-in path either way.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
+    null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch {
+    // Fall through to the redirect below.
+  }
 
   if (!user) {
     redirect("/sign-in");

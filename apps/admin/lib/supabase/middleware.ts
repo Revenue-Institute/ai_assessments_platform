@@ -34,9 +34,26 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Only call getUser() when an auth cookie is actually present. Without
+  // this guard, every request from a signed-out browser triggers an
+  // AuthApiError(refresh_token_not_found) that the Supabase SDK logs
+  // directly to stderr before returning user=null - try/catch can't
+  // suppress it because the log is a side effect of the SDK's internal
+  // refresh call. Looking up the cookie ourselves and short-circuiting
+  // is the only clean way to keep the dev console quiet.
+  const hasSupabaseCookie = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"));
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
+    null;
+  if (hasSupabaseCookie) {
+    try {
+      const result = await supabase.auth.getUser();
+      user = result.data.user;
+    } catch {
+      // Stale or malformed cookie; the !user redirect handles it.
+    }
+  }
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));

@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       lang="en"
       suppressHydrationWarning
     >
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster />

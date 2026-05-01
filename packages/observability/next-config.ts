@@ -50,4 +50,13 @@ export const withSentry = (sourceConfig: object): object => {
   return withSentryConfig(configWithTranspile, sentryConfig);
 };
 
-export const withLogging = (config: object): object => withLogtail(config);
+export const withLogging = (config: object): object => {
+  // @logtail/next prints "Envvars not detected" / "Sending logs to console"
+  // every time it loads when LOGTAIL_SOURCE_TOKEN is unset; we don't ship
+  // Logtail in v1 (Sentry + Axiom per spec §15), so skip the wrapper
+  // entirely when the token isn't configured.
+  if (!process.env.LOGTAIL_SOURCE_TOKEN) {
+    return config;
+  }
+  return withLogtail(config);
+};

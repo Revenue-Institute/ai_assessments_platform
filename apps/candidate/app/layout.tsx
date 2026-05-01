@@ -34,7 +34,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${brandFontShell(headingFont.variable, bodyFont.variable)} dark`}
       lang="en"
     >
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      <body
+        className="min-h-screen bg-background text-foreground antialiased"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
