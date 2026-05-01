@@ -162,7 +162,7 @@ function DiagramCanvas({
     setRenaming(null);
   }, [renaming, setNodes]);
 
-  // Serialize for the form action — strips React Flow internals so the
+  // Serialize for the form action: strips React Flow internals so the
   // server only sees structural data.
   const serialized = {
     nodes: nodes.map((n) => ({

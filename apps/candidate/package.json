@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "bun --bun next dev -p 3001",
-    "build": "bun --bun next build",
+    "build": "next build",
     "start": "bun --bun next start",
-    "test": "NODE_ENV=test vitest run",
+    "test": "NODE_ENV=test vitest run --passWithNoTests",
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },

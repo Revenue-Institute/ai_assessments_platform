@@ -9,7 +9,7 @@ type Props = {
 };
 
 /** Collapsible side panel that lets the candidate jump back to any
- * already-viewed question. Default forward-only — the rail only renders
+ * already-viewed question. Default forward-only: the rail only renders
  * links for indices ≤ current, per spec §13.3 ("only forward navigation
  * allowed unless module config says otherwise"). */
 export function QuestionNavigator({ token, current, total }: Props) {

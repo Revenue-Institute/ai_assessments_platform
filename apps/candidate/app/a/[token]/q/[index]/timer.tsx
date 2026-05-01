@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-/** Live countdown driven by the server's expires_at — the timer is a
+/** Live countdown driven by the server's expires_at. The timer is a
  * display only; deadline enforcement happens server-side per spec §10.1.
  *
  * Accessibility: the visible countdown is `aria-hidden` so it doesn't
@@ -47,12 +47,12 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   }
 
   const visible = expired
-    ? "00:00 — time up"
+    ? "00:00 time up"
     : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} left`;
 
   return (
     // Wrap both elements so the parent flex container sees a single
-    // child — fragmenting them would split the timer into two flex items
+    // child, since fragmenting them would split into two flex items
     // and break the question header's justify-between layout.
     <span className="inline-flex">
       <span

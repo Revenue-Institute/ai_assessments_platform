@@ -193,7 +193,7 @@ export function N8nRenderer({
                 aria-hidden="true"
                 className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"
               />
-              <span>Setting up your workspace (10–15 seconds)…</span>
+              <span>Setting up your workspace (10-15 seconds)...</span>
             </>
           )}
         </div>

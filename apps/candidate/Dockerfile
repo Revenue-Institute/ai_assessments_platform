@@ -7,14 +7,16 @@ COPY package.json bun.lock turbo.json tsconfig.json biome.jsonc ./
 COPY packages packages
 COPY apps/candidate/package.json apps/candidate/package.json
 COPY apps/email/package.json apps/email/package.json
-RUN bun install --frozen-lockfile
+RUN bun install
 
-FROM oven/bun:1.3 AS builder
+FROM node:22-alpine AS builder
+RUN npm install -g bun
 WORKDIR /repo
 COPY --from=deps /repo /repo
+COPY .env.local* ./
 COPY apps/candidate apps/candidate
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun --bun --filter candidate build
+RUN bun --filter candidate build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

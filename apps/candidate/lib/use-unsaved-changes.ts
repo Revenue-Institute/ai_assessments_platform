@@ -14,7 +14,7 @@ import { useEffect } from "react";
  * most browsers, so without intervention the candidate's "Save and
  * continue" button would prompt "are you sure you want to leave?". We
  * suppress the guard the moment any form on the page begins submitting
- * — that submission is the candidate's intentional save. */
+ *, that submission is the candidate's intentional save. */
 export function useUnsavedChangesWarning(dirty: boolean): void {
   useEffect(() => {
     if (!dirty) return;
