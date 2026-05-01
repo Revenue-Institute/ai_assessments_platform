@@ -51,6 +51,58 @@ class ModuleDetail(ModuleSummary):
     questions: list[dict[str, Any]] = Field(default_factory=list)
 
 
+AssessmentStatus = ModuleStatus
+
+
+class AssessmentCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    module_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class AssessmentPatchRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+
+
+class AssessmentModuleEntry(BaseModel):
+    module_id: str
+    position: int
+    title: str
+    domain: str
+    difficulty: Difficulty
+    target_duration_minutes: int
+    question_count: int
+
+
+class AssessmentSummary(BaseModel):
+    id: str
+    slug: str
+    title: str
+    description: str | None = None
+    status: AssessmentStatus
+    version: int
+    module_count: int
+    question_count: int
+    total_duration_minutes: int
+    created_at: datetime
+    published_at: datetime | None = None
+
+
+class AssessmentDetail(AssessmentSummary):
+    modules: list[AssessmentModuleEntry] = Field(default_factory=list)
+
+
+class AssessmentModuleAddRequest(BaseModel):
+    module_id: str
+    position: int | None = None
+
+
+class AssessmentReorderRequest(BaseModel):
+    module_ids: list[str] = Field(min_length=1, max_length=20)
+
+
 class SubjectCreateRequest(BaseModel):
     type: SubjectType
     full_name: str = Field(min_length=1, max_length=200)
@@ -68,14 +120,20 @@ class SubjectSummary(BaseModel):
 
 
 class AssignmentCreateRequest(BaseModel):
-    module_id: str
+    """Bind a subject to an assessment. `module_id` is accepted only as a
+    legacy alias when the admin still has just-a-module data; new flows
+    pass `assessment_id`."""
+
+    assessment_id: str | None = None
+    module_id: str | None = None
     subject_id: str
     expires_in_days: int = Field(default=7, ge=1, le=90)
     send_email: bool = True
 
 
 class AssignmentBulkCreateRequest(BaseModel):
-    module_id: str
+    assessment_id: str | None = None
+    module_id: str | None = None
     subject_ids: list[str] = Field(min_length=1, max_length=200)
     expires_in_days: int = Field(default=7, ge=1, le=90)
     send_email: bool = True
@@ -84,7 +142,8 @@ class AssignmentBulkCreateRequest(BaseModel):
 class AssignmentMagicLink(BaseModel):
     assignment_id: str
     subject_id: str
-    module_id: str
+    assessment_id: str | None = None
+    module_id: str | None = None
     expires_at: datetime
     magic_link_url: str
     token: str = Field(
@@ -104,6 +163,8 @@ class AssignmentSummary(BaseModel):
     subject_id: str
     subject_full_name: str | None = None
     subject_email: str | None = None
+    assessment_id: str | None = None
+    assessment_title: str | None = None
     module_id: str | None = None
     module_title: str | None = None
     status: AssignmentStatus

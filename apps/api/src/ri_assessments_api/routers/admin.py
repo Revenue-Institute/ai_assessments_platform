@@ -11,6 +11,12 @@ from supabase import Client
 from ..auth import AdminPrincipal, require_admin_jwt
 from ..db import get_supabase
 from ..models.admin import (
+    AssessmentCreateRequest,
+    AssessmentDetail,
+    AssessmentModuleAddRequest,
+    AssessmentPatchRequest,
+    AssessmentReorderRequest,
+    AssessmentSummary,
     AssignmentBulkCreateRequest,
     AssignmentBulkCreateResult,
     AssignmentCreateRequest,
@@ -148,6 +154,120 @@ def archive_module(
     return admin_service.archive_module(supabase, principal, module_id)
 
 
+# Assessments ----------------------------------------------------------------
+
+
+@router.get("/assessments", response_model=list[AssessmentSummary])
+def list_assessments(
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> list[AssessmentSummary]:
+    return admin_service.list_assessments(supabase)
+
+
+@router.post(
+    "/assessments", response_model=AssessmentSummary, status_code=201
+)
+def create_assessment(
+    payload: AssessmentCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentSummary:
+    return admin_service.create_assessment(supabase, principal, payload)
+
+
+@router.get(
+    "/assessments/{assessment_id}", response_model=AssessmentDetail
+)
+def get_assessment(
+    assessment_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentDetail:
+    return admin_service.get_assessment_detail(supabase, assessment_id)
+
+
+@router.patch(
+    "/assessments/{assessment_id}", response_model=AssessmentSummary
+)
+def patch_assessment(
+    assessment_id: str,
+    payload: AssessmentPatchRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentSummary:
+    return admin_service.patch_assessment(
+        supabase, principal, assessment_id, payload
+    )
+
+
+@router.post(
+    "/assessments/{assessment_id}/modules",
+    response_model=AssessmentDetail,
+)
+def add_assessment_module(
+    assessment_id: str,
+    payload: AssessmentModuleAddRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentDetail:
+    return admin_service.add_assessment_module(
+        supabase, principal, assessment_id, payload
+    )
+
+
+@router.delete(
+    "/assessments/{assessment_id}/modules/{module_id}",
+    response_model=AssessmentDetail,
+)
+def remove_assessment_module(
+    assessment_id: str,
+    module_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentDetail:
+    return admin_service.remove_assessment_module(
+        supabase, principal, assessment_id, module_id
+    )
+
+
+@router.post(
+    "/assessments/{assessment_id}/reorder",
+    response_model=AssessmentDetail,
+)
+def reorder_assessment(
+    assessment_id: str,
+    payload: AssessmentReorderRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentDetail:
+    return admin_service.reorder_assessment_modules(
+        supabase, principal, assessment_id, payload
+    )
+
+
+@router.post(
+    "/assessments/{assessment_id}/publish",
+    response_model=AssessmentSummary,
+)
+def publish_assessment(
+    assessment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentSummary:
+    return admin_service.publish_assessment(supabase, principal, assessment_id)
+
+
+@router.post(
+    "/assessments/{assessment_id}/archive",
+    response_model=AssessmentSummary,
+)
+def archive_assessment(
+    assessment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssessmentSummary:
+    return admin_service.archive_assessment(supabase, principal, assessment_id)
+
+
 # Subjects -------------------------------------------------------------------
 
 
@@ -223,6 +343,7 @@ def bulk_create_assignments(
     result = admin_service.bulk_create_assignments(
         supabase,
         principal,
+        assessment_id=payload.assessment_id,
         module_id=payload.module_id,
         subject_ids=payload.subject_ids,
         expires_in_days=payload.expires_in_days,

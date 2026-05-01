@@ -29,12 +29,22 @@ from ri_assessments_api.services.tokens import (  # noqa: E402
     hash_token,
 )
 
-TEST_ADMIN_EMAIL = "seed-admin@revenueinstitute.local"
+import os
+
+TEST_ADMIN_EMAIL = os.environ.get(
+    "SEED_ADMIN_EMAIL", "seed-admin@revenueinstitute.local"
+)
+TEST_ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")
 TEST_SUBJECT_EMAIL = "seed-candidate@revenueinstitute.local"
 
 
 def ensure_admin_user(supabase) -> str:
-    """Make sure an admin auth.user + public.users row exists. Returns the UUID."""
+    """Make sure an admin auth.user + public.users row exists. Returns the UUID.
+
+    If SEED_ADMIN_PASSWORD is set, the auth user is created or updated to
+    use it; otherwise a random password is set on first creation."""
+
+    password = TEST_ADMIN_PASSWORD or secrets.token_urlsafe(24)
 
     # See if a public.users row already exists for the test admin.
     existing = (
@@ -45,14 +55,20 @@ def ensure_admin_user(supabase) -> str:
         .execute()
     )
     if existing.data:
-        return existing.data[0]["id"]
+        auth_id = existing.data[0]["id"]
+        # Reset password if the operator passed one explicitly.
+        if TEST_ADMIN_PASSWORD:
+            supabase.auth.admin.update_user_by_id(
+                auth_id, {"password": TEST_ADMIN_PASSWORD, "email_confirm": True}
+            )
+        return auth_id
 
     # Try to create the auth user; if it already exists, fetch by email.
     try:
         created = supabase.auth.admin.create_user(
             {
                 "email": TEST_ADMIN_EMAIL,
-                "password": secrets.token_urlsafe(24),
+                "password": password,
                 "email_confirm": True,
             }
         )
@@ -73,6 +89,10 @@ def ensure_admin_user(supabase) -> str:
                 f"Could not create or find test admin: {exc}"
             ) from exc
         auth_id = match.id
+        if TEST_ADMIN_PASSWORD:
+            supabase.auth.admin.update_user_by_id(
+                auth_id, {"password": TEST_ADMIN_PASSWORD, "email_confirm": True}
+            )
 
     supabase.table("users").upsert(
         {
@@ -113,25 +133,18 @@ def ensure_subject(supabase) -> str:
     return inserted.data[0]["id"]
 
 
-def build_module_snapshot() -> dict:
-    """Module snapshot covering mcq + short + long + code, with one MCQ that
-    uses sampled variables and a Python code question that exercises the E2B
-    runner."""
+SEED_MODULE_SLUG = "seed-mixed-smoke"
+SEED_MODULE_VERSION = 1
 
-    return {
-        "slug": "seed-mixed-smoke",
-        "title": "Seed smoke test",
-        "description": (
-            "A four-question assessment used to verify the candidate flow "
-            "end-to-end (mcq, short, long, mcq with sampled variables). "
-            "Not for real evaluation."
-        ),
-        "domain": "ops",
-        "target_duration_minutes": 15,
-        "difficulty": "junior",
-        "questions": [
+
+def _seed_questions() -> list[dict]:
+    """Question templates covering mcq + short + long + code, with one
+    MCQ that uses sampled variables and a Python code question that
+    exercises the E2B runner. IDs are generated at insert time by the
+    DB so they line up with the FK on attempts.question_template_id."""
+
+    return [
             {
-                "id": str(uuid.uuid4()),
                 "type": "mcq",
                 "prompt_template": "What does RI stand for in this platform?",
                 "variable_schema": {},
@@ -162,7 +175,6 @@ def build_module_snapshot() -> dict:
                 },
             },
             {
-                "id": str(uuid.uuid4()),
                 "type": "short_answer",
                 "prompt_template": (
                     "In one sentence, name a HubSpot workflow trigger you would use "
@@ -188,7 +200,6 @@ def build_module_snapshot() -> dict:
                 "difficulty": "junior",
             },
             {
-                "id": str(uuid.uuid4()),
                 "type": "long_answer",
                 "prompt_template": (
                     "Describe how you would design a re-engagement sequence for "
@@ -222,10 +233,9 @@ def build_module_snapshot() -> dict:
                 "difficulty": "mid",
             },
             {
-                "id": str(uuid.uuid4()),
                 "type": "mcq",
                 "prompt_template": (
-                    "A SaaS company has $${{ revenue }} in ARR and is growing "
+                    "A SaaS company has ${{ revenue }} in ARR and is growing "
                     "{{ growth_rate * 100 }}% YoY. Which growth motion is the "
                     "most appropriate next investment?"
                 ),
@@ -269,7 +279,6 @@ def build_module_snapshot() -> dict:
                 },
             },
             {
-                "id": str(uuid.uuid4()),
                 "type": "code",
                 "prompt_template": (
                     "Implement `total(prices)` that returns the sum of a list "
@@ -332,8 +341,169 @@ def build_module_snapshot() -> dict:
                     "time_limit_exec_ms": 15000,
                 },
             },
-        ],
+    ]
+
+
+def ensure_module(supabase, admin_id: str) -> tuple[str, list[dict]]:
+    """Upsert the seed module and its question_templates. Returns
+    (module_id, question_template_rows) where the rows include real ids
+    and positions; those rows are what the snapshot is built from."""
+
+    existing_module = (
+        supabase.table("modules")
+        .select("id")
+        .eq("slug", SEED_MODULE_SLUG)
+        .eq("version", SEED_MODULE_VERSION)
+        .limit(1)
+        .execute()
+    )
+    if existing_module.data:
+        module_id = existing_module.data[0]["id"]
+    else:
+        inserted = (
+            supabase.table("modules")
+            .insert(
+                {
+                    "slug": SEED_MODULE_SLUG,
+                    "title": "Seed smoke test",
+                    "description": (
+                        "A five-question assessment used to verify the "
+                        "candidate flow end-to-end (mcq, short, long, mcq with "
+                        "sampled variables, code). Not for real evaluation."
+                    ),
+                    "domain": "ops",
+                    "target_duration_minutes": 15,
+                    "difficulty": "junior",
+                    "status": "published",
+                    "version": SEED_MODULE_VERSION,
+                    "created_by": admin_id,
+                    "published_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .execute()
+        )
+        module_id = inserted.data[0]["id"]
+
+    # Reuse existing templates if the seed already ran; otherwise insert
+    # the canonical set. We don't delete templates that may already be
+    # referenced by existing attempts.
+    existing_templates = (
+        supabase.table("question_templates")
+        .select(
+            "id, module_id, position, type, prompt_template, variable_schema, "
+            "solver_code, solver_language, interactive_config, rubric, "
+            "competency_tags, time_limit_seconds, max_points, metadata"
+        )
+        .eq("module_id", module_id)
+        .order("position")
+        .execute()
+    )
+    if existing_templates.data:
+        return module_id, existing_templates.data
+
+    rows: list[dict] = []
+    for position, q in enumerate(_seed_questions()):
+        row = {
+            "module_id": module_id,
+            "position": position,
+            "type": q["type"],
+            "prompt_template": q["prompt_template"],
+            "variable_schema": q.get("variable_schema") or {},
+            "solver_code": q.get("solver_code"),
+            "solver_language": q.get("solver_language") or "python",
+            "interactive_config": q.get("interactive_config"),
+            "rubric": q["rubric"],
+            "competency_tags": q.get("competency_tags") or [],
+            "max_points": q["max_points"],
+            "time_limit_seconds": q.get("time_limit_seconds"),
+            "metadata": {"difficulty": q.get("difficulty", "junior")},
+        }
+        inserted = supabase.table("question_templates").insert(row).execute()
+        rows.append(inserted.data[0])
+
+    return module_id, rows
+
+
+def build_module_snapshot(module_id: str, question_rows: list[dict]) -> dict:
+    return {
+        "slug": SEED_MODULE_SLUG,
+        "title": "Seed smoke test",
+        "description": (
+            "A five-question assessment used to verify the candidate flow "
+            "end-to-end (mcq, short, long, mcq with sampled variables, code). "
+            "Not for real evaluation."
+        ),
+        "domain": "ops",
+        "target_duration_minutes": 15,
+        "difficulty": "junior",
+        "questions": question_rows,
     }
+
+
+def ensure_assessment(supabase, admin_id: str, module_id: str) -> str:
+    """Wrap the seed module in a published Assessment so the assignment can
+    bind to the new container model."""
+
+    existing = (
+        supabase.table("assessments")
+        .select("id")
+        .eq("slug", SEED_MODULE_SLUG)
+        .limit(1)
+        .execute()
+    )
+    title = "Seed Smoke Assessment"
+    description = (
+        "One module wrapping the seed smoke test. Verifies the "
+        "candidate flow, scoring, and admin views end-to-end."
+    )
+    if existing.data:
+        assessment_id = existing.data[0]["id"]
+        # Normalize the title in case the migration auto-created this one
+        # off the module title (which read "Seed smoke test").
+        supabase.table("assessments").update(
+            {
+                "title": title,
+                "description": description,
+                "status": "published",
+            }
+        ).eq("id", assessment_id).execute()
+    else:
+        inserted = (
+            supabase.table("assessments")
+            .insert(
+                {
+                    "slug": SEED_MODULE_SLUG,
+                    "title": title,
+                    "description": description,
+                    "status": "published",
+                    "version": 1,
+                    "created_by": admin_id,
+                    "published_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .execute()
+        )
+        assessment_id = inserted.data[0]["id"]
+
+    # Idempotent module-link.
+    link_check = (
+        supabase.table("assessment_modules")
+        .select("module_id")
+        .eq("assessment_id", assessment_id)
+        .eq("module_id", module_id)
+        .limit(1)
+        .execute()
+    )
+    if not link_check.data:
+        supabase.table("assessment_modules").insert(
+            {
+                "assessment_id": assessment_id,
+                "module_id": module_id,
+                "position": 0,
+            }
+        ).execute()
+
+    return assessment_id
 
 
 def main() -> int:
@@ -353,7 +523,30 @@ def main() -> int:
 
     admin_id = ensure_admin_user(supabase)
     subject_id = ensure_subject(supabase)
-    snapshot = build_module_snapshot()
+    module_id, question_rows = ensure_module(supabase, admin_id)
+    assessment_id = ensure_assessment(supabase, admin_id, module_id)
+    snapshot = build_module_snapshot(module_id, question_rows)
+    # Wrap as an assessment_snapshot so new code paths read it correctly,
+    # while keeping the same flat questions list the candidate flow expects.
+    snapshot_with_assessment = {
+        **snapshot,
+        "title": "Seed Smoke Assessment",
+        "modules": [
+            {
+                "module_id": module_id,
+                "slug": SEED_MODULE_SLUG,
+                "title": snapshot["title"],
+                "description": snapshot["description"],
+                "domain": snapshot["domain"],
+                "difficulty": snapshot["difficulty"],
+                "target_duration_minutes": snapshot["target_duration_minutes"],
+                "position": 0,
+            }
+        ],
+        "questions": [
+            {**q, "module_id": module_id} for q in snapshot["questions"]
+        ],
+    }
 
     expires_at = datetime.now(UTC) + timedelta(days=7)
     assignment_id = str(uuid.uuid4())
@@ -369,7 +562,10 @@ def main() -> int:
         {
             "id": assignment_id,
             "subject_id": subject_id,
-            "module_snapshot": snapshot,
+            "module_id": module_id,
+            "assessment_id": assessment_id,
+            "module_snapshot": snapshot_with_assessment,
+            "assessment_snapshot": snapshot_with_assessment,
             "created_by": admin_id,
             "token_hash": token_hash,
             "expires_at": expires_at.isoformat(),

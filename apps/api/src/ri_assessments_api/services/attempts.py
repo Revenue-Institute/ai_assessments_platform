@@ -3,7 +3,7 @@ deadline enforcement, and final completion (spec §10.1, §13.1, §14.2)."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -23,14 +23,37 @@ def _parse_ts(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def session_deadline(assignment: dict[str, Any]) -> datetime | None:
+    """The deadline the candidate timer should count down to.
+
+    Once the candidate has consented (started_at is set), the session
+    deadline is started_at + module_snapshot.target_duration_minutes,
+    capped by the magic-link expiry. Before consent we just return the
+    link expiry so the consent screen can show "Link expires" without
+    pretending the assessment has started."""
+
+    expires_at = _parse_ts(assignment.get("expires_at"))
+    started_at = _parse_ts(assignment.get("started_at"))
+    if not started_at:
+        return expires_at
+    snapshot = assignment.get("module_snapshot") or {}
+    minutes = int(snapshot.get("target_duration_minutes") or 0)
+    if minutes <= 0:
+        return expires_at
+    session_end = started_at + timedelta(minutes=minutes)
+    if expires_at and expires_at < session_end:
+        return expires_at
+    return session_end
+
+
 def _ensure_in_progress(assignment: dict[str, Any]) -> None:
     if assignment["status"] != "in_progress":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Assessment is {assignment['status']}, not in progress.",
         )
-    expires_at = _parse_ts(assignment["expires_at"])
-    if expires_at and expires_at <= datetime.now(UTC):
+    deadline = session_deadline(assignment)
+    if deadline and deadline <= datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Assessment time limit has elapsed.",
@@ -182,6 +205,7 @@ def get_or_create_attempt_view(
         )
 
     questions = assignment["module_snapshot"]["questions"]
+    deadline = session_deadline(assignment)
     return {
         "assignment_id": assignment["id"],
         "index": index,
@@ -197,7 +221,7 @@ def get_or_create_attempt_view(
         ),
         "raw_answer": attempt.get("raw_answer"),
         "submitted_at": attempt.get("submitted_at"),
-        "expires_at": assignment["expires_at"],
+        "expires_at": (deadline or _parse_ts(assignment["expires_at"])),
     }
 
 
@@ -411,24 +435,35 @@ def complete_assignment(
 
     supabase.table("assignments").update(update).eq("id", assignment["id"]).execute()
 
-    # Score every attempt synchronously. Failures here are logged but do
-    # not roll back the status flip — the candidate's submission stands
-    # and an admin can rescore. Synchronous keeps v1 simple; BullMQ async
-    # lands when the latency starts mattering.
-    try:
-        from .scoring import score_assignment
+    # Try to enqueue async. Falls back to inline scoring when Redis is
+    # offline so a stack without the worker still produces scores. A
+    # background worker (apps/api/src/ri_assessments_api/worker.py) pulls
+    # the job and runs the same score_assignment path.
+    import logging
 
-        score_assignment(supabase, assignment["id"])
-    except Exception:
-        import logging
+    log = logging.getLogger(__name__)
 
-        logging.getLogger(__name__).exception(
-            "scoring failed for assignment %s; admin rescore will retry",
+    from .queue import enqueue_score_assignment
+
+    enqueued = enqueue_score_assignment(assignment["id"])
+    if not enqueued:
+        log.warning(
+            "redis unavailable; running inline scoring for %s",
             assignment["id"],
         )
+        try:
+            from .scoring import score_assignment
+
+            score_assignment(supabase, assignment["id"])
+        except Exception:
+            log.exception(
+                "scoring failed for assignment %s; admin rescore will retry",
+                assignment["id"],
+            )
 
     return {
         "assignment_id": assignment["id"],
         "status": "completed",
         "completed_at": now.isoformat(),
+        "scoring": "queued" if enqueued else "inline",
     }

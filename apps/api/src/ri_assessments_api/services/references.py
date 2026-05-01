@@ -1,5 +1,5 @@
 """Reference library: ingest text/markdown/URL/PDF, chunk, embed via
-Voyage, store, retrieve top-k by cosine similarity (spec §6.4)."""
+OpenAI, store, retrieve top-k by cosine similarity (spec §6.4)."""
 
 from __future__ import annotations
 
@@ -20,11 +20,9 @@ log = logging.getLogger(__name__)
 # Spec §6.4: chunk at 800 tokens with 100 token overlap. We approximate
 # 1 token ~= 4 chars (English) so 800 tokens ~= 3200 chars and 100 tokens
 # ~= 400 chars. Cheap and good enough for retrieval; if cross-language
-# accuracy ever matters, swap in voyageai.tokenize() here.
+# accuracy ever matters, swap in tiktoken here.
 CHUNK_CHAR_TARGET = 3_200
 CHUNK_CHAR_OVERLAP = 400
-EMBEDDING_MODEL = "voyage-3"
-EMBEDDING_DIMS = 1024
 
 
 def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
@@ -35,21 +33,21 @@ def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
         )
 
 
-def _voyage_client():
+def _openai_client():
     settings = get_settings()
-    if not settings.voyage_api_key:
+    if not settings.openai_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="VOYAGE_API_KEY is not configured.",
+            detail="OPENAI_API_KEY is not configured.",
         )
     try:
-        import voyageai  # type: ignore[import-not-found]
+        from openai import OpenAI  # type: ignore[import-not-found]
     except ImportError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="voyageai is not installed on the server.",
+            detail="openai is not installed on the server.",
         ) from exc
-    return voyageai.Client(api_key=settings.voyage_api_key)
+    return OpenAI(api_key=settings.openai_api_key)
 
 
 # -- Chunking ---------------------------------------------------------------
@@ -94,24 +92,24 @@ def chunk_text(content: str) -> list[str]:
 
 
 def embed_chunks(chunks: list[str], *, input_type: str = "document") -> list[list[float]]:
-    """Voyage-3 embeddings, batched. `input_type` is `document` for ingestion
-    and `query` for retrieval (Voyage embeds them in distinct spaces)."""
+    """OpenAI embeddings, batched. `input_type` is retained for API compatibility but ignored."""
 
-    client = _voyage_client()
+    client = _openai_client()
+    settings = get_settings()
     if not chunks:
         return []
-    result = client.embed(
-        texts=chunks,
-        model=EMBEDDING_MODEL,
-        input_type=input_type,
+    result = client.embeddings.create(
+        input=chunks,
+        model=settings.embedding_model,
+        dimensions=settings.embedding_dims,
     )
-    embeddings = list(result.embeddings)
-    if any(len(v) != EMBEDDING_DIMS for v in embeddings):
+    embeddings = [data.embedding for data in result.data]
+    if any(len(v) != settings.embedding_dims for v in embeddings):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                f"Voyage returned vectors of unexpected dimension; "
-                f"expected {EMBEDDING_DIMS}."
+                f"OpenAI returned vectors of unexpected dimension; "
+                f"expected {settings.embedding_dims}."
             ),
         )
     return embeddings

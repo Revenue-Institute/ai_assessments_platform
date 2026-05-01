@@ -120,13 +120,24 @@ def record_consent(
 
     now = datetime.now(UTC)
 
+    from .attempts import session_deadline as _session_deadline
+
     if view.status == "in_progress" and view.started_at:
+        deadline = _session_deadline(
+            {
+                "started_at": view.started_at.isoformat(),
+                "expires_at": view.expires_at.isoformat(),
+                "module_snapshot": {
+                    "target_duration_minutes": view.module.target_duration_minutes,
+                },
+            }
+        )
         # Already consented. Return the existing state.
         return ConsentResponse(
             assignment_id=view.assignment_id,
             status="in_progress",
             started_at=view.started_at,
-            server_deadline=view.expires_at,
+            server_deadline=deadline or view.expires_at,
         )
 
     update = {
@@ -141,11 +152,21 @@ def record_consent(
         "id", view.assignment_id
     ).execute()
 
+    deadline = _session_deadline(
+        {
+            "started_at": now.isoformat(),
+            "expires_at": view.expires_at.isoformat(),
+            "module_snapshot": {
+                "target_duration_minutes": view.module.target_duration_minutes,
+            },
+        }
+    )
+
     return ConsentResponse(
         assignment_id=view.assignment_id,
         status="in_progress",
         started_at=now,
-        server_deadline=view.expires_at,
+        server_deadline=deadline or view.expires_at,
     )
 
 

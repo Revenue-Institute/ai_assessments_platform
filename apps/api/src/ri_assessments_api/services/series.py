@@ -2,7 +2,7 @@
 
 v1 scope: stores series rows + the link table to assignments. Auto-creating
 the next assignment on cadence (and emailing the subject) lives in a
-follow-up worker — for v1 the admin manually creates each assignment and
+follow-up worker, for v1 the admin manually creates each assignment and
 links it to a series."""
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def dispatch_due_series(
 ) -> dict[str, Any]:
     """Walks every series with next_due_at <= now and issues the next
     assignment for each. Designed to be called from a Cloud Scheduler
-    cron — idempotent and partial-failure tolerant."""
+    cron, idempotent and partial-failure tolerant."""
 
     _ensure_role(principal, "admin", "reviewer")
 
@@ -194,7 +194,7 @@ def issue_next_for_series(
 
     _ensure_role(principal, "admin", "reviewer")
 
-    # Lazy import to avoid circular import (admin.py imports series? — not yet,
+    # Lazy import to avoid circular import (admin.py imports series?, not yet,
     # but defensive).
     from ..models.admin import AssignmentCreateRequest
     from .admin import create_assignment

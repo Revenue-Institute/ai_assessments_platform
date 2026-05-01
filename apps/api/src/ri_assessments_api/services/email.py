@@ -1,6 +1,6 @@
 """Resend email delivery (spec §15).
 
-Fails soft when RESEND_API_KEY is unset — callers get back ok=False and
+Fails soft when RESEND_API_KEY is unset, callers get back ok=False and
 log the reason. The candidate flow still works without email; admins
 just have to copy the magic-link URL out of the create-assignment
 response themselves."""
