@@ -43,6 +43,43 @@ Migration `0007_assessments.sql` adds an `assessments` container that groups one
 - Integrity heartbeats return 200 (no-op) once the assignment is no longer `in_progress`, so the client console isn't littered as the page transitions to `/done`.
 - Raw answers are immutable. Rescoring snapshots the previous score row into `attempt_scores_history` before recomputing.
 
+## Environments and URLs
+
+| Env | Admin | Candidate magic link |
+| :-- | :-- | :-- |
+| local | http://localhost:3000 | http://localhost:3001/a/{token} |
+| dev (Vercel preview) | https://admin-<branch>.vercel.app | https://candidate-<branch>.vercel.app/a/{token} |
+| prod | https://assessments.revenueinstitute.com | https://assessments.revenueinstitute.com/a/{token} |
+
+Production is single-host: admin owns the root, `/a/*` is rewritten to
+the candidate deployment. Wiring lives in `apps/admin/next.config.ts`
+behind `NEXT_PUBLIC_CANDIDATE_URL`. To enable in any env:
+
+```
+# admin's .env.* (or Vercel project settings)
+NEXT_PUBLIC_CANDIDATE_URL=https://candidate-prod.vercel.app
+```
+
+When unset (the local default), the rewrite is skipped and the two
+apps just listen on their own ports. The candidate FastAPI route
+(`/a/{token}` on apps/api) is unaffected; magic-link emails point at
+`NEXT_PUBLIC_CANDIDATE_URL` for the link they serve to the recipient.
+
+To launch the candidate experience yourself for QA:
+
+1. From an admin session, run a seed (`bun --filter api seed`) or use
+   the `/assignments/new` flow to pick a candidate + module.
+2. The seed prints the magic-link URL; the assignments page exposes
+   "Copy link" buttons for production.
+3. Open the link in any browser. You will see exactly what the
+   candidate sees, including the consent gate, server-driven timer,
+   and integrity monitoring.
+
+For passive review, the admin module/assessment preview pages
+(`/modules/{id}/preview`, `/assessments/{id}/preview`) render every
+question type in a read-only mirror so reviewers can scan the bank
+without spinning up an attempt.
+
 ## Repo layout pointers
 
 - Migrations: `packages/db/migrations/00NN_*.sql`. `apps/api/scripts/apply_migrations.py` is idempotent.
