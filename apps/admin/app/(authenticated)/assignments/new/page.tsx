@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import {
   ApiError,
+  type AssessmentSummary,
   type AssignmentMagicLink,
   bulkCreateAssignments,
-  listModules,
+  listAssessments,
   listSubjects,
-  type ModuleSummary,
   type SubjectSummary,
 } from "@/lib/api";
 import { CopyButton } from "../../components/copy-button";
@@ -27,21 +27,24 @@ export default async function NewAssignmentPage({
 }) {
   const sp = await searchParams;
 
-  let modules: ModuleSummary[] = [];
+  let assessments: AssessmentSummary[] = [];
   let subjects: SubjectSummary[] = [];
   let loadError: string | null = null;
   try {
-    [modules, subjects] = await Promise.all([listModules(), listSubjects()]);
+    [assessments, subjects] = await Promise.all([
+      listAssessments(),
+      listSubjects(),
+    ]);
   } catch (e) {
     if (e instanceof ApiError) loadError = e.message;
     else throw e;
   }
 
-  const publishable = modules.filter((m) => m.status === "published");
+  const publishable = assessments.filter((a) => a.status === "published");
 
   async function action(formData: FormData): Promise<void> {
     "use server";
-    const module_id = String(formData.get("module_id") ?? "");
+    const assessment_id = String(formData.get("assessment_id") ?? "");
     const subject_ids = formData.getAll("subject_ids").map((v) => String(v));
     const expires_in_days = Number.parseInt(
       String(formData.get("expires_in_days") ?? "7"),
@@ -49,16 +52,16 @@ export default async function NewAssignmentPage({
     );
     const send_email = formData.get("send_email") === "on";
 
-    if (!module_id || subject_ids.length === 0) {
+    if (!assessment_id || subject_ids.length === 0) {
       redirect(
         "/assignments/new?error=" +
-          encodeURIComponent("Pick a module and at least one subject.")
+          encodeURIComponent("Pick an assessment and at least one subject.")
       );
     }
 
     try {
       const result = await bulkCreateAssignments({
-        module_id,
+        assessment_id,
         subject_ids,
         expires_in_days,
         send_email,
@@ -89,9 +92,10 @@ export default async function NewAssignmentPage({
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
           <h1 className="font-semibold text-xl">Issue magic-link assignments</h1>
           <p className="text-muted-foreground text-sm">
-            Pick one or more subjects and a published module. Each subject gets
-            their own assignment + JWT. Invites are emailed via Resend when
-            enabled and configured; otherwise copy the URLs from the response.
+            Pick one or more subjects and a published assessment. Each subject
+            gets their own assignment + JWT. Invites are emailed via Resend
+            when enabled and configured; otherwise copy the URLs from the
+            response.
           </p>
         </section>
 
@@ -159,21 +163,21 @@ export default async function NewAssignmentPage({
           className="grid max-w-3xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
           <label className="space-y-1">
-            <span className="text-sm">Module (published only)</span>
+            <span className="text-sm">Assessment (published only)</span>
             <select
               className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
               defaultValue=""
-              name="module_id"
+              name="assessment_id"
               required
             >
               <option disabled value="">
                 {publishable.length === 0
-                  ? "No published modules — publish one first"
-                  : "Pick a module"}
+                  ? "No published assessments, publish one first"
+                  : "Pick an assessment"}
               </option>
-              {publishable.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.title} ({m.question_count} q · {m.target_duration_minutes} min)
+              {publishable.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.title} ({a.question_count} q · {a.total_duration_minutes} min · {a.module_count} modules)
                 </option>
               ))}
             </select>
@@ -183,7 +187,7 @@ export default async function NewAssignmentPage({
             <legend className="px-1 text-sm">Subjects</legend>
             {subjects.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No subjects — add one in Subjects first.
+                No subjects, add one in Subjects first.
               </p>
             ) : (
               <ul className="grid max-h-72 gap-1 overflow-auto md:grid-cols-2">

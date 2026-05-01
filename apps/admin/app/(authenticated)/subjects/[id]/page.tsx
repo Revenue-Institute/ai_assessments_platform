@@ -225,15 +225,17 @@ function AssignmentHistory({
         <tbody className="divide-y divide-border/30">
           {assignments.map((a) => (
             <tr key={a.id}>
-              <td className="px-2 py-1.5">{a.module_title ?? "—"}</td>
+              <td className="px-2 py-1.5">
+                {a.assessment_title ?? a.module_title ?? "-"}
+              </td>
               <td className="px-2 py-1.5">{a.status}</td>
               <td className="px-2 py-1.5">
                 {a.final_score != null && a.max_possible_score != null
                   ? `${a.final_score} / ${a.max_possible_score}`
-                  : "—"}
+                  : "-"}
               </td>
               <td className="px-2 py-1.5">
-                {a.integrity_score != null ? a.integrity_score : "—"}
+                {a.integrity_score != null ? a.integrity_score : "-"}
               </td>
               <td className="px-2 py-1.5 text-muted-foreground text-xs">
                 {new Date(a.created_at).toLocaleString()}

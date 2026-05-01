@@ -29,7 +29,7 @@ export default async function SettingsUsersPage() {
             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
               <div>
                 <dt className="text-muted-foreground text-xs">Name</dt>
-                <dd className="mt-0.5 font-medium">{me.full_name ?? "—"}</dd>
+                <dd className="mt-0.5 font-medium">{me.full_name ?? "-"}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground text-xs">Email</dt>

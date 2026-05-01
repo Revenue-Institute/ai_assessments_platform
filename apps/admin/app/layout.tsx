@@ -15,7 +15,7 @@ const headingFont = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-// Satoshi (variable) — licensed self-hosted woff2 at
+// Satoshi (variable), licensed self-hosted woff2 at
 // app/fonts/Satoshi-Variable.woff2 (compressed from the source ttf
 // via `woff2_compress`).
 const bodyFont = localFont({

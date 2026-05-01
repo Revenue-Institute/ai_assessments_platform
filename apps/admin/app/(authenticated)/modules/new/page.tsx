@@ -41,19 +41,34 @@ export default async function NewModuleWizardPage({
       .filter(Boolean);
     const notes = String(formData.get("notes") ?? "").trim() || undefined;
 
+    const mix = {
+      mcq_pct: optionalPct(formData, "mcq_pct"),
+      short_pct: optionalPct(formData, "short_pct"),
+      long_pct: optionalPct(formData, "long_pct"),
+      code_pct: optionalPct(formData, "code_pct"),
+      interactive_pct: optionalPct(formData, "interactive_pct"),
+    };
+    const allEmpty = Object.values(mix).every((v) => v === null);
+    const constrainedTotal = Object.values(mix).reduce<number>(
+      (acc, v) => acc + (v ?? 0),
+      0
+    );
+    if (constrainedTotal > 100.5) {
+      redirect(
+        "/modules/new?error=" +
+          encodeURIComponent(
+            `Question-mix percentages sum to ${constrainedTotal.toFixed(0)}%. Reduce values so they total at most 100, or clear them so the AI can choose.`
+          )
+      );
+    }
+
     const brief: GenerationBriefIn = {
       role_title,
       responsibilities,
       target_duration_minutes,
       difficulty,
       domains,
-      question_mix: {
-        mcq_pct: pctField(formData, "mcq_pct", 30),
-        short_pct: pctField(formData, "short_pct", 20),
-        long_pct: pctField(formData, "long_pct", 20),
-        code_pct: pctField(formData, "code_pct", 15),
-        interactive_pct: pctField(formData, "interactive_pct", 15),
-      },
+      ...(allEmpty ? {} : { question_mix: mix }),
       reference_document_ids: [],
       required_competencies,
       notes,
@@ -150,15 +165,23 @@ export default async function NewModuleWizardPage({
             placeholder="e.g. hubspot.workflows, marketing.analytics"
           />
 
-          <fieldset className="grid grid-cols-5 gap-3 rounded border border-border/40 bg-background/30 p-3">
+          <fieldset className="space-y-3 rounded border border-border/40 bg-background/30 p-3">
             <legend className="px-1 eyebrow-label">
-              Question mix (%)
+              Question mix (%) (optional)
             </legend>
-            <NumField label="mcq" name="mcq_pct" defaultValue="30" />
-            <NumField label="short" name="short_pct" defaultValue="20" />
-            <NumField label="long" name="long_pct" defaultValue="20" />
-            <NumField label="code" name="code_pct" defaultValue="15" />
-            <NumField label="interactive" name="interactive_pct" defaultValue="15" />
+            <p className="text-muted-foreground text-xs">
+              Leave every box blank to let the AI choose the mix from the
+              role and responsibilities. Set one or more to constrain the
+              AI; remaining blanks are filled to total 100%. Filled values
+              must sum to at most 100.
+            </p>
+            <div className="grid grid-cols-5 gap-3">
+              <NumField label="mcq" name="mcq_pct" />
+              <NumField label="short" name="short_pct" />
+              <NumField label="long" name="long_pct" />
+              <NumField label="code" name="code_pct" />
+              <NumField label="interactive" name="interactive_pct" />
+            </div>
           </fieldset>
 
           <Field label="Notes for the generator (optional)" name="notes" textarea />
@@ -175,9 +198,12 @@ export default async function NewModuleWizardPage({
   );
 }
 
-function pctField(form: FormData, name: string, fallback: number): number {
-  const v = Number.parseFloat(String(form.get(name) ?? ""));
-  return Number.isFinite(v) ? v : fallback;
+function optionalPct(form: FormData, name: string): number | null {
+  const raw = String(form.get(name) ?? "").trim();
+  if (raw === "") return null;
+  const v = Number.parseFloat(raw);
+  if (!Number.isFinite(v) || v < 0 || v > 100) return null;
+  return v;
 }
 
 function Field({
@@ -226,21 +252,19 @@ function Field({
 function NumField({
   label,
   name,
-  defaultValue,
 }: {
   label: string;
   name: string;
-  defaultValue: string;
 }) {
   return (
     <label className="space-y-1">
       <span className="text-muted-foreground text-xs">{label}</span>
       <input
         className="block w-full rounded border border-border/60 bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
-        defaultValue={defaultValue}
         max="100"
         min="0"
         name={name}
+        placeholder="AI"
         step="5"
         type="number"
       />

@@ -91,7 +91,7 @@ export default async function SeriesPage({
           <h1 className="font-semibold text-xl">Assessment series</h1>
           <p className="text-muted-foreground text-sm">
             Track recurring competency check-ins per subject. Auto-scheduling
-            of the next assignment lands in a follow-up worker — for v1, link
+            of the next assignment lands in a follow-up worker. For v1, link
             assignments to a series via the series detail endpoint.
           </p>
         </section>
@@ -123,7 +123,7 @@ export default async function SeriesPage({
             >
               <option disabled value="">
                 {subjects.length === 0
-                  ? "No subjects — add one in Subjects"
+                  ? "No subjects, add one in Subjects"
                   : "Pick a subject"}
               </option>
               {subjects.map((s) => (
@@ -191,7 +191,7 @@ export default async function SeriesPage({
                 <tr key={s.id}>
                   <td className="px-4 py-2 font-medium">{s.name}</td>
                   <td className="px-4 py-2">
-                    <p>{s.subject_full_name ?? "—"}</p>
+                    <p>{s.subject_full_name ?? "-"}</p>
                     <p className="text-muted-foreground text-xs">
                       {s.subject_email ?? ""}
                     </p>
@@ -205,7 +205,7 @@ export default async function SeriesPage({
                   <td className="px-4 py-2 text-xs">
                     {s.next_due_at
                       ? new Date(s.next_due_at).toLocaleString()
-                      : "—"}
+                      : "-"}
                   </td>
                   <td className="px-4 py-2">{s.assignment_count}</td>
                   <td className="px-4 py-2 text-right">

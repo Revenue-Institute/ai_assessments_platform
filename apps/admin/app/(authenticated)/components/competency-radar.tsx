@@ -12,7 +12,7 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
   if (slices.length === 0) {
     return (
       <div className="flex h-72 items-center justify-center rounded-xl border border-border/50 bg-muted/20 text-muted-foreground text-sm">
-        No competency scores yet — complete an assessment first.
+        No competency scores yet, complete an assessment first.
       </div>
     );
   }

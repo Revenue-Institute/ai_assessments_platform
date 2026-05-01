@@ -14,7 +14,7 @@ type Props = {
   height?: number;
 };
 
-/** Compact horizontal box-plot — whiskers from min→max, IQR box, median tick,
+/** Compact horizontal box-plot. Whiskers from min->max, IQR box, median tick,
  * and a marker for the candidate's score (spec §11.3). Falls back to a flat
  * line when the cohort has < 2 samples. */
 export function DistributionBox({
@@ -108,7 +108,7 @@ export function DistributionBox({
           y1={trackY - 6}
           y2={trackY + 6}
         />
-        {/* candidate marker — primary if at/above median, destructive otherwise */}
+        {/* candidate marker: primary if at/above median, destructive otherwise */}
         <circle
           className={candidateAhead ? "text-primary" : "text-destructive"}
           cx={candX}
@@ -121,7 +121,7 @@ export function DistributionBox({
       </svg>
       <p className="text-[11px] text-muted-foreground">
         team n={stats.sample_size} · median {Math.round(stats.median_pct)}% ·
-        IQR {Math.round(stats.p25_pct)}–{Math.round(stats.p75_pct)}% ·
+        IQR {Math.round(stats.p25_pct)}-{Math.round(stats.p75_pct)}% ·
         you {Math.round(candidateScore)}%
       </p>
     </div>

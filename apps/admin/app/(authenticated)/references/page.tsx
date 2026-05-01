@@ -42,7 +42,7 @@ export default async function ReferencesPage({
       redirect(
         "/references?ok=" +
           encodeURIComponent(
-            `Uploaded "${result.document.title}" — ${result.chunks_inserted} chunks indexed.`
+            `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
           )
       );
     } catch (e) {
@@ -69,7 +69,7 @@ export default async function ReferencesPage({
       redirect(
         "/references?ok=" +
           encodeURIComponent(
-            `Uploaded "${result.document.title}" — ${result.chunks_inserted} chunks indexed.`
+            `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
           )
       );
     } catch (e) {

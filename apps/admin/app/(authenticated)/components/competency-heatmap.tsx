@@ -92,7 +92,7 @@ function ScoreCell({ score }: { score: number | undefined }) {
   if (score == null) {
     return (
       <td className="border-border/30 border-l px-2 py-2 text-muted-foreground">
-        —
+        -
       </td>
     );
   }

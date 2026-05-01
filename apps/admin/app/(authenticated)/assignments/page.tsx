@@ -55,7 +55,7 @@ export default async function AssignmentsPage() {
             <thead className="bg-muted/40 text-left text-muted-foreground text-xs uppercase">
               <tr>
                 <th className="px-4 py-2">Subject</th>
-                <th className="px-4 py-2">Module</th>
+                <th className="px-4 py-2">Assessment</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Created</th>
                 <th className="px-4 py-2">Score</th>
@@ -66,12 +66,14 @@ export default async function AssignmentsPage() {
               {assignments.map((a) => (
                 <tr key={a.id}>
                   <td className="px-4 py-2">
-                    <p className="font-medium">{a.subject_full_name ?? "—"}</p>
+                    <p className="font-medium">{a.subject_full_name ?? "-"}</p>
                     <p className="text-muted-foreground text-xs">
                       {a.subject_email ?? ""}
                     </p>
                   </td>
-                  <td className="px-4 py-2">{a.module_title ?? "—"}</td>
+                  <td className="px-4 py-2">
+                    {a.assessment_title ?? a.module_title ?? "-"}
+                  </td>
                   <td className="px-4 py-2">
                     <StatusPill status={a.status} />
                   </td>
@@ -81,7 +83,7 @@ export default async function AssignmentsPage() {
                   <td className="px-4 py-2">
                     {a.final_score != null && a.max_possible_score != null
                       ? `${a.final_score} / ${a.max_possible_score}`
-                      : "—"}
+                      : "-"}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Link

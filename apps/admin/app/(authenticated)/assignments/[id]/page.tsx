@@ -109,31 +109,41 @@ export default async function AssignmentDetailPage({
               ↗ Subject: {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
             </Link>
           )}
-          {detail.module_id && (
+          {detail.assessment_id ? (
+            <Link
+              className="hover:text-primary hover:underline"
+              href={`/assessments/${detail.assessment_id}`}
+            >
+              ↗ Assessment: {detail.assessment_title ?? detail.assessment_id.slice(0, 8)}
+            </Link>
+          ) : detail.module_id ? (
             <Link
               className="hover:text-primary hover:underline"
               href={`/modules/${detail.module_id}`}
             >
               ↗ Module: {detail.module_title ?? detail.module_id.slice(0, 8)}
             </Link>
-          )}
+          ) : null}
         </nav>
 
         <section className="grid grid-cols-1 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 sm:grid-cols-2 md:grid-cols-4">
           <Stat label="Status" value={detail.status} />
-          <Stat label="Module" value={detail.module_title ?? "—"} />
+          <Stat
+            label="Assessment"
+            value={detail.assessment_title ?? detail.module_title ?? "-"}
+          />
           <Stat
             label="Score"
             value={
               detail.final_score != null && detail.max_possible_score != null
                 ? `${detail.final_score} / ${detail.max_possible_score}`
-                : "—"
+                : "-"
             }
           />
           <Stat
             label="Integrity"
             value={
-              detail.integrity_score != null ? `${detail.integrity_score}` : "—"
+              detail.integrity_score != null ? `${detail.integrity_score}` : "-"
             }
           />
           <Stat
@@ -141,7 +151,7 @@ export default async function AssignmentDetailPage({
             value={
               detail.started_at
                 ? new Date(detail.started_at).toLocaleString()
-                : "—"
+                : "-"
             }
           />
           <Stat
@@ -149,7 +159,7 @@ export default async function AssignmentDetailPage({
             value={
               detail.completed_at
                 ? new Date(detail.completed_at).toLocaleString()
-                : "—"
+                : "-"
             }
           />
           <Stat
@@ -161,7 +171,7 @@ export default async function AssignmentDetailPage({
             value={
               detail.total_time_seconds != null
                 ? `${Math.round(detail.total_time_seconds / 60)} min`
-                : "—"
+                : "-"
             }
           />
         </section>
@@ -215,7 +225,7 @@ export default async function AssignmentDetailPage({
                       Score:{" "}
                       {a.score != null
                         ? `${a.score} / ${a.max_score}`
-                        : `— / ${a.max_score}`}
+                        : `- / ${a.max_score}`}
                     </span>
                     {a.scorer_model && (
                       <span>
