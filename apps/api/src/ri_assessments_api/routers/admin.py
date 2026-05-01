@@ -311,8 +311,9 @@ def list_competencies(
 @router.get("/assignments", response_model=list[AssignmentSummary])
 def list_assignments(
     supabase: Annotated[Client, Depends(get_supabase)],
+    needs_review: bool | None = None,
 ) -> list[AssignmentSummary]:
-    return admin_service.list_assignments(supabase)
+    return admin_service.list_assignments(supabase, needs_review=needs_review)
 
 
 @router.post(

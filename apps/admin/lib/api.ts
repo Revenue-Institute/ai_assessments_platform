@@ -93,6 +93,7 @@ export type AssignmentSummary = {
   integrity_score: number | null;
   final_score: number | null;
   max_possible_score: number | null;
+  needs_review: boolean;
   created_at: string;
 };
 
@@ -361,8 +362,15 @@ export const createSubject = (body: {
   });
 
 // Assignments
-export const listAssignments = () =>
-  callApi<AssignmentSummary[]>("/api/assignments");
+export const listAssignments = (opts?: { needsReview?: boolean }) => {
+  const qs =
+    opts?.needsReview === true
+      ? "?needs_review=true"
+      : opts?.needsReview === false
+        ? "?needs_review=false"
+        : "";
+  return callApi<AssignmentSummary[]>(`/api/assignments${qs}`);
+};
 export const getAssignment = (id: string) =>
   callApi<AssignmentDetail>(`/api/assignments/${id}`);
 export const createAssignment = (body: {

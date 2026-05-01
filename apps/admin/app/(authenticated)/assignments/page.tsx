@@ -8,11 +8,19 @@ import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
 
-export default async function AssignmentsPage() {
+export default async function AssignmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ review?: string }>;
+}) {
+  const { review } = await searchParams;
+  const reviewOnly = review === "1";
   let assignments: AssignmentSummary[] = [];
   let error: string | null = null;
   try {
-    assignments = await listAssignments();
+    assignments = await listAssignments(
+      reviewOnly ? { needsReview: true } : undefined,
+    );
   } catch (e) {
     if (e instanceof ApiError) error = e.message;
     else throw e;
@@ -29,9 +37,22 @@ export default async function AssignmentsPage() {
               Magic-link assignments. Status and scores update as candidates submit.
             </p>
           </div>
-          <Link className="btn-primary text-sm" href="/assignments/new">
-            New assignment
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              aria-pressed={reviewOnly}
+              className={`rounded border px-3 py-1.5 text-xs ${
+                reviewOnly
+                  ? "border-warning/60 bg-warning/15 text-warning"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/40"
+              }`}
+              href={reviewOnly ? "/assignments" : "/assignments?review=1"}
+            >
+              {reviewOnly ? "Showing review-flagged" : "Needs review only"}
+            </Link>
+            <Link className="btn-primary text-sm" href="/assignments/new">
+              New assignment
+            </Link>
+          </div>
         </section>
 
         {error && (
@@ -59,6 +80,7 @@ export default async function AssignmentsPage() {
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Created</th>
                 <th className="px-4 py-2">Score</th>
+                <th className="px-4 py-2">Review</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -84,6 +106,18 @@ export default async function AssignmentsPage() {
                     {a.final_score != null && a.max_possible_score != null
                       ? `${a.final_score} / ${a.max_possible_score}`
                       : "-"}
+                  </td>
+                  <td className="px-4 py-2">
+                    {a.needs_review ? (
+                      <span
+                        className="rounded bg-warning/20 px-2 py-0.5 font-medium text-warning text-xs"
+                        title="At least one attempt scored with low confidence"
+                      >
+                        Flagged
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Link

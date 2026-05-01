@@ -1016,14 +1016,17 @@ def _module_snapshot(supabase: Client, module_id: str) -> dict[str, Any]:
     }
 
 
-def list_assignments(supabase: Client) -> list[AssignmentSummary]:
+def list_assignments(
+    supabase: Client, *, needs_review: bool | None = None
+) -> list[AssignmentSummary]:
     res = (
         supabase.table("assignments")
         .select(
             "id, subject_id, module_id, assessment_id, status, expires_at, "
             "started_at, completed_at, integrity_score, final_score, "
             "max_possible_score, created_at, "
-            "subjects(full_name, email), modules(title), assessments(title)"
+            "subjects(full_name, email), modules(title), assessments(title), "
+            "attempts(needs_review)"
         )
         .order("created_at", desc=True)
         .limit(200)
@@ -1034,6 +1037,14 @@ def list_assignments(supabase: Client) -> list[AssignmentSummary]:
         subject = row.get("subjects") or {}
         module = row.get("modules") or {}
         assessment = row.get("assessments") or {}
+        attempts = row.get("attempts") or []
+        has_review_flag = any(
+            bool(a.get("needs_review")) for a in attempts
+        )
+        if needs_review is True and not has_review_flag:
+            continue
+        if needs_review is False and has_review_flag:
+            continue
         out.append(
             AssignmentSummary(
                 id=row["id"],
@@ -1051,6 +1062,7 @@ def list_assignments(supabase: Client) -> list[AssignmentSummary]:
                 integrity_score=row.get("integrity_score"),
                 final_score=row.get("final_score"),
                 max_possible_score=row.get("max_possible_score"),
+                needs_review=has_review_flag,
                 created_at=row["created_at"],
             )
         )

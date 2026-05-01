@@ -174,6 +174,9 @@ class AssignmentSummary(BaseModel):
     integrity_score: float | None = None
     final_score: float | None = None
     max_possible_score: float | None = None
+    # True when at least one scored attempt has needs_review=true
+    # (low scorer confidence, spec §9.2). Drives the admin filter.
+    needs_review: bool = False
     created_at: datetime
 
 
