@@ -20,7 +20,7 @@ returns table (
   id uuid,
   document_id uuid,
   content text,
-  position int,
+  chunk_position int,
   similarity float
 )
 language sql
@@ -30,7 +30,7 @@ as $$
     c.id,
     c.document_id,
     c.content,
-    c.position,
+    c.position as chunk_position,
     1 - (c.embedding <=> query_embedding) as similarity
   from reference_chunks c
   where document_ids is null or c.document_id = any(document_ids)
