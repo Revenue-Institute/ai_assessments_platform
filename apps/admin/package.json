@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@repo/competencies": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/design-system": "workspace:*",

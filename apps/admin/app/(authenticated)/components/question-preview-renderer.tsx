@@ -10,7 +10,24 @@
  * this component handles a single sampled instance. The parent decides
  * how many to render. */
 
+import dynamic from "next/dynamic";
 import type { ModulePreviewQuestion } from "@/lib/api";
+
+// Lazy-load Monaco so it only ships in the preview routes. The read-only
+// editor renders identically to what candidates see (vs-dark theme,
+// matching syntax highlighting), without the Run / Test wiring.
+const CodePreviewMonaco = dynamic(
+  () => import("./code-preview").then((m) => m.CodePreviewMonaco),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        aria-hidden="true"
+        className="h-[260px] animate-pulse rounded-lg border border-border bg-muted/40"
+      />
+    ),
+  },
+);
 
 type PreviewConfig = Record<string, unknown>;
 
@@ -148,29 +165,64 @@ function ScenarioPreview({ config }: { config: PreviewConfig }) {
   );
 }
 
+function EditorChrome({
+  language,
+  rightSlot,
+  children,
+}: {
+  language: string;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card/40">
+      <div className="flex items-center justify-between border-border/60 border-b bg-muted/40 px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          <span className="flex gap-1.5" aria-hidden="true">
+            <span className="h-2.5 w-2.5 rounded-full bg-destructive/60" />
+            <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-primary/70" />
+          </span>
+          <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-wide">
+            {language}
+          </span>
+        </div>
+        {rightSlot}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function CodePreview({ config }: { config: PreviewConfig }) {
   const language = (config.language as string | undefined) ?? "python";
   const starter = (config.starter_code as string | undefined) ?? "";
   const visible = config.visible_tests as string | undefined;
   const packages = (config.packages as string[] | undefined) ?? [];
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-muted-foreground text-xs">
-        <span className="font-mono uppercase">{language}</span>
-        {packages.length > 0 && (
-          <span>{`packages: ${packages.join(", ")}`}</span>
-        )}
-      </div>
-      <CodeBlock
-        ariaLabel={`Starter code (${language})`}
-        body={starter || "(empty starter)"}
-      />
+    <div className="space-y-3">
+      <EditorChrome
+        language={language}
+        rightSlot={
+          packages.length > 0 ? (
+            <span className="text-muted-foreground text-xs">
+              {`packages: ${packages.join(", ")}`}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs">
+              read-only preview
+            </span>
+          )
+        }
+      >
+        <CodePreviewMonaco code={starter} language={language} />
+      </EditorChrome>
       {visible && (
-        <details className="rounded border border-border/40 bg-background/30 text-xs">
-          <summary className="cursor-pointer px-2 py-1 text-muted-foreground">
-            Visible tests (candidate can run these)
+        <details className="rounded-lg border border-border/40 bg-card/40">
+          <summary className="cursor-pointer border-border/40 border-b bg-muted/30 px-3 py-1.5 text-muted-foreground text-xs">
+            Visible tests (candidate can run these from a Run tests button)
           </summary>
-          <CodeBlock ariaLabel="Visible tests" body={visible} muted />
+          <CodePreviewMonaco code={visible} language={language} height="180px" />
         </details>
       )}
     </div>
@@ -180,18 +232,34 @@ function CodePreview({ config }: { config: PreviewConfig }) {
 function SqlPreview({ config }: { config: PreviewConfig }) {
   const schema = config.schema_sql as string | undefined;
   const seed = config.seed_sql as string | undefined;
-  const starter = (config.starter_sql as string | undefined) ?? "-- Candidate writes their SQL here";
+  const starter =
+    (config.starter_sql as string | undefined) ??
+    "-- Candidate writes their SQL here";
   return (
-    <div className="space-y-2">
-      <p className="font-mono text-muted-foreground text-xs uppercase">sql</p>
-      <CodeBlock ariaLabel="Starter SQL" body={starter} />
+    <div className="space-y-3">
+      <EditorChrome
+        language="sql"
+        rightSlot={
+          <span className="text-muted-foreground text-xs">
+            DuckDB sandbox
+          </span>
+        }
+      >
+        <CodePreviewMonaco code={starter} language="sql" />
+      </EditorChrome>
       {(schema || seed) && (
-        <details className="rounded border border-border/40 bg-background/30 text-xs">
-          <summary className="cursor-pointer px-2 py-1 text-muted-foreground">
-            Sandbox schema + seed (candidate sees the resulting tables)
+        <details className="rounded-lg border border-border/40 bg-card/40">
+          <summary className="cursor-pointer border-border/40 border-b bg-muted/30 px-3 py-1.5 text-muted-foreground text-xs">
+            Sandbox schema + seed (the resulting tables are queryable)
           </summary>
-          {schema && <CodeBlock ariaLabel="Schema SQL" body={schema} muted />}
-          {seed && <CodeBlock ariaLabel="Seed SQL" body={seed} muted />}
+          <div className="space-y-2 p-2">
+            {schema && (
+              <CodePreviewMonaco code={schema} language="sql" height="160px" />
+            )}
+            {seed && (
+              <CodePreviewMonaco code={seed} language="sql" height="160px" />
+            )}
+          </div>
         </details>
       )}
     </div>
