@@ -153,7 +153,7 @@ def dispatch_due(
     send_email: bool = Query(default=True),
 ) -> dict:
     """Walks every series with next_due_at <= now and issues the next
-    assignment for each. Designed for a Cloud Scheduler cron — idempotent
+    assignment for each. Designed for a Cloud Scheduler cron, idempotent
     and partial-failure tolerant."""
 
     return series_service.dispatch_due_series(

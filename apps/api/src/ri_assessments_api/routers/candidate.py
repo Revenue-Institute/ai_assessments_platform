@@ -406,7 +406,7 @@ def notebook_save(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> SaveAnswerResponse:
     """Spec §14.3 alias for autosaving a notebook answer. Body should
-    include `question_index` plus the {cells: [...]} payload — we forward
+    include `question_index` plus the {cells: [...]} payload, we forward
     to save_draft_answer."""
 
     payload = body.answer

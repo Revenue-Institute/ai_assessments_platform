@@ -68,20 +68,71 @@ class AdminPrincipal:
 
 
 def _decode_supabase_jwt(token: str) -> dict[str, Any]:
+    """Verify a Supabase access token and return its claims.
+
+    Supports both legacy HS256 (shared SUPABASE_JWT_SECRET) and the
+    ES256 / asymmetric keys that newer Supabase projects issue. For
+    asymmetric tokens we delegate to Supabase's auth.get_user() so the
+    JWKS rotation is handled by the SDK rather than reinvented here."""
+
     settings = get_settings()
-    if not settings.supabase_jwt_secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server is missing SUPABASE_JWT_SECRET.",
-        )
+
+    # Inspect the header to pick a verification path. Falls back to
+    # auth.get_user() for any algorithm we don't natively understand.
     try:
-        return jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=[ALGORITHM],
-            audience=SUPABASE_TOKEN_AUDIENCE,
-        )
+        header = jwt.get_unverified_header(token)
     except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired admin token.",
+        ) from exc
+
+    alg = header.get("alg")
+
+    if alg == ALGORITHM:
+        if not settings.supabase_jwt_secret:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Server is missing SUPABASE_JWT_SECRET.",
+            )
+        try:
+            return jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=[ALGORITHM],
+                audience=SUPABASE_TOKEN_AUDIENCE,
+            )
+        except JWTError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired admin token.",
+            ) from exc
+
+    # Asymmetric (ES256 / RS256), let the Supabase SDK validate it.
+    try:
+        from supabase import create_client
+
+        if not settings.supabase_url or not settings.supabase_anon_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Supabase URL/anon key not configured.",
+            )
+        sb = create_client(settings.supabase_url, settings.supabase_anon_key)
+        user_res = sb.auth.get_user(token)
+        user = getattr(user_res, "user", None)
+        if user is None or not getattr(user, "id", None):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired admin token.",
+            )
+        return {
+            "sub": user.id,
+            "email": getattr(user, "email", None),
+            "aud": getattr(user, "aud", SUPABASE_TOKEN_AUDIENCE),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired admin token.",

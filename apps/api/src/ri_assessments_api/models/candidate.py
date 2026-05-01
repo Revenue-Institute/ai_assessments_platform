@@ -117,6 +117,7 @@ class CompleteResponse(BaseModel):
     assignment_id: str
     status: Literal["completed"]
     completed_at: datetime
+    scoring: Literal["queued", "inline"] | None = None
 
 
 class CodeRunRequest(BaseModel):
@@ -180,7 +181,7 @@ class NotebookRunRequest(BaseModel):
 
 class NotebookCellRunRequest(BaseModel):
     """Run a single cell against a fresh kernel with the dataset_urls
-    materialized. v1 doesn't keep kernels alive across calls — the
+    materialized. v1 doesn't keep kernels alive across calls, the
     candidate UI is responsible for sending the cell's preceding context
     when relevant."""
 

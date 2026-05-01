@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # Supabase
     supabase_url: str = ""
+    supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""  # Supabase project's auth.jwt_secret (HS256)
     database_url: str = ""
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     jwt_signing_secret: str = ""
     session_cookie_secret: str = ""
 
-    # Anthropic — split keys for cost attribution (spec §15).
+    # Anthropic, split keys for cost attribution (spec §15).
     anthropic_api_key_generation: str = ""
     anthropic_api_key_scoring: str = ""
 
@@ -50,7 +51,7 @@ class Settings(BaseSettings):
     # Embeddings
     voyage_api_key: str = ""
     openai_api_key: str = ""
-    embedding_model: str = "voyage-3"
+    embedding_model: str = "text-embedding-3-small"
     embedding_dims: int = 1024
 
     # Observability

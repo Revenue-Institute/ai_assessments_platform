@@ -240,7 +240,7 @@ def competency_distribution(
 ) -> CompetencyDistributionResponse:
     """Latest score_pct per subject for a single competency, returned with
     summary stats (min / p25 / median / p75 / max). Used by the
-    candidate-vs-team overlay (spec §11.3) — caller plots their subject's
+    candidate-vs-team overlay (spec §11.3), caller plots their subject's
     own latest score on top of this distribution."""
 
     subj_q = supabase.table("subjects").select("id")

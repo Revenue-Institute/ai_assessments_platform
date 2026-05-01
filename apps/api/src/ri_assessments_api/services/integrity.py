@@ -112,18 +112,23 @@ def record_heartbeat(
 
     assignment = get_assignment_for_token(supabase, raw_token)
     if assignment["status"] != "in_progress":
+        # Tolerate stale heartbeats arriving after the candidate has
+        # consented but not yet started, or after they have completed.
+        # Returning 200 here keeps the browser console quiet during the
+        # natural race between the final submit and /done navigation.
+        return {
+            "ok": True,
+            "applied": 0,
+            "status": assignment.get("status"),
+        }
+    from .attempts import session_deadline
+
+    deadline = session_deadline(assignment)
+    if deadline and deadline <= datetime.now(UTC):
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Assessment is not in progress.",
+            status_code=status.HTTP_410_GONE,
+            detail="Assessment time limit has elapsed.",
         )
-    expires_at = assignment.get("expires_at")
-    if expires_at:
-        deadline = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        if deadline <= datetime.now(UTC):
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Assessment time limit has elapsed.",
-            )
 
     attempt_id = _current_attempt_id(supabase, assignment["id"])
     if not attempt_id:

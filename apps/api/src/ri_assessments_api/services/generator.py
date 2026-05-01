@@ -158,15 +158,64 @@ def _outline_user_prompt(brief: GenerationBriefIn) -> str:
         f"Target duration: {brief.target_duration_minutes} minutes",
         f"Domains: {', '.join(brief.domains) if brief.domains else '(none specified)'}",
         "",
-        "Question mix targets (within plus or minus 10 percent each):",
-        f"  mcq: {brief.question_mix.mcq_pct}%",
-        f"  short_answer: {brief.question_mix.short_pct}%",
-        f"  long_answer: {brief.question_mix.long_pct}%",
-        f"  code: {brief.question_mix.code_pct}%",
-        f"  interactive (n8n / notebook / diagram / sql): {brief.question_mix.interactive_pct}%",
-        "",
-        "Required competencies (must each appear in at least one topic):",
     ]
+
+    mix = brief.question_mix
+    if mix is None or mix.is_empty():
+        parts.append(
+            "Question mix: not specified. Pick a mix that fits the role's "
+            "actual day-to-day work. Bias toward interactive types "
+            "(code, sql, n8n, notebook, diagram) for hands-on roles; bias "
+            "toward written types (mcq, short_answer, long_answer) for "
+            "judgment / strategy roles. Buckets: mcq_pct, short_pct, "
+            "long_pct, code_pct, interactive_pct (interactive covers n8n, "
+            "notebook, diagram, sql)."
+        )
+    else:
+        constrained = mix.constrained_total()
+        if constrained > 100.5:  # tiny float slack
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "question_mix constraints sum to more than 100% "
+                    f"({constrained:.1f}%). Reduce values so the constrained "
+                    "buckets total at most 100, or leave fields blank for "
+                    "the AI to fill."
+                ),
+            )
+
+        parts.append(
+            "Question mix targets. Explicit percentages are HARD CONSTRAINTS "
+            "set by the admin. The final outline must hit each explicit "
+            "value within plus or minus 10 percent. Pick values for any "
+            "bucket marked AI-pick. Do not substitute a different question "
+            "type because you think the role does not justify it; design "
+            "topics that exercise the requested types instead."
+        )
+        labels = [
+            ("mcq", mix.mcq_pct),
+            ("short_answer", mix.short_pct),
+            ("long_answer", mix.long_pct),
+            ("code", mix.code_pct),
+            ("interactive (n8n / notebook / diagram / sql)", mix.interactive_pct),
+        ]
+        for label, value in labels:
+            if value is None:
+                parts.append(f"  {label}: AI-pick")
+            else:
+                parts.append(f"  {label}: {value}%")
+        if 0 < constrained < 100:
+            parts.append(
+                f"  Total of explicit values is {constrained:.0f}%. Fill the "
+                f"remaining {100 - constrained:.0f}% across AI-pick buckets."
+            )
+
+    parts.extend(
+        [
+            "",
+            "Required competencies (must each appear in at least one topic):",
+        ]
+    )
     parts.extend(f"  - {tag}" for tag in brief.required_competencies) if (
         brief.required_competencies
     ) else parts.append("  (none specified)")
@@ -197,7 +246,6 @@ def generate_outline(
     response = client.messages.create(
         model=GENERATION_MODEL,
         max_tokens=8000,
-        thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         system=_system_blocks(OUTLINE_SYSTEM_PROMPT),
         tools=[SUBMIT_OUTLINE_TOOL],
@@ -277,9 +325,10 @@ def _questions_user_prompt(
         for chunk in reference_chunks:
             sim = chunk.get("similarity")
             sim_str = f" (similarity {sim:.2f})" if isinstance(sim, (int, float)) else ""
+            position = chunk.get("chunk_position", chunk.get("position"))
             parts.append(
                 f"<chunk document_id=\"{chunk['document_id']}\" "
-                f"position=\"{chunk['position']}\"{sim_str}>"
+                f"position=\"{position}\"{sim_str}>"
             )
             parts.append(chunk["content"])
             parts.append("</chunk>")
@@ -322,7 +371,7 @@ def _self_verify_question(raw_q: dict[str, Any]) -> bool:
         sample_count=3,
     )
     # When E2B is offline every sample comes back with `solver returned
-    # no result` — treat that as "could not verify, accept" so we don't
+    # no result`, treat that as "could not verify, accept" so we don't
     # block all generated questions in dev.
     if report.get("failures"):
         all_no_result = all(
@@ -441,7 +490,6 @@ def generate_questions(
             response = client.messages.create(
                 model=GENERATION_MODEL,
                 max_tokens=16_000,
-                thinking={"type": "adaptive"},
                 output_config={"effort": "high"},
                 system=_system_blocks(QUESTIONS_SYSTEM_PROMPT),
                 tools=[SUBMIT_QUESTIONS_TOOL],
@@ -650,7 +698,6 @@ def revise_question(
     response = client.messages.create(
         model=GENERATION_MODEL,
         max_tokens=10_000,
-        thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         system=_system_blocks(REVISION_SYSTEM_PROMPT),
         tools=[SUBMIT_REVISED_QUESTION_TOOL],
@@ -661,7 +708,7 @@ def revise_question(
 
     raw = _extract_tool_input(response, "submit_revised_question")
 
-    # Apply preserve list — overwrite revised fields with the originals.
+    # Apply preserve list, overwrite revised fields with the originals.
     for field in preserve:
         if field in current:
             raw[field] = current[field]
@@ -717,7 +764,7 @@ def revise_question(
 
 def _strip_for_prompt(row: dict[str, Any]) -> dict[str, Any]:
     """Drop heavy or DB-internal fields when sending the current question to
-    the model — keeps the prompt focused on user-meaningful template state."""
+    the model, keeps the prompt focused on user-meaningful template state."""
     return {
         k: v
         for k, v in row.items()

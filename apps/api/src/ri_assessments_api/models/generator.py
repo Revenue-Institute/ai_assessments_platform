@@ -11,11 +11,42 @@ Difficulty = Literal["junior", "mid", "senior", "expert"]
 
 
 class QuestionMix(BaseModel):
-    mcq_pct: float = Field(ge=0, le=100)
-    short_pct: float = Field(ge=0, le=100)
-    long_pct: float = Field(ge=0, le=100)
-    code_pct: float = Field(ge=0, le=100)
-    interactive_pct: float = Field(ge=0, le=100)
+    """Optional admin-supplied constraints on the question type mix.
+
+    Each percentage is optional. When a field is None, the AI picks a
+    value that fits the role; when set, the AI must honor it. Set fields
+    must collectively be <= 100; the remainder is filled in by the AI."""
+
+    mcq_pct: float | None = Field(default=None, ge=0, le=100)
+    short_pct: float | None = Field(default=None, ge=0, le=100)
+    long_pct: float | None = Field(default=None, ge=0, le=100)
+    code_pct: float | None = Field(default=None, ge=0, le=100)
+    interactive_pct: float | None = Field(default=None, ge=0, le=100)
+
+    def constrained_total(self) -> float:
+        return sum(
+            v
+            for v in (
+                self.mcq_pct,
+                self.short_pct,
+                self.long_pct,
+                self.code_pct,
+                self.interactive_pct,
+            )
+            if v is not None
+        )
+
+    def is_empty(self) -> bool:
+        return all(
+            v is None
+            for v in (
+                self.mcq_pct,
+                self.short_pct,
+                self.long_pct,
+                self.code_pct,
+                self.interactive_pct,
+            )
+        )
 
 
 class GenerationBriefIn(BaseModel):
@@ -24,7 +55,7 @@ class GenerationBriefIn(BaseModel):
     target_duration_minutes: int = Field(ge=10, le=240)
     difficulty: Difficulty
     domains: list[str] = Field(default_factory=list)
-    question_mix: QuestionMix
+    question_mix: QuestionMix | None = None
     reference_document_ids: list[str] = Field(default_factory=list)
     required_competencies: list[str] = Field(default_factory=list)
     notes: str | None = None

@@ -171,7 +171,7 @@ def _score_rubric_ai(
         f"{json.dumps(raw_answer, indent=2)}\n"
         "</candidate_answer>\n\n"
         f"This question is worth {max_points} max points. The criterion `max` "
-        "fields are local caps — your final score is computed by us as a "
+        "fields are local caps, your final score is computed by us as a "
         "weighted average of (criterion.score / criterion.max) * weight scaled "
         f"to {max_points}, so populate every criterion."
     )
@@ -181,7 +181,6 @@ def _score_rubric_ai(
     response = client.messages.create(
         model=SCORING_MODEL,
         max_tokens=4_000,
-        thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         system=[
             {
@@ -333,11 +332,19 @@ def score_attempt(
         )
 
     elif mode == "structural_match":
-        # n8n / diagram runners land in the next slice.
-        update["needs_review"] = True
-        update["score_rationale"] = (
-            "structural_match scoring is not yet wired; awaiting runner integration."
-        )
+        # diagram + n8n submissions are graded synchronously at submit
+        # time by their respective runners (grade_diagram_attempt /
+        # grade_n8n_attempt). If a score is already set we leave it; if
+        # it's missing the runner was unavailable and an admin rescore
+        # picks it up later.
+        if attempt.get("score") is None:
+            update["needs_review"] = True
+            update["score_rationale"] = (
+                "structural_match runner did not produce a score at submit "
+                "time. Admin rescore will retry."
+            )
+        else:
+            return None
     else:
         update["needs_review"] = True
         update["score_rationale"] = f"Unknown scoring_mode: {mode!r}"
@@ -391,7 +398,7 @@ def _compute_competency_rollups(
 ) -> list[dict[str, Any]]:
     """For each competency tag referenced by any question, sum the points
     earned and possible across attempts that map to that tag (questions can
-    carry multiple tags — we attribute the full attempt to each tag, per
+    carry multiple tags, we attribute the full attempt to each tag, per
     spec §11.2 read pattern)."""
 
     questions_by_id = {
@@ -469,7 +476,7 @@ def _replace_competency_scores(
     rollups: list[dict[str, Any]],
 ) -> None:
     """Replace existing rollups for this assignment, then insert fresh rows.
-    Keeps history simple — we re-derive on every (re)score."""
+    Keeps history simple, we re-derive on every (re)score."""
 
     supabase.table("competency_scores").delete().eq(
         "assignment_id", assignment_id
