@@ -65,33 +65,70 @@ export default async function QuestionPage({
 
   async function handleSubmit(formData: FormData): Promise<void> {
     "use server";
-    const raw = formData.get("answer");
-    let parsed: unknown = raw;
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      if (trimmed.length === 0) {
+    let parsed: unknown;
+
+    // multi_select: checkbox group emits one entry per selected option.
+    const checkedIndices = formData.getAll("answer_indices");
+    if (checkedIndices.length > 0) {
+      const ints = checkedIndices
+        .map((v) => Number.parseInt(String(v), 10))
+        .filter((n) => !Number.isNaN(n))
+        .sort((a, b) => a - b);
+      if (ints.length === 0) {
         redirect(
-          `/a/${token}/q/${idx}?error=${encodeURIComponent("Please provide an answer.")}`
+          `/a/${token}/q/${idx}?error=${encodeURIComponent("Please select at least one answer.")}`,
         );
       }
-      // Renderers that own a structured shape (code, multi-part) emit the
-      // answer as JSON. Plain string values mean a legacy renderer (mcq,
-      // short, long) — wrap accordingly.
-      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        try {
-          parsed = JSON.parse(trimmed);
-        } catch {
-          parsed = { text: trimmed };
+      parsed = { selected_indices: ints };
+    } else {
+      // scenario with explicit parts: collect all `scenario_part:*` keys.
+      const responses: Record<string, string> = {};
+      for (const [key, value] of formData.entries()) {
+        if (key.startsWith("scenario_part:") && typeof value === "string") {
+          const partId = key.slice("scenario_part:".length);
+          responses[partId] = value.trim();
         }
+      }
+      if (Object.keys(responses).length > 0) {
+        if (Object.values(responses).every((v) => v.length === 0)) {
+          redirect(
+            `/a/${token}/q/${idx}?error=${encodeURIComponent("Please provide an answer.")}`,
+          );
+        }
+        parsed = { responses };
       } else {
-        const selectedIndex = formData.get("answer_index");
-        if (typeof selectedIndex === "string" && selectedIndex.length > 0) {
-          const parsedIndex = Number.parseInt(selectedIndex, 10);
-          parsed = Number.isNaN(parsedIndex)
-            ? { selected: trimmed }
-            : { selected_index: parsedIndex, selected: trimmed };
-        } else {
-          parsed = { text: trimmed };
+        const raw = formData.get("answer");
+        parsed = raw;
+        if (typeof raw === "string") {
+          const trimmed = raw.trim();
+          if (trimmed.length === 0) {
+            redirect(
+              `/a/${token}/q/${idx}?error=${encodeURIComponent("Please provide an answer.")}`,
+            );
+          }
+          // Renderers that own a structured shape (code, multi-part) emit the
+          // answer as JSON. Plain string values mean a legacy renderer (mcq,
+          // short, long), wrap accordingly.
+          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+              parsed = JSON.parse(trimmed);
+            } catch {
+              parsed = { text: trimmed };
+            }
+          } else {
+            const selectedIndex = formData.get("answer_index");
+            if (
+              typeof selectedIndex === "string" &&
+              selectedIndex.length > 0
+            ) {
+              const parsedIndex = Number.parseInt(selectedIndex, 10);
+              parsed = Number.isNaN(parsedIndex)
+                ? { selected: trimmed }
+                : { selected_index: parsedIndex, selected: trimmed };
+            } else {
+              parsed = { text: trimmed };
+            }
+          }
         }
       }
     }
