@@ -149,9 +149,7 @@ async function authHeader(): Promise<Record<string, string>> {
   // do not also drag `next/headers` into the client. The runtime here is
   // server-only by design; if a client component ever reaches this code
   // path the dynamic import would fail loudly at runtime.
-  const { createSupabaseServerClient } = await import(
-    "@/lib/supabase/server"
-  );
+  const { createSupabaseServerClient } = await import("@/lib/supabase/server");
   const supabase = await createSupabaseServerClient();
   const {
     data: { session },

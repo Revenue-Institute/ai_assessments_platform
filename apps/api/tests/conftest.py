@@ -17,8 +17,30 @@ can assert that the service issued the right write."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+import os
+
+# Set test-stable env vars BEFORE any ri_assessments_api module imports.
+# CI runners don't have .env.local, so without this the auth / config
+# layers refuse to start. These values are deterministic, never used
+# against real services, and stay scoped to the test session.
+os.environ.setdefault("APP_ENV", "local")
+os.environ.setdefault(
+    "JWT_SIGNING_SECRET", "test-jwt-signing-secret-32-chars-long-please"
+)
+os.environ.setdefault(
+    "SESSION_COOKIE_SECRET", "test-session-cookie-secret-32-chars-long"
+)
+os.environ.setdefault("SUPABASE_URL", "http://localhost:54321")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+os.environ.setdefault("DATABASE_URL", "postgresql://test@localhost/test")
+os.environ.setdefault("ANTHROPIC_API_KEY_GENERATION", "test-anthropic-gen")
+os.environ.setdefault("ANTHROPIC_API_KEY_SCORING", "test-anthropic-scoring")
+os.environ.setdefault("OPENAI_API_KEY", "test-openai")
+os.environ.setdefault("E2B_API_KEY", "test-e2b")
+os.environ.setdefault("RESEND_API_KEY", "test-resend")
+
+from dataclasses import dataclass, field  # noqa: E402
+from typing import Any  # noqa: E402
 
 
 @dataclass

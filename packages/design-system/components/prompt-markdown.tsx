@@ -2,8 +2,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 interface Props {
-  source: string;
   className?: string;
+  source: string;
 }
 
 // Renders an assessment question prompt as GFM-flavored markdown. Code
@@ -21,7 +21,6 @@ export function PromptMarkdown({ source, className }: Props) {
         .trim()}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
             <h2 className="font-semibold text-lg">{children}</h2>
@@ -34,18 +33,14 @@ export function PromptMarkdown({ source, className }: Props) {
               {children}
             </h4>
           ),
-          p: ({ children }) => (
-            <p className="text-foreground">{children}</p>
-          ),
+          p: ({ children }) => <p className="text-foreground">{children}</p>,
           ul: ({ children }) => (
             <ul className="list-disc space-y-1 pl-6">{children}</ul>
           ),
           ol: ({ children }) => (
             <ol className="list-decimal space-y-1 pl-6">{children}</ol>
           ),
-          li: ({ children }) => (
-            <li className="text-foreground">{children}</li>
-          ),
+          li: ({ children }) => <li className="text-foreground">{children}</li>,
           a: ({ children, href }) => (
             <a
               className="text-primary underline-offset-4 hover:underline"
@@ -97,6 +92,7 @@ export function PromptMarkdown({ source, className }: Props) {
             </pre>
           ),
         }}
+        remarkPlugins={[remarkGfm]}
       >
         {source}
       </ReactMarkdown>
