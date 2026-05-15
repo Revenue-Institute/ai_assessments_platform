@@ -14,6 +14,7 @@
     "env:check": "bash scripts/check-env.sh all",
     "check": "ultracite check && node --experimental-strip-types scripts/check-copy.ts && node --experimental-strip-types scripts/check-boundaries.ts",
     "check:copy": "node --experimental-strip-types scripts/check-copy.ts",
+    "check:boundaries": "node --experimental-strip-types scripts/check-boundaries.ts",
     "check:all": "bun run check && bun run typecheck && bun run test",
     "fix": "ultracite fix",
     "test": "PATH=\"$HOME/.bun/bin:$PATH\" turbo test",
