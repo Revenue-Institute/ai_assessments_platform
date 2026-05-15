@@ -11,14 +11,11 @@ name: deploy-api
 #                              (alternative: pull from Secret Manager and skip
 #                              this block; see DEPLOYMENT.md)
 
+# DISABLED auto-trigger: production deploys go through deploy-vm.yml
+# (single-VM docker-compose topology). This workflow stays available via
+# workflow_dispatch so the Cloud Run path can be revived later without
+# rewriting the runbook.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/api/**"
-      - "packages/db/**"
-      - ".github/workflows/deploy-api.yml"
-      - "infra/cloud-run/**"
   workflow_dispatch:
 
 permissions:

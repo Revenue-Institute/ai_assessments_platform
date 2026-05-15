@@ -17,6 +17,24 @@ COPY --from=deps /repo /repo
 # runtime; the Next.js build only needs NEXT_PUBLIC_* values that the
 # host platform passes through normally.
 COPY apps/admin apps/admin
+
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time,
+# so they have to be passed as build args. Defaults match the env.ts
+# defaults so local docker builds work without --build-arg.
+ARG NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder
+ARG NEXT_PUBLIC_ADMIN_URL=http://localhost:3000
+ARG NEXT_PUBLIC_CANDIDATE_URL=http://localhost:3001
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_ADMIN_URL=$NEXT_PUBLIC_ADMIN_URL
+ENV NEXT_PUBLIC_CANDIDATE_URL=$NEXT_PUBLIC_CANDIDATE_URL
+
+# Server-only env vars (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) come
+# from .env.local on the VM at runtime. SKIP_ENV_VALIDATION tells
+# @t3-oss/env-nextjs not to require them at build time; runtime
+# validation still runs when the Next server boots.
+ENV SKIP_ENV_VALIDATION=true
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV ANALYZE=false
 RUN bun --filter admin build

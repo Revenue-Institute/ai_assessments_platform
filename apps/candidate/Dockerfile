@@ -17,6 +17,15 @@ COPY --from=deps /repo /repo
 # runtime; the Next.js build only needs NEXT_PUBLIC_* values that the
 # host platform passes through normally.
 COPY apps/candidate apps/candidate
+
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time.
+# Defaults match env.ts so local docker builds work without --build-arg.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_CANDIDATE_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_CANDIDATE_URL=$NEXT_PUBLIC_CANDIDATE_URL
+
+ENV SKIP_ENV_VALIDATION=true
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun --filter candidate build
 

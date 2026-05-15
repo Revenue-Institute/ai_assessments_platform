@@ -60,6 +60,10 @@ jobs:
   build:
     name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
+    # Build needs production env vars (NEXT_PUBLIC_*) to inline into the
+    # client bundle at compile time. Same environment as deploy so secret
+    # rotation lands in both jobs simultaneously.
+    environment: production
     permissions:
       contents: read
       packages: write
@@ -81,17 +85,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (api)
+        if: matrix.service == 'api'
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/${{ matrix.service }}/Dockerfile
+          file: apps/api/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:latest
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and push (admin)
+        if: matrix.service == 'admin'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/admin/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/admin:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/admin:latest
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,mode=max,scope=admin
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_ADMIN_URL=${{ vars.NEXT_PUBLIC_ADMIN_URL }}
+            NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
+
+      - name: Build and push (candidate)
+        if: matrix.service == 'candidate'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/candidate/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/candidate:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/candidate:latest
+          cache-from: type=gha,scope=candidate
+          cache-to: type=gha,mode=max,scope=candidate
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
 
   deploy:
     name: SSH deploy

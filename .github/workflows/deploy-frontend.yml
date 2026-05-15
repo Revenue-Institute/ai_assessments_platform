@@ -10,15 +10,11 @@ name: deploy-frontend
 #   VERCEL_ADMIN_PROJECT_ID
 #   VERCEL_CANDIDATE_PROJECT_ID
 
+# DISABLED auto-trigger: production deploys go through deploy-vm.yml
+# (single-VM docker-compose topology). This workflow stays available via
+# workflow_dispatch so the Vercel path can be revived later without
+# rewriting the runbook.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/admin/**"
-      - "apps/candidate/**"
-      - "packages/**"
-      - "bun.lock"
-      - ".github/workflows/deploy-frontend.yml"
   workflow_dispatch:
 
 concurrency:
