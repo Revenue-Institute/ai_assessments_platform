@@ -1,8 +1,11 @@
 name: Release
 
+# DISABLED auto-trigger: this workflow is a next-forge leftover that runs
+# `auto shipit` to create semantic releases. The repo is an internal app,
+# not a published npm package, so the release path is not relevant.
+# Re-enable via workflow_dispatch if you ever want to mint a release tag.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
