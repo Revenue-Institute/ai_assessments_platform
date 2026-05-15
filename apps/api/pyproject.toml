@@ -1,7 +1,7 @@
 [project]
 name = "ri-assessments-api"
 version = "0.1.0"
-description = "Revenue Institute Assessments Platform — FastAPI backend"
+description = "Revenue Institute Assessments Platform - FastAPI backend"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",
@@ -22,6 +22,8 @@ dependencies = [
   "resend>=2.4.0",
   "openai>=2.32.0",
   "sentry-sdk[fastapi]>=2.18.0",
+  "slowapi>=0.1.9",
+  "tenacity>=8.5.0",
 ]
 
 [dependency-groups]
@@ -30,6 +32,7 @@ dev = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.24.0",
   "datamodel-code-generator>=0.26.0",
+  "pip-audit>=2.9.0",
 ]
 
 [build-system]

@@ -3,12 +3,16 @@ linked to a public.users row."""
 
 from __future__ import annotations
 
+import asyncio
+import json
+from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from supabase import Client
 
-from ..auth import AdminPrincipal, require_admin_jwt
+from ..auth import AdminPrincipal, ensure_role, require_admin_jwt
 from ..db import get_supabase
 from ..models.admin import (
     AssessmentCreateRequest,
@@ -29,7 +33,24 @@ from ..models.admin import (
     ModuleSummary,
     SubjectCreateRequest,
     SubjectSummary,
+    UserListItem,
+    UserListResponse,
+    UserRoleUpdate,
 )
+
+# Typed bodies on question CRUD (spec §14.1). Falls back to dict so a
+# fresh checkout that hasn't picked up the models module still boots.
+try:
+    from ..models.admin import (
+        QuestionTemplateCreate,
+        QuestionTemplatePatch,
+    )
+
+    _QUESTION_MODELS_AVAILABLE = True
+except ImportError:  # pragma: no cover, defensive
+    QuestionTemplateCreate = dict  # type: ignore[assignment,misc]
+    QuestionTemplatePatch = dict  # type: ignore[assignment,misc]
+    _QUESTION_MODELS_AVAILABLE = False
 from ..services import admin as admin_service
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin_jwt)])
@@ -87,12 +108,17 @@ def patch_module(
 @router.post("/modules/{module_id}/questions", status_code=201)
 def create_question(
     module_id: str,
-    payload: dict,
+    payload: QuestionTemplateCreate,
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> dict:
+    body = (
+        payload.model_dump(exclude_unset=False)
+        if _QUESTION_MODELS_AVAILABLE
+        else payload
+    )
     return admin_service.create_question(
-        supabase, principal, module_id=module_id, payload=payload
+        supabase, principal, module_id=module_id, payload=body
     )
 
 
@@ -100,16 +126,23 @@ def create_question(
 def patch_question(
     module_id: str,
     question_id: str,
-    payload: dict,
+    payload: QuestionTemplatePatch,
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> dict:
+    # exclude_unset so PATCH semantics match: only fields the client sent
+    # land in the update, leaving the rest of the row untouched.
+    body = (
+        payload.model_dump(exclude_unset=True)
+        if _QUESTION_MODELS_AVAILABLE
+        else payload
+    )
     return admin_service.patch_question(
         supabase,
         principal,
         module_id=module_id,
         question_id=question_id,
-        payload=payload,
+        payload=body,
     )
 
 
@@ -428,6 +461,81 @@ def resend_assignment_email(
     )
 
 
+async def _scoring_events_stream(
+    assignment_id: str | None,
+) -> AsyncGenerator[bytes, None]:
+    """Bridges the Redis pub/sub channel into an SSE stream. We poll the
+    pubsub get_message() in a thread executor so the asyncio loop stays
+    free; redis-py's async client would also work but the existing
+    services/queue.py is sync-only and we don't want a hybrid."""
+
+    from ..services import queue as queue_service
+
+    if not queue_service.is_configured():
+        # Without Redis we can't fan out events. Send an immediate retry
+        # hint and close so the client doesn't tight-loop reconnecting.
+        yield b'retry: 30000\nevent: unavailable\ndata: {"reason":"redis-unavailable"}\n\n'
+        return
+
+    pubsub = queue_service.subscribe_scoring_events()
+    loop = asyncio.get_running_loop()
+    # Initial comment so the client connection registers immediately.
+    yield b": connected\n\n"
+    try:
+        while True:
+            message = await loop.run_in_executor(
+                None, lambda: pubsub.get_message(timeout=15.0)
+            )
+            if message is None:
+                # Heartbeat keeps the connection from idling out via proxies.
+                yield b": keepalive\n\n"
+                continue
+            data = message.get("data")
+            if isinstance(data, bytes):
+                data = data.decode("utf-8", errors="replace")
+            if not isinstance(data, str):
+                continue
+            if assignment_id:
+                try:
+                    parsed = json.loads(data)
+                except json.JSONDecodeError:
+                    parsed = None
+                if (
+                    isinstance(parsed, dict)
+                    and parsed.get("assignment_id") != assignment_id
+                ):
+                    continue
+            yield f"event: scoring\ndata: {data}\n\n".encode()
+    finally:
+        try:
+            pubsub.unsubscribe()
+            pubsub.close()
+        except Exception:
+            pass
+
+
+@router.get("/scoring-events")
+async def scoring_events(
+    assignment_id: Annotated[str | None, Query()] = None,
+) -> StreamingResponse:
+    """Server-Sent Events stream of scoring lifecycle events (spec §9.1,
+    §14.4). Pass ?assignment_id=... to filter to a single assignment.
+
+    Events are published from the scoring worker / webhook via Redis
+    pub/sub. The admin UI subscribes via EventSource and replaces a
+    'scoring...' badge with the final score when the matching event
+    arrives, instead of polling every few seconds."""
+
+    return StreamingResponse(
+        _scoring_events_stream(assignment_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/attempts/{attempt_id}")
 def get_attempt(
     attempt_id: str,
@@ -452,39 +560,45 @@ def rescore_assignment(
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssignmentDetail:
-    """Re-runs scoring across every attempt on the assignment. Each attempt's
-    current score is snapshotted to attempt_scores_history first."""
+    """Re-runs scoring across every attempt on the assignment.
+
+    Prior scores are snapshotted to attempt_scores_history automatically by
+    the BEFORE UPDATE trigger installed in migration 0011. We stamp the
+    freshest trigger-written history row per attempt with the admin's
+    recorded_by id after scoring completes so audit attribution is
+    preserved without dual-writing.
+    """
+
+    # Spec §9.3: rescoring is admin-only. The router dependency only
+    # establishes that the JWT belongs to a registered user (admin /
+    # reviewer / viewer); the role gate sits at the service layer per
+    # CLAUDE.md, but rescore composes scoring_service.score_assignment
+    # directly and doesn't pass a principal, so we enforce here.
+    ensure_role(principal, "admin")
 
     from ..services import scoring as scoring_service
 
-    current = (
-        supabase.table("attempts")
-        .select(
-            "id, score, max_score, score_rationale, scorer_model, "
-            "scorer_version, rubric_version, scorer_confidence"
+    attempt_ids = [
+        row["id"]
+        for row in (
+            (
+                supabase.table("attempts")
+                .select("id, score")
+                .eq("assignment_id", assignment_id)
+                .execute()
+            ).data
+            or []
         )
-        .eq("assignment_id", assignment_id)
-        .execute()
-    ).data or []
-    history_rows = [
-        {
-            "attempt_id": row["id"],
-            "score": row.get("score"),
-            "max_score": row.get("max_score"),
-            "score_rationale": row.get("score_rationale"),
-            "scorer_model": row.get("scorer_model"),
-            "scorer_version": row.get("scorer_version"),
-            "rubric_version": row.get("rubric_version"),
-            "scorer_confidence": row.get("scorer_confidence"),
-            "recorded_by": principal.user_id,
-        }
-        for row in current
         if row.get("score") is not None
     ]
-    if history_rows:
-        supabase.table("attempt_scores_history").insert(history_rows).execute()
 
     scoring_service.score_assignment(supabase, assignment_id)
+
+    for attempt_id in attempt_ids:
+        scoring_service._stamp_history_recorded_by(
+            supabase, attempt_id, principal.user_id
+        )
+
     return admin_service.get_assignment_detail(supabase, assignment_id)
 
 
@@ -496,9 +610,60 @@ def rescore_attempt(
 ) -> AssignmentDetail:
     """Rescore a single attempt and re-derive assignment-level rollups."""
 
+    # Spec §9.3: admin-only. See rescore_assignment for rationale.
+    ensure_role(principal, "admin")
+
     from ..services import scoring as scoring_service
 
     aggregate = scoring_service.rescore_attempt(
         supabase, attempt_id=attempt_id, recorded_by=principal.user_id
     )
     return admin_service.get_assignment_detail(supabase, aggregate["assignment_id"])
+
+
+# Settings / users (spec §12.1 /settings/users) ------------------------------
+
+
+@router.get("/users", response_model=UserListResponse)
+def list_users(
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> UserListResponse:
+    """List internal users (admin-only). Drives /settings/users."""
+
+    return admin_service.list_users(supabase, principal)
+
+
+@router.patch("/users/{user_id}", response_model=UserListItem)
+def update_user_role(
+    user_id: str,
+    payload: UserRoleUpdate,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> UserListItem:
+    """Change another user's role (admin-only, refuses self-demotion)."""
+
+    return admin_service.update_user_role(
+        supabase,
+        principal,
+        target_user_id=user_id,
+        new_role=payload.role,
+    )
+
+
+@router.post("/users/invite", status_code=501)
+def invite_user(
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+) -> dict:
+    """v1 placeholder. User invites are handled via the Supabase Dashboard
+    (see /settings/users guidance); this endpoint exists so the admin UI
+    can surface a stable error contract instead of a 404."""
+
+    ensure_role(principal, "admin")
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Use Supabase Dashboard for invites in v1; see /settings/users "
+            "guidance"
+        ),
+    )

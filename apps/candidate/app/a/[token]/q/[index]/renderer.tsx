@@ -30,8 +30,9 @@ export function QuestionRenderer({
         visible_tests?: string;
         packages?: string[];
       };
-      const previousCode = (question.raw_answer?.value as { code?: string } | undefined)
-        ?.code;
+      const previousCode = (
+        question.raw_answer?.value as { code?: string } | undefined
+      )?.code;
       const initial = previousCode ?? config.starter_code ?? "";
       return (
         <CodeRenderer
@@ -49,10 +50,13 @@ export function QuestionRenderer({
         seed_sql?: string;
         starter_sql?: string;
       };
-      const previousSql = (question.raw_answer?.value as { sql?: string } | undefined)
-        ?.sql;
+      const previousSql = (
+        question.raw_answer?.value as { sql?: string } | undefined
+      )?.sql;
       const initial =
-        previousSql ?? config.starter_sql ?? "-- Write your SQL here\nSELECT 1;";
+        previousSql ??
+        config.starter_sql ??
+        "-- Write your SQL here\nSELECT 1;";
       return (
         <SqlRenderer
           config={config}
@@ -78,19 +82,33 @@ export function QuestionRenderer({
         }>;
         palette?: Array<{ type: string; label: string }>;
       };
-      const previous = (question.raw_answer?.value as
-        | { diagram?: Parameters<typeof DiagramRenderer>[0]["initialAnswer"] }
-        | undefined)?.diagram;
+      const previous = (
+        question.raw_answer?.value as
+          | { diagram?: Parameters<typeof DiagramRenderer>[0]["initialAnswer"] }
+          | undefined
+      )?.diagram;
       return <DiagramRenderer config={config} initialAnswer={previous} />;
     }
     case "notebook": {
       const config = (question.interactive_config ?? {}) as {
         dataset_urls?: string[];
-        starter_cells?: Array<{ type: "code" | "markdown"; source: string }>;
+        starter_cells?: Array<{
+          id?: string;
+          type: "code" | "markdown";
+          source: string;
+        }>;
       };
-      const previous = (question.raw_answer?.value as
-        | { cells?: Array<{ type: "code" | "markdown"; source: string }> }
-        | undefined)?.cells;
+      const previous = (
+        question.raw_answer?.value as
+          | {
+              cells?: Array<{
+                id?: string;
+                type: "code" | "markdown";
+                source: string;
+              }>;
+            }
+          | undefined
+      )?.cells;
       return (
         <NotebookRenderer
           config={config}
@@ -101,9 +119,9 @@ export function QuestionRenderer({
       );
     }
     case "n8n": {
-      const previous = (question.raw_answer?.value as
-        | { workflow_id?: string }
-        | undefined)?.workflow_id;
+      const previous = (
+        question.raw_answer?.value as { workflow_id?: string } | undefined
+      )?.workflow_id;
       return (
         <N8nRenderer
           initialWorkflowId={previous ?? null}
@@ -117,7 +135,11 @@ export function QuestionRenderer({
   }
 }
 
-function MultiSelectRenderer({ question }: { question: CandidateQuestionView }) {
+function MultiSelectRenderer({
+  question,
+}: {
+  question: CandidateQuestionView;
+}) {
   const config = question.interactive_config ?? {};
   const options = (config.options as string[] | undefined) ?? [];
   const previousIndices =
@@ -130,7 +152,7 @@ function MultiSelectRenderer({ question }: { question: CandidateQuestionView }) 
       {options.map((opt, i) => (
         <label
           className="flex cursor-pointer items-start gap-3 rounded border border-transparent px-2 py-2 hover:border-primary/40 hover:bg-primary/5"
-          key={`${i}-${opt}`}
+          key={opt}
         >
           <input
             className="mt-1"
@@ -155,9 +177,10 @@ function ScenarioRenderer({ question }: { question: CandidateQuestionView }) {
   const parts = config.parts as
     | Array<{ id?: string; label?: string; placeholder?: string }>
     | undefined;
-  const previousResponses = (question.raw_answer?.value as
-    | { responses?: Record<string, string>; text?: string }
-    | undefined) ?? {};
+  const previousResponses =
+    (question.raw_answer?.value as
+      | { responses?: Record<string, string>; text?: string }
+      | undefined) ?? {};
 
   if (Array.isArray(parts) && parts.length > 0) {
     return (
@@ -167,7 +190,7 @@ function ScenarioRenderer({ question }: { question: CandidateQuestionView }) {
           const previous = previousResponses.responses?.[partId] ?? "";
           return (
             <label className="block space-y-1" key={partId}>
-              <span className="block text-sm font-medium text-foreground">
+              <span className="block font-medium text-foreground text-sm">
                 {part.label ?? `Part ${i + 1}`}
               </span>
               <textarea
@@ -187,6 +210,7 @@ function ScenarioRenderer({ question }: { question: CandidateQuestionView }) {
 
   return (
     <textarea
+      aria-label="Scenario response"
       className="h-56 w-full rounded border border-border bg-card px-3 py-2 text-sm leading-6 focus:border-primary focus:outline-none"
       defaultValue={previousResponses.text ?? ""}
       maxLength={6000}
@@ -200,8 +224,9 @@ function ScenarioRenderer({ question }: { question: CandidateQuestionView }) {
 function McqRenderer({ question }: { question: CandidateQuestionView }) {
   const config = question.interactive_config ?? {};
   const options = (config.options as string[] | undefined) ?? [];
-  const previous = (question.raw_answer?.value as { selected?: string } | undefined)
-    ?.selected;
+  const previous = (
+    question.raw_answer?.value as { selected?: string } | undefined
+  )?.selected;
 
   return (
     <fieldset className="space-y-2 rounded border border-border bg-card p-4">
@@ -209,7 +234,7 @@ function McqRenderer({ question }: { question: CandidateQuestionView }) {
       {options.map((opt, i) => (
         <label
           className="flex cursor-pointer items-start gap-3 rounded border border-transparent px-2 py-2 hover:border-primary/40 hover:bg-primary/5"
-          key={`${i}-${opt}`}
+          key={opt}
         >
           <input
             className="mt-1"
@@ -217,9 +242,8 @@ function McqRenderer({ question }: { question: CandidateQuestionView }) {
             name="answer"
             required
             type="radio"
-            value={opt}
+            value={JSON.stringify({ selected_index: i, selected: opt })}
           />
-          <input name="answer_index" type="hidden" value={String(i)} />
           <span className="text-sm leading-6">{opt}</span>
         </label>
       ))}
@@ -236,6 +260,7 @@ function ShortAnswerRenderer({
     ?.text;
   return (
     <input
+      aria-label="Your short answer"
       autoComplete="off"
       className="w-full rounded border border-border bg-card px-3 py-2 text-sm focus:border-primary focus:outline-none"
       defaultValue={previous ?? ""}
@@ -248,15 +273,12 @@ function ShortAnswerRenderer({
   );
 }
 
-function LongAnswerRenderer({
-  question,
-}: {
-  question: CandidateQuestionView;
-}) {
+function LongAnswerRenderer({ question }: { question: CandidateQuestionView }) {
   const previous = (question.raw_answer?.value as { text?: string } | undefined)
     ?.text;
   return (
     <textarea
+      aria-label="Your long-form answer"
       className="h-48 w-full rounded border border-border bg-card px-3 py-2 text-sm leading-6 focus:border-primary focus:outline-none"
       defaultValue={previous ?? ""}
       maxLength={4000}
@@ -274,7 +296,7 @@ function UnsupportedRenderer({
 }) {
   return (
     <div
-      className="rounded border border-warning/40 bg-warning/10 p-4 text-warning text-sm"
+      className="rounded border border-warning/40 bg-warning/10 p-4 text-sm text-warning"
       role="alert"
     >
       <p className="font-medium">Unrecognized question type</p>

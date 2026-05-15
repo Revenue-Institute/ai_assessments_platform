@@ -1,18 +1,18 @@
-type Stats = {
+interface Stats {
+  max_pct: number;
+  median_pct: number;
   min_pct: number;
   p25_pct: number;
-  median_pct: number;
   p75_pct: number;
-  max_pct: number;
   sample_size: number;
-};
+}
 
-type Props = {
-  stats: Stats;
+interface Props {
   candidateScore: number;
-  width?: number;
   height?: number;
-};
+  stats: Stats;
+  width?: number;
+}
 
 /** Compact horizontal box-plot. Whiskers from min->max, IQR box, median tick,
  * and a marker for the candidate's score (spec §11.3). Falls back to a flat
@@ -25,7 +25,7 @@ export function DistributionBox({
 }: Props) {
   if (stats.sample_size === 0) {
     return (
-      <p className="text-muted-foreground text-[11px]">No team data yet.</p>
+      <p className="text-[11px] text-muted-foreground">No team data yet.</p>
     );
   }
   const padX = 2;
@@ -121,8 +121,8 @@ export function DistributionBox({
       </svg>
       <p className="text-[11px] text-muted-foreground">
         team n={stats.sample_size} · median {Math.round(stats.median_pct)}% ·
-        IQR {Math.round(stats.p25_pct)}-{Math.round(stats.p75_pct)}% ·
-        you {Math.round(candidateScore)}%
+        IQR {Math.round(stats.p25_pct)}-{Math.round(stats.p75_pct)}% · you{" "}
+        {Math.round(candidateScore)}%
       </p>
     </div>
   );

@@ -1,5 +1,11 @@
 """Debug-only endpoints. Intentionally narrow surface; refuse to do
-anything outside `local` / `staging` to avoid accidental prod misuse."""
+anything outside `local` / `staging` to avoid accidental prod misuse.
+
+Defense in depth: `main.py` already declines to include this router
+when APP_ENV=production, but we also gate every handler with
+`_require_non_production` so a future routing change can never silently
+expose these in prod. Belt and braces.
+"""
 
 from __future__ import annotations
 
@@ -10,17 +16,24 @@ from ..config import get_settings
 router = APIRouter(tags=["debug"])
 
 
+def _require_non_production() -> None:
+    """Return 404 (not 403) when in production so the surface looks
+    identical to a missing route. Probes shouldn't be able to fingerprint
+    that these handlers exist at all."""
+
+    if get_settings().app_env == "production":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found.",
+        )
+
+
 @router.get("/debug/sentry")
 def sentry_smoke() -> dict[str, str]:
     """Raises a controlled error so the operator can confirm SENTRY_DSN_API
     is wired and breadcrumbs land in the project. Disabled in production."""
 
-    settings = get_settings()
-    if settings.app_env == "production":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not found.",
-        )
+    _require_non_production()
     raise RuntimeError(
         "Intentional error from /debug/sentry to verify the Sentry integration."
     )
@@ -32,6 +45,7 @@ def observability_status() -> dict[str, object]:
     missing DSN before chasing a non-event. Returns booleans only; never
     leaks the secret values themselves."""
 
+    _require_non_production()
     settings = get_settings()
     return {
         "app_env": settings.app_env,

@@ -1,16 +1,27 @@
 /*
- * This file configures the initialization of Sentry on the client.
- * The config you add here will be used whenever a users loads a page in their browser.
- * https://docs.sentry.io/platforms/javascript/guides/nextjs/
+ * Sentry browser-side init. Shared by both Next apps via
+ * `sentry.client.config.ts` / `instrumentation-client.ts`. The DSN is
+ * resolved per spec §16: admin and candidate use independent Sentry
+ * projects so errors stay attributed to the right surface.
  */
 
 // biome-ignore lint/performance/noNamespaceImport: Sentry SDK convention
 import * as Sentry from "@sentry/nextjs";
-import { keys } from "./keys";
+import { resolveSentryDsn } from "./keys";
 
 export const initializeSentry = (): ReturnType<typeof Sentry.init> =>
   Sentry.init({
-    dsn: keys().NEXT_PUBLIC_SENTRY_DSN,
+    // Per-app DSN with legacy NEXT_PUBLIC_SENTRY_DSN fallback. Each
+    // Next app sets NEXT_PUBLIC_SENTRY_DSN_ADMIN or
+    // NEXT_PUBLIC_SENTRY_DSN_CANDIDATE; resolveSentryDsn() picks the
+    // first one present.
+    dsn: resolveSentryDsn(),
+
+    environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? "production",
+
+    // PII policy (spec §18). We hash IPs server-side and strip raw
+    // bodies; tell Sentry not to attach default PII either.
+    sendDefaultPii: false,
 
     // Enable logging
     enableLogs: true,

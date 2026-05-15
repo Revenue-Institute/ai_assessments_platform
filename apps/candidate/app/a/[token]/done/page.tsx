@@ -1,6 +1,6 @@
 export default function DonePage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center animate-reveal">
+    <main className="mx-auto flex min-h-screen max-w-md animate-reveal flex-col items-center justify-center gap-4 px-6 text-center">
       <p className="eyebrow-label">Submitted</p>
       <h1 className="font-semibold text-3xl">Thanks.</h1>
       <p className="text-muted-foreground text-sm">

@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const McqConfig = z.object({
+  options: z.array(z.string()).min(2),
+  correct_index: z.number().int().nonnegative(),
+});
+export type McqConfig = z.infer<typeof McqConfig>;
+
+export const MultiSelectConfig = z.object({
+  options: z.array(z.string()).min(2),
+  correct_indices: z.array(z.number().int().nonnegative()).min(1),
+});
+export type MultiSelectConfig = z.infer<typeof MultiSelectConfig>;
+
 export const CodeConfig = z.object({
   language: z.enum(["python", "javascript", "typescript", "sql", "bash"]),
   starter_code: z.string(),
@@ -7,7 +19,7 @@ export const CodeConfig = z.object({
   visible_tests: z.string().optional(),
   allow_internet: z.boolean().default(false),
   packages: z.array(z.string()).default([]),
-  time_limit_exec_ms: z.number().default(10000),
+  time_limit_exec_ms: z.number().default(10_000),
 });
 export type CodeConfig = z.infer<typeof CodeConfig>;
 
@@ -16,9 +28,7 @@ export const N8nConfig = z.object({
   starter_workflow: z.any(),
   reference_workflow: z.any(),
   required_nodes: z.array(z.string()),
-  required_connections: z.array(
-    z.object({ from: z.string(), to: z.string() })
-  ),
+  required_connections: z.array(z.object({ from: z.string(), to: z.string() })),
   test_payloads: z.array(z.any()),
   credentials_provided: z.array(z.string()),
 });

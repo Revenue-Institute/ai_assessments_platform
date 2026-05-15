@@ -1,22 +1,24 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
+import Editor, { type OnMount } from "@monaco-editor/react";
 import { useState } from "react";
 import { env } from "@/env";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
-type SqlConfig = {
+interface SqlConfig {
   schema_sql?: string;
   seed_sql?: string;
-};
+}
 
-type SqlRunResult = {
+interface SqlRunResult {
   columns: string[];
+  error: string | null;
   rows: unknown[][];
   runtime_ms: number;
-  error: string | null;
   timed_out: boolean;
-};
+}
+
+const TRAILING_SLASH_RE = /\/$/;
 
 export function SqlRenderer({
   token,
@@ -36,7 +38,11 @@ export function SqlRenderer({
 
   useUnsavedChangesWarning(sql !== initialSql);
 
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
+
+  const onMount: OnMount = (editor) => {
+    editor.updateOptions({ ariaLabel: "SQL query editor" });
+  };
 
   async function runQuery() {
     setRunning(true);
@@ -85,24 +91,27 @@ export function SqlRenderer({
         </details>
       )}
 
-      <div
-        className="overflow-hidden rounded-lg border border-border"
+      <fieldset
+        aria-label="SQL query editor"
+        className="overflow-hidden rounded-lg border border-border p-0"
         data-allow-paste="true"
       >
         <Editor
           defaultLanguage="sql"
           height="240px"
           onChange={(value) => setSql(value ?? "")}
+          onMount={onMount}
           options={{
             minimap: { enabled: false },
             fontSize: 13,
             scrollBeyondLastLine: false,
             wordWrap: "on",
+            ariaLabel: "SQL query editor",
           }}
           theme="vs-dark"
           value={sql}
         />
-      </div>
+      </fieldset>
 
       <button
         className="rounded border border-border bg-card px-3 py-2 text-sm hover:bg-primary/10 disabled:opacity-50"
@@ -119,9 +128,7 @@ export function SqlRenderer({
         </p>
       )}
 
-      {result && (
-        <ResultPane result={result} />
-      )}
+      {result && <ResultPane result={result} />}
     </div>
   );
 }
@@ -163,12 +170,14 @@ function ResultPane({ result }: { result: SqlRunResult }) {
             </tr>
           </thead>
           <tbody>
-            {result.rows.map((row, i) => (
-              <tr className="odd:bg-secondary/30" key={i}>
-                {row.map((cell, j) => (
+            {result.rows.map((row, rowIndex) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: SQL result rows have no stable id; full re-render is correct
+              <tr className="odd:bg-secondary/30" key={`row-${rowIndex}`}>
+                {row.map((cell, colIndex) => (
                   <td
                     className="border-border/60 border-b px-2 py-1"
-                    key={j}
+                    // biome-ignore lint/suspicious/noArrayIndexKey: SQL result rows have no stable id; full re-render is correct
+                    key={`cell-${rowIndex}-${colIndex}`}
                   >
                     {formatCell(cell)}
                   </td>
@@ -186,8 +195,12 @@ function ResultPane({ result }: { result: SqlRunResult }) {
 }
 
 function formatCell(value: unknown): string {
-  if (value === null || value === undefined) return "-";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
   return String(value);
 }
 

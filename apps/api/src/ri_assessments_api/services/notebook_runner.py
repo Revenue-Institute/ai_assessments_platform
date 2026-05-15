@@ -189,12 +189,25 @@ def grade_notebook_attempt(
     cells: list[dict[str, Any]],
     config: dict[str, Any],
     max_points: float,
+    packages: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Provision a fresh kernel, run the candidate's cells, then run the
-    question's validation_script in the same kernel and parse the JSON
-    {pass, details} it prints. Score is binary pass times max_points (the
-    spec leaves room for a richer rubric_ai pass on narrative cells; that
-    layers in via score_assignment's rubric_ai path post-hoc)."""
+    """Provision a fresh kernel, run the candidate's cells, snapshot the
+    resulting globals to a pickle file, then run the question's
+    validation_script in a SECOND, fresh sandbox that loads that state.
+
+    Security rationale (spec §7.3): the validation script encodes the
+    answer key. Running it in the candidate's kernel means the candidate
+    can monkey-patch globals (`def assert_(*a, **k): pass`,
+    `result = {"pass": True}`) and trivially flip the verdict. Loading
+    state into a fresh kernel and exec'ing the validation script there
+    with the snapshot bound to a local namespace (`state`) prevents that
+    tampering: validation reads candidate values but the validation
+    script's own globals are untouched by candidate code.
+
+    Caveat: only picklable values survive the snapshot. Modules,
+    open file handles, and live connections drop. The validation script
+    should look up data in `state[name]` rather than relying on imports
+    persisting from the candidate kernel."""
 
     validation_script = config.get("validation_script") or ""
     if not validation_script.strip():
@@ -208,14 +221,23 @@ def grade_notebook_attempt(
         }
 
     dataset_urls = list(config.get("dataset_urls") or [])
+    install_packages = list(packages or config.get("packages") or [])
 
     sandbox_cls, api_key = _sandbox_or_503()
     output_log_parts: list[str] = []
     passed = False
     details: dict[str, Any] = {}
+    state_b64: str | None = None
 
+    # Stage 1: candidate kernel. Run the candidate's cells, then dump
+    # picklable globals to base64-encoded bytes we can ferry across the
+    # sandbox boundary via stdout (avoids depending on the sandbox SDK's
+    # file-transfer specifics).
     try:
         with sandbox_cls.create(api_key=api_key, timeout=240) as sandbox:
+            if install_packages:
+                joined = " ".join(shlex.quote(p) for p in install_packages)
+                sandbox.commands.run(f"pip install --quiet {joined}", timeout=180)
             _materialize_datasets(sandbox, dataset_urls)
             for i, cell in enumerate(cells):
                 if (cell.get("type") or "code").lower() != "code":
@@ -231,16 +253,79 @@ def grade_notebook_attempt(
                 if row.stdout:
                     output_log_parts.append(f"[cell {i} stdout] {row.stdout}")
 
-            # Validation: prepend a guard so we can find the JSON line even
-            # if the script also prints other things.
+            # Snapshot globals. We pickle inside a try/except per key so a
+            # single un-picklable value (e.g. a thread lock) doesn't lose
+            # the whole state.
+            snapshot_src = (
+                "import pickle as _p, base64 as _b64, sys as _sys\n"
+                "_RI_SNAPSHOT_SENTINEL = '__RI_STATE_PKL_B64__'\n"
+                "_state = {}\n"
+                "for _k, _v in list(globals().items()):\n"
+                "    if _k.startswith('_'): continue\n"
+                "    try:\n"
+                "        _p.dumps(_v); _state[_k] = _v\n"
+                "    except Exception:\n"
+                "        pass\n"
+                "_blob = _b64.b64encode(_p.dumps(_state)).decode('ascii')\n"
+                "_sys.stdout.flush(); print(_RI_SNAPSHOT_SENTINEL + _blob)\n"
+            )
+            snap = _capture_run(sandbox, snapshot_src, 60)
+            marker = "__RI_STATE_PKL_B64__"
+            for line in (snap.stdout or "").splitlines():
+                if marker in line:
+                    state_b64 = line.split(marker, 1)[1].strip()
+                    break
+            if state_b64 is None and snap.stderr:
+                output_log_parts.append(f"[snapshot stderr] {snap.stderr}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Notebook grading failure: {exc}",
+        ) from exc
+
+    if state_b64 is None:
+        # Couldn't capture state. Surface as a graded failure rather than
+        # a 502 so the attempt still records something.
+        return {
+            "score": 0.0,
+            "score_rationale": "Validation skipped: could not snapshot kernel state.",
+            "scorer_model": "notebook-e2b",
+            "scorer_version": "1",
+        }
+
+    # Stage 2: validation kernel. Fresh sandbox so the candidate's code
+    # has zero opportunity to tamper with the verdict. We rebuild the
+    # state dict and exec the validation script with `state` injected as
+    # a local; the script reads candidate values via `state[name]`.
+    try:
+        with sandbox_cls.create(api_key=api_key, timeout=240) as sandbox:
+            if install_packages:
+                joined = " ".join(shlex.quote(p) for p in install_packages)
+                sandbox.commands.run(f"pip install --quiet {joined}", timeout=180)
+            _materialize_datasets(sandbox, dataset_urls)
+
+            # NOTE: we pass the validation_script verbatim inside a Python
+            # string. To avoid quote-escape headaches we ship it via a file
+            # using base64, same pattern as the state blob.
+            import base64 as _b64
+
+            script_b64 = _b64.b64encode(
+                validation_script.encode("utf-8")
+            ).decode("ascii")
             wrapped = (
-                "import json as _json, sys as _sys\n"
+                "import pickle as _p, base64 as _b64, json as _json, sys as _sys\n"
+                f"_STATE_B64 = {state_b64!r}\n"
+                f"_SCRIPT_B64 = {script_b64!r}\n"
                 "_RI_SENTINEL = '__RI_VALIDATION_RESULT__'\n"
-                + validation_script
-                + (
-                    "\nif isinstance(globals().get('result'), dict):\n"
-                    "    _sys.stdout.flush(); print(_RI_SENTINEL + _json.dumps(result))\n"
-                )
+                "state = _p.loads(_b64.b64decode(_STATE_B64))\n"
+                "_validation_src = _b64.b64decode(_SCRIPT_B64).decode('utf-8')\n"
+                "_ns = {'state': state}\n"
+                "exec(compile(_validation_src, '<validation>', 'exec'), _ns, _ns)\n"
+                "_res = _ns.get('result')\n"
+                "if isinstance(_res, dict):\n"
+                "    _sys.stdout.flush(); print(_RI_SENTINEL + _json.dumps(_res, default=str))\n"
             )
             verdict = _capture_run(sandbox, wrapped, 90)
             output_log_parts.append("[validation]")
@@ -266,7 +351,7 @@ def grade_notebook_attempt(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Notebook grading failure: {exc}",
+            detail=f"Notebook validation failure: {exc}",
         ) from exc
 
     score = round(max_points if passed else 0.0, 2)

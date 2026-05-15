@@ -1,39 +1,31 @@
 {
-  "name": "next-forge",
-  "version": "6.0.2",
+  "name": "ri-assessments-platform",
+  "version": "0.1.0",
+  "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel/next-forge.git"
+    "url": "git+ssh://github.com/revenue-institute/ai_assessments_platform.git"
   },
-  "publishConfig": {
-    "provenance": true,
-    "access": "public"
-  },
-  "bin": {
-    "next-forge": "dist/index.js"
-  },
-  "files": [
-    "dist/index.js"
-  ],
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
+    "build": "PATH=\"$HOME/.bun/bin:$PATH\" turbo build",
+    "dev": "PATH=\"$HOME/.bun/bin:$PATH\" turbo dev",
     "dev:full": "bash scripts/dev-all.sh",
     "env:link": "bash scripts/link-env.sh",
     "env:check": "bash scripts/check-env.sh all",
-    "check": "ultracite check",
+    "check": "ultracite check && node --experimental-strip-types scripts/check-copy.ts && node --experimental-strip-types scripts/check-boundaries.ts",
+    "check:copy": "node --experimental-strip-types scripts/check-copy.ts",
+    "check:all": "bun run check && bun run typecheck && bun run test",
     "fix": "ultracite fix",
-    "test": "turbo test",
-    "analyze": "turbo analyze",
-    "translate": "turbo translate",
-    "boundaries": "turbo boundaries",
+    "test": "PATH=\"$HOME/.bun/bin:$PATH\" turbo test",
+    "typecheck": "PATH=\"$HOME/.bun/bin:$PATH\" turbo typecheck",
+    "analyze": "PATH=\"$HOME/.bun/bin:$PATH\" turbo analyze",
+    "boundaries": "node --experimental-strip-types scripts/check-boundaries.ts",
     "bump-deps": "bunx npm-check-updates --deep -u && bun install",
     "bump-ui": "bunx shadcn@latest add --all --overwrite -c packages/design-system",
-    "migrate": "cd packages/database && bunx prisma format && bunx prisma generate && bunx prisma migrate dev",
-    "migrate:deploy": "cd packages/database && bunx prisma generate && bunx prisma migrate deploy",
-    "db:push": "cd packages/database && bunx prisma format && bunx prisma generate && bunx prisma db push",
-    "clean": "git clean -xdf node_modules",
-    "release": "npm publish"
+    "migrate": "bun --cwd apps/api run migrate",
+    "gen-schemas": "bun --cwd apps/api run gen-schemas",
+    "seed": "bun --cwd apps/api run seed",
+    "clean": "git clean -xdf node_modules .turbo"
   },
   "devDependencies": {
     "@auto-it/first-time-contributor": "^11.3.6",
@@ -48,7 +40,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "packageManager": "bun@1.3.10",
   "dependencies": {

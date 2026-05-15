@@ -29,7 +29,9 @@ export function AssessmentModulesSection({
 
   const editable = status === "draft";
 
-  function handle(promise: Promise<{ ok: true } | { ok: false; error: string }>) {
+  function handle(
+    promise: Promise<{ ok: true } | { ok: false; error: string }>
+  ) {
     setError(null);
     startTransition(async () => {
       const r = await promise;
@@ -42,7 +44,9 @@ export function AssessmentModulesSection({
   }
 
   function moveUp(index: number) {
-    if (index <= 0) return;
+    if (index <= 0) {
+      return;
+    }
     const ids = assessment.modules.map((m) => m.module_id);
     const next = ids.slice();
     [next[index - 1], next[index]] = [
@@ -54,7 +58,9 @@ export function AssessmentModulesSection({
 
   function moveDown(index: number) {
     const ids = assessment.modules.map((m) => m.module_id);
-    if (index < 0 || index >= ids.length - 1) return;
+    if (index < 0 || index >= ids.length - 1) {
+      return;
+    }
     const next = ids.slice();
     [next[index], next[index + 1]] = [
       next[index + 1] as string,
@@ -68,7 +74,9 @@ export function AssessmentModulesSection({
   }
 
   function addPicked() {
-    if (!pickerValue) return;
+    if (!pickerValue) {
+      return;
+    }
     const id = pickerValue;
     setPickerValue("");
     handle(addAssessmentModuleAction(assessment.id, id));
@@ -97,7 +105,7 @@ export function AssessmentModulesSection({
       )}
 
       {assessment.modules.length === 0 ? (
-        <p className="rounded border border-dashed border-border/60 bg-background/30 px-3 py-4 text-center text-muted-foreground text-sm">
+        <p className="rounded border border-border/60 border-dashed bg-background/30 px-3 py-4 text-center text-muted-foreground text-sm">
           No modules in this assessment yet.
         </p>
       ) : (

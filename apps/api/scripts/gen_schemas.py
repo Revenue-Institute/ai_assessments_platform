@@ -1,19 +1,23 @@
 """Zod -> JSON Schema -> Pydantic codegen pipeline (spec §5).
 
-Steps:
+DEPRECATED / RESERVED. Per CLAUDE.md ("Pydantic models hand-authored,
+Zod canonical"), the Pydantic mirrors under
+`apps/api/src/ri_assessments_api/models/` are maintained by hand and the
+`generated/` tree is empty by design. Do not regenerate as part of the
+normal build; doing so would drop hand-written validation that is not
+expressible in plain Zod (e.g. EmailStr, alias-based fields, service-
+layer cross-field constraints).
+
+This script is kept for future automation, in case the runner-package
+decision flips and the generated tree becomes the source of truth again.
+Until that happens it is intentionally not wired into CI or pre-commit.
+
+Original steps (kept for reference):
   1. Run packages/schemas/scripts/emit-json-schema.ts via Bun. It walks
      every Zod export in @repo/schemas and dumps draft-07 JSON Schemas
      into a temp directory.
   2. Run datamodel-code-generator over those JSON Schemas, emitting
      Pydantic v2 models into apps/api/src/ri_assessments_api/generated/.
-
-Why generate? Spec §5 makes Zod the single source of truth so the API and
-the UI cannot disagree about request/response shapes. The generated tree
-is gitignored; CI regenerates on every PR and fails if the diff is
-non-empty.
-
-Idempotent: rerunning produces a deterministic tree. Safe to wire as a
-pre-commit hook or a CI step.
 """
 
 from __future__ import annotations

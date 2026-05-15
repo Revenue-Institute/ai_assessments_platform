@@ -8,6 +8,8 @@ import {
   publishModule,
 } from "@/lib/api";
 import { Header } from "../../components/header";
+import { type PreflightIssue, PublishButton } from "./publish-button";
+import { QuestionActions } from "./question-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,9 @@ export default async function ModuleDetailPage({
   try {
     detail = await getModule(id);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
     throw e;
   }
 
@@ -77,6 +81,30 @@ export default async function ModuleDetailPage({
     }
   }
 
+  // Spec §6.1 publish-button UX preflight. Server still re-checks via the
+  // fairness validator (spec §8.4); these are surface-level checks based on
+  // the fields the admin module API actually returns to the client.
+  const preflight: PreflightIssue[] = [];
+  if (detail.questions.length === 0) {
+    preflight.push({ message: "Add at least one question before publishing." });
+  }
+  const taglessQuestions = detail.questions.filter(
+    (q) => !q.competency_tags || q.competency_tags.length === 0
+  );
+  if (taglessQuestions.length > 0) {
+    preflight.push({
+      message: `${taglessQuestions.length} question(s) missing a competency tag.`,
+    });
+  }
+  const pointlessQuestions = detail.questions.filter(
+    (q) => !q.max_points || q.max_points <= 0
+  );
+  if (pointlessQuestions.length > 0) {
+    preflight.push({
+      message: `${pointlessQuestions.length} question(s) have no point value.`,
+    });
+  }
+
   return (
     <>
       <Header page={detail.title} pages={["Modules"]} />
@@ -99,7 +127,10 @@ export default async function ModuleDetailPage({
           <Stat label="Slug" value={detail.slug} />
           <Stat label="Domain" value={detail.domain} />
           <Stat label="Difficulty" value={detail.difficulty} />
-          <Stat label="Duration" value={`${detail.target_duration_minutes} min`} />
+          <Stat
+            label="Duration"
+            value={`${detail.target_duration_minutes} min`}
+          />
           <Stat label="Questions" value={String(detail.question_count)} />
         </section>
 
@@ -122,13 +153,18 @@ export default async function ModuleDetailPage({
           {detail.questions.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               No questions yet. Use the seed script (
-              <code className="rounded bg-muted px-1">bun --filter api seed</code>
-              ) or wait for the Phase 2 generator.
+              <code className="rounded bg-muted px-1">
+                bun --filter api seed
+              </code>
+              ) or generate via the wizard.
             </p>
           ) : (
             <ol className="space-y-2 text-sm">
               {detail.questions.map((q, i) => (
-                <li className="rounded border border-border/40 bg-background/30 p-3" key={q.id}>
+                <li
+                  className="rounded border border-border/40 bg-background/30 p-3"
+                  key={q.id}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium">
                       {i + 1}. {q.type}
@@ -137,9 +173,23 @@ export default async function ModuleDetailPage({
                       <p className="text-muted-foreground text-xs">
                         {q.max_points} pts
                       </p>
+                      <QuestionActions
+                        editable={detail.status === "draft"}
+                        question={{
+                          id: q.id,
+                          type: q.type,
+                          prompt_template: q.prompt_template,
+                          variable_schema: q.variable_schema,
+                          rubric: q.rubric,
+                        }}
+                      />
                       {detail.status === "draft" && (
                         <form action={removeQuestion}>
-                          <input name="question_id" type="hidden" value={q.id} />
+                          <input
+                            name="question_id"
+                            type="hidden"
+                            value={q.id}
+                          />
                           <button
                             className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15"
                             type="submit"
@@ -153,19 +203,20 @@ export default async function ModuleDetailPage({
                   <p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
                     {q.prompt_template}
                   </p>
+                  {q.competency_tags.length === 0 && (
+                    <p className="mt-1 text-destructive text-xs">
+                      No competency tags. Required before publish.
+                    </p>
+                  )}
                 </li>
               ))}
             </ol>
           )}
         </section>
 
-        <section className="flex gap-2">
+        <section className="flex flex-col gap-2">
           {detail.status === "draft" && (
-            <form action={publish}>
-              <button className="btn-primary text-sm" type="submit">
-                Publish
-              </button>
-            </form>
+            <PublishButton action={publish} issues={preflight} />
           )}
           {detail.status !== "archived" && (
             <form action={archive}>

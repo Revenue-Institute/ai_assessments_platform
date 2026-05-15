@@ -1,12 +1,12 @@
 import taxonomyJson from "./taxonomy.json";
 
-export type Competency = {
-  id: string;
+export interface Competency {
+  description?: string;
   domain: string;
+  id: string;
   label: string;
   parent_id: string | null;
-  description?: string;
-};
+}
 
 export const taxonomy: Competency[] = taxonomyJson as Competency[];
 

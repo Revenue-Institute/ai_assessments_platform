@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import {
   ApiError,
-  type AssessmentSummary,
   type AssignmentMagicLink,
   bulkCreateAssignments,
   listAssessments,
   listSubjects,
-  type SubjectSummary,
 } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
 
@@ -27,18 +26,10 @@ export default async function NewAssignmentPage({
 }) {
   const sp = await searchParams;
 
-  let assessments: AssessmentSummary[] = [];
-  let subjects: SubjectSummary[] = [];
-  let loadError: string | null = null;
-  try {
-    [assessments, subjects] = await Promise.all([
-      listAssessments(),
-      listSubjects(),
-    ]);
-  } catch (e) {
-    if (e instanceof ApiError) loadError = e.message;
-    else throw e;
-  }
+  const { data, error: loadError } = await loadOrApiError(() =>
+    Promise.all([listAssessments(), listSubjects()])
+  );
+  const [assessments, subjects] = data ?? [[], []];
 
   const publishable = assessments.filter((a) => a.status === "published");
 
@@ -72,11 +63,11 @@ export default async function NewAssignmentPage({
       const failedJson = encodeURIComponent(JSON.stringify(result.failed));
       redirect(
         `/assignments/new?links=${linksJson}&failed=${failedJson}` +
-          (send_email ? "&ok=" + encodeURIComponent("Invites sent") : "")
+          (send_email ? `&ok=${encodeURIComponent("Invites sent")}` : "")
       );
     } catch (e) {
       if (e instanceof ApiError) {
-        redirect("/assignments/new?error=" + encodeURIComponent(e.message));
+        redirect(`/assignments/new?error=${encodeURIComponent(e.message)}`);
       }
       throw e;
     }
@@ -90,12 +81,13 @@ export default async function NewAssignmentPage({
       <Header page="New assignment" pages={["Assignments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Issue magic-link assignments</h1>
+          <h1 className="font-semibold text-xl">
+            Issue magic-link assignments
+          </h1>
           <p className="text-muted-foreground text-sm">
             Pick one or more subjects and a published assessment. Each subject
-            gets their own assignment + JWT. Invites are emailed via Resend
-            when enabled and configured; otherwise copy the URLs from the
-            response.
+            gets their own assignment + JWT. Invites are emailed via Resend when
+            enabled and configured; otherwise copy the URLs from the response.
           </p>
         </section>
 
@@ -109,10 +101,7 @@ export default async function NewAssignmentPage({
         )}
 
         {issuedLinks.length > 0 && (
-          <section
-            className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm"
-            role="status"
-          >
+          <output className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm">
             <p className="font-medium text-primary">
               {issuedLinks.length} magic link
               {issuedLinks.length === 1 ? "" : "s"} issued
@@ -122,8 +111,8 @@ export default async function NewAssignmentPage({
               Tokens are not retrievable later. Copy what you need now.
             </p>
             <ul className="mt-2 space-y-2 text-xs">
-              {issuedLinks.map((row, i) => (
-                <li className="flex flex-col gap-1" key={i}>
+              {issuedLinks.map((row) => (
+                <li className="flex flex-col gap-1" key={row.assignment_id}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">
                       Assignment <code>{row.assignment_id.slice(0, 8)}…</code>
@@ -136,7 +125,7 @@ export default async function NewAssignmentPage({
                 </li>
               ))}
             </ul>
-          </section>
+          </output>
         )}
 
         {failedRows.length > 0 && (
@@ -145,11 +134,12 @@ export default async function NewAssignmentPage({
             role="alert"
           >
             <p className="font-medium text-destructive">
-              {failedRows.length} subject{failedRows.length === 1 ? "" : "s"} failed
+              {failedRows.length} subject{failedRows.length === 1 ? "" : "s"}{" "}
+              failed
             </p>
             <ul className="mt-2 space-y-1 text-xs">
-              {failedRows.map((f, i) => (
-                <li key={i}>
+              {failedRows.map((f) => (
+                <li key={`${f.subject_id}-${f.detail}`}>
                   <code className="text-destructive">{f.subject_id}</code> ·{" "}
                   {f.detail}
                 </li>
@@ -177,7 +167,8 @@ export default async function NewAssignmentPage({
               </option>
               {publishable.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.title} ({a.question_count} q · {a.total_duration_minutes} min · {a.module_count} modules)
+                  {a.title} ({a.question_count} q · {a.total_duration_minutes}{" "}
+                  min · {a.module_count} modules)
                 </option>
               ))}
             </select>
@@ -255,9 +246,11 @@ function linkPair(link: AssignmentMagicLink) {
 }
 
 function decodeIssuedLinks(
-  raw: string | undefined,
+  raw: string | undefined
 ): Array<{ assignment_id: string; magic_link_url: string }> {
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   try {
     return JSON.parse(decodeURIComponent(raw));
   } catch {
@@ -266,9 +259,11 @@ function decodeIssuedLinks(
 }
 
 function decodeFailedRows(
-  raw: string | undefined,
+  raw: string | undefined
 ): Array<{ subject_id: string; detail: string }> {
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   try {
     return JSON.parse(decodeURIComponent(raw));
   } catch {

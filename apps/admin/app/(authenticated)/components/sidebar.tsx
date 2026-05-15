@@ -54,12 +54,12 @@ const NAV_SETTINGS = [
   { title: "Users", href: "/settings/users", icon: SettingsIcon },
 ] as const;
 
-type GlobalSidebarProps = {
+interface GlobalSidebarProps {
   children: ReactNode;
   userEmail: string;
   userName: string;
   userRole: AdminRole;
-};
+}
 
 export function GlobalSidebar({
   children,
@@ -71,13 +71,13 @@ export function GlobalSidebar({
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname?.startsWith(href);
   const visiblePrimary = NAV_PRIMARY.filter((item) =>
-    canAccessPath(userRole, item.href),
+    canAccessPath(userRole, item.href)
   );
   const visibleLibrary = NAV_LIBRARY.filter((item) =>
-    canAccessPath(userRole, item.href),
+    canAccessPath(userRole, item.href)
   );
   const visibleSettings = NAV_SETTINGS.filter((item) =>
-    canAccessPath(userRole, item.href),
+    canAccessPath(userRole, item.href)
   );
 
   async function handleSignOut() {

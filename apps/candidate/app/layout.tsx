@@ -30,9 +30,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
+    // suppressHydrationWarning on <html>: HubSpot / LastPass browser
+    // extensions stamp attributes (data-hubspot-theme, lang="en-us") onto
+    // the root element after SSR but before React hydrates, which would
+    // otherwise throw a hydration warning on every candidate page load.
+    // The suppress is scoped to the html element only; mismatches in the
+    // rest of the tree still surface normally.
     <html
       className={`${brandFontShell(headingFont.variable, bodyFont.variable)} dark`}
       lang="en"
+      suppressHydrationWarning
     >
       <body
         className="min-h-screen bg-background text-foreground antialiased"

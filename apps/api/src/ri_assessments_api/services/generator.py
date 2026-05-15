@@ -14,10 +14,12 @@ from typing import Any
 
 from anthropic import Anthropic
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 from supabase import Client
 
-from ..auth import AdminPrincipal
+from ..auth import AdminPrincipal, ensure_role
 from ..config import get_settings
+from ..models.admin import QuestionTemplateCreate
 from ..models.generator import (
     EditedOutline,
     GeneratedOutline,
@@ -25,9 +27,11 @@ from ..models.generator import (
     OutlineRunResponse,
     QuestionGenerationResponse,
 )
+from ..models.interactive import validate_interactive_config
 from ..prompts.outline import OUTLINE_SYSTEM_PROMPT, SUBMIT_OUTLINE_TOOL
 from ..prompts.questions import QUESTIONS_SYSTEM_PROMPT, SUBMIT_QUESTIONS_TOOL
 from ..prompts.revision import REVISION_SYSTEM_PROMPT, SUBMIT_REVISED_QUESTION_TOOL
+from . import queue as queue_service
 from . import references as references_service
 from .randomizer import question_seed, render_prompt, sample_variables
 
@@ -35,14 +39,6 @@ log = logging.getLogger(__name__)
 
 # Spec §15 names Sonnet 4.5 for generation; we use the latest in that family.
 GENERATION_MODEL = "claude-sonnet-4-6"
-
-
-def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
-    if principal.role not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{principal.role}' is not permitted for this action.",
-        )
 
 
 def _client() -> Anthropic:
@@ -58,26 +54,115 @@ def _client() -> Anthropic:
 # -- Taxonomy injection ------------------------------------------------------
 
 
-def _load_taxonomy_text() -> str:
-    """Read packages/competencies/src/taxonomy.json and render it as
-    `id - label` lines for prompt injection. Cached on first call."""
+def _load_taxonomy_rows() -> list[dict[str, Any]]:
+    """Parsed taxonomy rows from packages/competencies/src/taxonomy.json.
+    Cached on first call. Used for both prompt injection and Stage-2
+    competency_tag validation (spec §6.2 directive 5)."""
 
-    global _CACHED_TAXONOMY
-    if _CACHED_TAXONOMY is not None:
-        return _CACHED_TAXONOMY
+    global _CACHED_TAXONOMY_ROWS
+    if _CACHED_TAXONOMY_ROWS is not None:
+        return _CACHED_TAXONOMY_ROWS
     # __file__ -> apps/api/src/ri_assessments_api/services/generator.py
     # parents[0..4] climb to apps/, parents[5] is the repo root.
     repo_root = Path(__file__).resolve().parents[5]
     path = repo_root / "packages" / "competencies" / "src" / "taxonomy.json"
     if not path.exists():
         raise RuntimeError(f"Competency taxonomy not found at {path}")
-    rows = json.loads(path.read_text(encoding="utf-8"))
+    _CACHED_TAXONOMY_ROWS = json.loads(path.read_text(encoding="utf-8"))
+    return _CACHED_TAXONOMY_ROWS
+
+
+def _load_taxonomy_text() -> str:
+    """Render the taxonomy as `id - label` lines for prompt injection."""
+
+    global _CACHED_TAXONOMY
+    if _CACHED_TAXONOMY is not None:
+        return _CACHED_TAXONOMY
+    rows = _load_taxonomy_rows()
     lines = [f"{row['id']} - {row['label']}" for row in rows]
     _CACHED_TAXONOMY = "\n".join(lines)
     return _CACHED_TAXONOMY
 
 
+def _taxonomy_ids() -> set[str]:
+    """Set of valid competency ids for membership checks."""
+
+    global _CACHED_TAXONOMY_IDS
+    if _CACHED_TAXONOMY_IDS is not None:
+        return _CACHED_TAXONOMY_IDS
+    _CACHED_TAXONOMY_IDS = {row["id"] for row in _load_taxonomy_rows()}
+    return _CACHED_TAXONOMY_IDS
+
+
 _CACHED_TAXONOMY: str | None = None
+_CACHED_TAXONOMY_ROWS: list[dict[str, Any]] | None = None
+_CACHED_TAXONOMY_IDS: set[str] | None = None
+
+
+def _filter_competency_tags(tags: Any) -> list[str]:
+    """Spec §6.2 directive 5: only emit competency tags present in the
+    taxonomy. Returns a de-duplicated list preserving order."""
+
+    valid = _taxonomy_ids()
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in tags or []:
+        if isinstance(t, str) and t in valid and t not in seen:
+            out.append(t)
+            seen.add(t)
+    return out
+
+
+def _validate_stage2_question(
+    raw: dict[str, Any], default_difficulty: str
+) -> tuple[bool, str | None]:
+    """Spec §6.1 Stage-2 validation. Returns (ok, reason).
+
+    Fails fast on:
+    - QuestionTemplateCreate (Pydantic) validation. We feed a synthesized
+      shape, defaulting difficulty so the model isn't required to emit it.
+    - interactive_config schema for typed question types.
+    - Empty / out-of-taxonomy competency_tags after filtering.
+
+    Failures cause the question to be skipped; v1 picks fail-the-question
+    strictness so a single bad item doesn't poison the entire topic."""
+
+    qtype = raw.get("type")
+    if not isinstance(qtype, str):
+        return False, "missing type"
+
+    # Pre-filter competency_tags so a Pydantic min_length=1 check after the
+    # filter still catches questions that had only invalid tags.
+    filtered_tags = _filter_competency_tags(raw.get("competency_tags"))
+    if not filtered_tags:
+        return False, "no valid competency_tags after taxonomy filter"
+
+    candidate_body: dict[str, Any] = {
+        "type": qtype,
+        "prompt_template": raw.get("prompt_template") or "",
+        "variable_schema": raw.get("variable_schema") or {},
+        "solver_code": raw.get("solver_code"),
+        "solver_language": "python",
+        "interactive_config": raw.get("interactive_config"),
+        "rubric": raw.get("rubric") or {},
+        "competency_tags": filtered_tags,
+        "time_limit_seconds": raw.get("time_limit_seconds"),
+        "max_points": float(raw.get("max_points") or 10),
+        "difficulty": raw.get("difficulty") or default_difficulty,
+        "metadata": raw.get("metadata") or {},
+    }
+    try:
+        QuestionTemplateCreate.model_validate(candidate_body)
+    except Exception as exc:
+        return False, f"QuestionTemplate validation failed: {exc}"
+
+    try:
+        validate_interactive_config(qtype, raw.get("interactive_config"))
+    except HTTPException as exc:
+        # validate_interactive_config raises 422 with a structured detail.
+        return False, f"interactive_config invalid: {exc.detail}"
+
+    return True, None
 
 
 def _system_blocks(prompt: str) -> list[dict[str, Any]]:
@@ -241,7 +326,7 @@ def generate_outline(
     principal: AdminPrincipal,
     brief: GenerationBriefIn,
 ) -> OutlineRunResponse:
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
 
     started = time.monotonic()
     client = _client()
@@ -355,8 +440,8 @@ def _document_title_lookup(supabase: Client, document_ids: list[str]) -> dict[st
     return {row["id"]: row.get("title", "") for row in res.data or []}
 
 
-_EMDASH = "—"
-_ENDASH = "–"
+_EMDASH = "\u2014"
+_ENDASH = "\u2013"
 
 
 def _sanitize_text(value: Any) -> Any:
@@ -410,6 +495,7 @@ def _normalize_question_row(
     module_id: str,
     position: int,
     cited_document_titles: dict[str, str] | None = None,
+    source_generation_id: str | None = None,
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {"generated_difficulty": raw.get("difficulty")}
     if cited_document_titles:
@@ -417,6 +503,10 @@ def _normalize_question_row(
             {"document_id": doc_id, "title": title}
             for doc_id, title in cited_document_titles.items()
         ]
+    if source_generation_id:
+        # Persisted so revision lookups (services.generator.revise_question)
+        # can trace parent_run_id through the generation_runs tree.
+        metadata["source_generation_id"] = source_generation_id
     return {
         "id": str(uuid.uuid4()),
         "module_id": module_id,
@@ -426,9 +516,14 @@ def _normalize_question_row(
         "variable_schema": raw.get("variable_schema") or {},
         "solver_code": raw.get("solver_code"),
         "solver_language": "python",
-        "interactive_config": _sanitize_text(raw.get("interactive_config")),
+        # Already validated upstream by _validate_stage2_question; run it
+        # through validate_interactive_config one more time so the
+        # round-tripped (alias-resolved) shape lands in storage.
+        "interactive_config": validate_interactive_config(
+            raw["type"], _sanitize_text(raw.get("interactive_config"))
+        ),
         "rubric": _sanitize_text(raw["rubric"]),
-        "competency_tags": raw.get("competency_tags") or [],
+        "competency_tags": _filter_competency_tags(raw.get("competency_tags")),
         "time_limit_seconds": raw.get("time_limit_seconds"),
         "max_points": float(raw.get("max_points") or 10),
         "metadata": metadata,
@@ -445,29 +540,47 @@ def generate_questions(
     slug: str,
     domain: str,
 ) -> QuestionGenerationResponse:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     client = _client()
 
     # Create the draft module first so we have an id for question_templates rows.
-    module_insert = (
-        supabase.table("modules")
-        .insert(
-            {
-                "slug": slug,
-                "title": outline.title,
-                "description": outline.description,
-                "domain": domain,
-                "target_duration_minutes": outline.estimated_duration_minutes,
-                "difficulty": brief.difficulty,
-                "status": "draft",
-                "version": 1,
-                "created_by": principal.user_id,
-                "source_generation_id": outline_run_id,
-            }
+    # (slug, version) is the uniqueness key. A re-run of the wizard with the
+    # same slug after an earlier failure leaves an orphan draft and would
+    # collide with a 500. Translate that into a clean 409 so the wizard can
+    # tell the admin to archive or rename.
+    try:
+        module_insert = (
+            supabase.table("modules")
+            .insert(
+                {
+                    "slug": slug,
+                    "title": outline.title,
+                    "description": outline.description,
+                    "domain": domain,
+                    "target_duration_minutes": outline.estimated_duration_minutes,
+                    "difficulty": brief.difficulty,
+                    "status": "draft",
+                    "version": 1,
+                    "created_by": principal.user_id,
+                    "source_generation_id": outline_run_id,
+                }
+            )
+            .execute()
         )
-        .execute()
-    )
+    except APIError as exc:
+        message = str(getattr(exc, "message", exc) or "")
+        code = getattr(exc, "code", "") or ""
+        if code == "23505" or "modules_slug_version_key" in message:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"A module with slug '{slug}' already exists. Archive the "
+                    "existing draft or pick a different slug, then re-run "
+                    "the wizard."
+                ),
+            ) from exc
+        raise
     if not module_insert.data:
         raise HTTPException(
             status_code=500, detail="Failed to create draft module."
@@ -477,6 +590,21 @@ def generate_questions(
     document_titles: dict[str, str] = {}
     if brief.reference_document_ids:
         document_titles = _document_title_lookup(supabase, brief.reference_document_ids)
+
+    # Spec §12.2 step 4: announce the run so admin SSE subscribers can
+    # render "1 of N" progress. outline_run_id is the natural anchor: the
+    # client already has it (it posted it on this request) and it ties
+    # the progress channel to the lineage we already record in
+    # generation_runs.
+    topic_names = [topic.name for topic in outline.topics]
+    queue_service.publish_generation_event(
+        outline_run_id,
+        {
+            "type": "started",
+            "topics": topic_names,
+            "total_topics": len(topic_names),
+        },
+    )
 
     def _generate_for_topic(topic: Any) -> dict[str, Any]:
         """Worker: retrieve refs, call Claude, parse + verify questions.
@@ -556,7 +684,30 @@ def generate_questions(
                 "cited_titles": {},
             }
 
-        verified = [q for q in raw_questions if _self_verify_question(q)]
+        # Spec §6.1 strictness: Pydantic shape + interactive_config schema
+        # + competency_tag taxonomy membership are all enforced. A
+        # question that fails any of these is dropped and logged so the
+        # admin sees a smaller question_count rather than a malformed row.
+        verified: list[dict[str, Any]] = []
+        validation_errors: list[dict[str, Any]] = []
+        for raw_q in raw_questions:
+            if not _self_verify_question(raw_q):
+                validation_errors.append(
+                    {"reason": "self_verify failed", "type": raw_q.get("type")}
+                )
+                continue
+            ok, reason = _validate_stage2_question(raw_q, brief.difficulty)
+            if not ok:
+                validation_errors.append(
+                    {"reason": reason, "type": raw_q.get("type")}
+                )
+                log.warning(
+                    "generator dropped stage-2 question for topic %s: %s",
+                    topic.name,
+                    reason,
+                )
+                continue
+            verified.append(raw_q)
         return {
             "topic_dict": topic_dict,
             "status": "success",
@@ -565,6 +716,7 @@ def generate_questions(
             "latency_ms": latency_ms,
             "raw_questions": raw_questions,
             "verified_questions": verified,
+            "validation_errors": validation_errors,
             "cited_titles": cited_titles,
         }
 
@@ -572,11 +724,55 @@ def generate_questions(
     # don't blow past Anthropic rate limits - each topic request streams
     # 16K tokens and takes 10-30s; 4 in flight gets us a 4x speedup
     # without tripping the org-level RPS cap.
-    from concurrent.futures import ThreadPoolExecutor
+    #
+    # Use submit + as_completed (not map) so we can publish a
+    # `topic_completed` SSE event the moment each future resolves,
+    # rather than waiting for the whole batch. Spec §12.2 step 4: live
+    # "1 of N" progress.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     max_workers = min(len(outline.topics), 4) or 1
+    topic_results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        topic_results = list(pool.map(_generate_for_topic, outline.topics))
+        future_to_topic = {
+            pool.submit(_generate_for_topic, topic): topic for topic in outline.topics
+        }
+        for completed_count, future in enumerate(
+            as_completed(future_to_topic), start=1
+        ):
+            topic = future_to_topic[future]
+            try:
+                outcome = future.result()
+            except Exception as exc:
+                # Defensive: _generate_for_topic catches its own errors,
+                # but a future-level crash should still publish a failed
+                # event so the UI doesn't stall on "N of N".
+                outcome = {
+                    "topic_dict": topic.model_dump(),
+                    "status": "failed",
+                    "error": str(exc),
+                    "tokens_in": 0,
+                    "tokens_out": 0,
+                    "latency_ms": 0,
+                    "raw_questions": [],
+                    "verified_questions": [],
+                    "cited_titles": {},
+                }
+            topic_results.append(outcome)
+            queue_service.publish_generation_event(
+                outline_run_id,
+                {
+                    "type": "topic_completed",
+                    "topic_name": topic.name,
+                    "status": outcome.get("status") or "failed",
+                    "questions_count": len(outcome.get("verified_questions") or []),
+                    "raw_count": len(outcome.get("raw_questions") or []),
+                    "dropped_count": len(outcome.get("validation_errors") or []),
+                    "error": outcome.get("error"),
+                    "completed": completed_count,
+                    "total_topics": len(topic_names),
+                },
+            )
 
     run_ids: list[str] = []
     total_tokens_in = 0
@@ -609,26 +805,18 @@ def generate_questions(
             run_ids.append(run_id)
             continue
 
-        rows: list[dict[str, Any]] = []
-        for raw_q in outcome["verified_questions"]:
-            rows.append(
-                _normalize_question_row(
-                    raw_q,
-                    module_id=module_id,
-                    position=position,
-                    cited_document_titles=outcome["cited_titles"],
-                )
-            )
-            position += 1
-        if rows:
-            supabase.table("question_templates").insert(rows).execute()
-            questions_generated += len(rows)
-
+        # Record the run first so each persisted question can stamp
+        # metadata.source_generation_id with this run's id. Without that
+        # link the revise endpoint can't trace parent_run_id back to the
+        # generating call (spec §6.5).
         run_id = _record_run(
             supabase,
             stage="full",
             input_brief={"brief": brief.model_dump(), "topic": topic_dict},
-            output={"questions": outcome["raw_questions"]},
+            output={
+                "questions": outcome["raw_questions"],
+                "validation_errors": outcome.get("validation_errors") or [],
+            },
             model=GENERATION_MODEL,
             tokens_in=int(outcome.get("tokens_in") or 0),
             tokens_out=int(outcome.get("tokens_out") or 0),
@@ -638,6 +826,31 @@ def generate_questions(
             created_by=principal.user_id,
         )
         run_ids.append(run_id)
+
+        rows: list[dict[str, Any]] = []
+        for raw_q in outcome["verified_questions"]:
+            rows.append(
+                _normalize_question_row(
+                    raw_q,
+                    module_id=module_id,
+                    position=position,
+                    cited_document_titles=outcome["cited_titles"],
+                    source_generation_id=run_id,
+                )
+            )
+            position += 1
+        if rows:
+            supabase.table("question_templates").insert(rows).execute()
+            questions_generated += len(rows)
+
+    queue_service.publish_generation_event(
+        outline_run_id,
+        {
+            "type": "finished",
+            "module_id": module_id,
+            "total_questions": questions_generated,
+        },
+    )
 
     return QuestionGenerationResponse(
         module_id=module_id,
@@ -694,7 +907,7 @@ def revise_question(
     instruction: str,
     preserve: list[str],
 ) -> dict[str, Any]:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     current = _question_row(supabase, question_id)
     bad = [f for f in preserve if f not in _PRESERVABLE_FIELDS]
     if bad:
@@ -734,23 +947,18 @@ def revise_question(
         if field in current:
             raw[field] = current[field]
 
-    update_payload: dict[str, Any] = {
-        "type": raw["type"],
-        "prompt_template": _sanitize_text(raw["prompt_template"]),
-        "variable_schema": raw.get("variable_schema") or {},
-        "solver_code": raw.get("solver_code"),
-        "interactive_config": _sanitize_text(raw.get("interactive_config")),
-        "rubric": _sanitize_text(raw["rubric"]),
-        "competency_tags": raw.get("competency_tags") or current.get("competency_tags") or [],
-        "time_limit_seconds": raw.get("time_limit_seconds"),
-        "max_points": float(raw.get("max_points") or current.get("max_points") or 10),
-        "metadata": {
-            **(current.get("metadata") or {}),
-            "last_revision_instruction": instruction,
-        },
-        "updated_at": datetime.now(UTC).isoformat(),
-    }
-    supabase.table("question_templates").update(update_payload).eq("id", question_id).execute()
+    # Spec §6.5: revised questions go through the same Stage-2 validators
+    # so a regression on shape / taxonomy / interactive_config can't
+    # silently land in the bank.
+    ok, reason = _validate_stage2_question(
+        {**raw, "competency_tags": raw.get("competency_tags") or current.get("competency_tags")},
+        current.get("metadata", {}).get("generated_difficulty") or "mid",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Revised question failed validation: {reason}",
+        )
 
     parent_run_id = (current.get("metadata") or {}).get("source_generation_id")
     run_id = _record_run(
@@ -771,6 +979,32 @@ def revise_question(
         parent_run_id=parent_run_id,
         created_by=principal.user_id,
     )
+
+    update_payload: dict[str, Any] = {
+        "type": raw["type"],
+        "prompt_template": _sanitize_text(raw["prompt_template"]),
+        "variable_schema": raw.get("variable_schema") or {},
+        "solver_code": raw.get("solver_code"),
+        # Validated interactive_config (alias-resolved shape).
+        "interactive_config": validate_interactive_config(
+            raw["type"], _sanitize_text(raw.get("interactive_config"))
+        ),
+        "rubric": _sanitize_text(raw["rubric"]),
+        "competency_tags": _filter_competency_tags(
+            raw.get("competency_tags") or current.get("competency_tags") or []
+        ),
+        "time_limit_seconds": raw.get("time_limit_seconds"),
+        "max_points": float(raw.get("max_points") or current.get("max_points") or 10),
+        "metadata": {
+            **(current.get("metadata") or {}),
+            "last_revision_instruction": instruction,
+            # Point future revisions at the latest revision run so the
+            # parent_run_id chain reflects the actual lineage.
+            "source_generation_id": run_id,
+        },
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    supabase.table("question_templates").update(update_payload).eq("id", question_id).execute()
 
     return {
         "question_id": question_id,

@@ -15,16 +15,22 @@ export default async function NewModulePage({
     "use server";
     const slug = String(formData.get("slug") ?? "").trim();
     const title = String(formData.get("title") ?? "").trim();
-    const description = String(formData.get("description") ?? "").trim() || null;
+    const description =
+      String(formData.get("description") ?? "").trim() || null;
     const domain = String(formData.get("domain") ?? "").trim();
     const target_duration_minutes = Number.parseInt(
       String(formData.get("target_duration_minutes") ?? "30"),
       10
     );
-    const difficulty = String(formData.get("difficulty") ?? "junior") as Difficulty;
+    const difficulty = String(
+      formData.get("difficulty") ?? "junior"
+    ) as Difficulty;
 
-    if (!slug || !title || !domain) {
-      redirect("/modules/new?error=" + encodeURIComponent("Slug, title, and domain are required."));
+    if (!(slug && title && domain)) {
+      redirect(
+        "/modules/new?error=" +
+          encodeURIComponent("Slug, title, and domain are required.")
+      );
     }
 
     try {
@@ -39,7 +45,7 @@ export default async function NewModulePage({
       redirect(`/modules/${created.id}`);
     } catch (e) {
       if (e instanceof ApiError) {
-        redirect("/modules/new/manual?error=" + encodeURIComponent(e.message));
+        redirect(`/modules/new/manual?error=${encodeURIComponent(e.message)}`);
       }
       throw e;
     }
@@ -52,8 +58,8 @@ export default async function NewModulePage({
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
           <h1 className="font-semibold text-xl">Create draft module</h1>
           <p className="mt-1 text-muted-foreground text-sm">
-            Modules start as drafts. Add questions via the seed script (or AI generation in Phase 2),
-            then publish before issuing assignments.
+            Modules start as drafts. Add questions via the seed script (or AI
+            generation in Phase 2), then publish before issuing assignments.
           </p>
         </section>
 
@@ -66,21 +72,39 @@ export default async function NewModulePage({
           </p>
         )}
 
-        <form action={action} className="grid max-w-xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4">
-          <Field label="Slug" name="slug" placeholder="hubspot-workflows-v1" required />
-          <Field label="Title" name="title" placeholder="HubSpot Workflows" required />
+        <form
+          action={action}
+          className="grid max-w-xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
+        >
+          <Field
+            label="Slug"
+            name="slug"
+            placeholder="hubspot-workflows-v1"
+            required
+          />
+          <Field
+            label="Title"
+            name="title"
+            placeholder="HubSpot Workflows"
+            required
+          />
           <Field
             label="Description"
             name="description"
             placeholder="Optional"
             textarea
           />
-          <Field label="Domain" name="domain" placeholder="hubspot, data, sales..." required />
           <Field
+            label="Domain"
+            name="domain"
+            placeholder="hubspot, data, sales..."
+            required
+          />
+          <Field
+            defaultValue="30"
             label="Target duration (minutes)"
             name="target_duration_minutes"
             type="number"
-            defaultValue="30"
           />
           <label className="space-y-1">
             <span className="text-sm">Difficulty</span>
@@ -124,12 +148,13 @@ function Field({
   const className =
     "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
-    <label className="space-y-1">
+    <label className="space-y-1" htmlFor={name}>
       <span className="text-sm">{label}</span>
       {textarea ? (
         <textarea
           className={`${className} h-24`}
           defaultValue={defaultValue}
+          id={name}
           name={name}
           placeholder={placeholder}
         />
@@ -137,6 +162,7 @@ function Field({
         <input
           className={className}
           defaultValue={defaultValue}
+          id={name}
           name={name}
           placeholder={placeholder}
           required={required}

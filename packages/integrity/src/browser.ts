@@ -1,22 +1,46 @@
 import type { IntegrityEventType } from "@repo/schemas";
 
-export type IntegrityEvent = {
-  type: IntegrityEventType;
-  payload?: Record<string, unknown>;
+export interface IntegrityEvent {
   client_timestamp?: string;
-};
+  payload?: Record<string, unknown>;
+  type: IntegrityEventType;
+}
 
-export type IntegrityMonitorOptions = {
-  /** Called for every captured event. The caller is responsible for batching. */
-  send: (event: IntegrityEvent) => void;
+export interface IntegrityMonitorOptions {
   /**
    * If a click target matches this selector, copy/cut/paste are allowed.
    * Defaults to the spec's `[data-allow-paste="true"]` (spec §10.2).
    */
   allowPasteSelector?: string;
-};
+  /** Called for every captured event. The caller is responsible for batching. */
+  send: (event: IntegrityEvent) => void;
+}
 
 const DEFAULT_ALLOW_PASTE_SELECTOR = '[data-allow-paste="true"]';
+
+/** Module-scoped sink the most recently installed monitor binds. Runner
+ * components that fire integrity events (code run, n8n save, notebook
+ * cell run, diagram edit) call `emitIntegrityEvent` and the event lands
+ * on the same batched queue the monitor uses. The sink is reset to null
+ * on teardown so we never leak events to a torn-down monitor. */
+let activeSend: ((event: IntegrityEvent) => void) | null = null;
+
+/** Push an integrity event onto the active monitor's queue. Safe to
+ * call when no monitor is mounted (becomes a no-op). The client_timestamp
+ * is auto-stamped to match what the monitor emits. */
+export function emitIntegrityEvent(
+  type: IntegrityEvent["type"],
+  payload?: Record<string, unknown>
+): void {
+  if (!activeSend) {
+    return;
+  }
+  activeSend({
+    type,
+    payload,
+    client_timestamp: new Date().toISOString(),
+  });
+}
 
 const BLOCKED_COMBOS: Array<{ key: string; meta?: boolean; ctrl?: boolean }> = [
   { key: "c", meta: true },
@@ -49,6 +73,7 @@ export function installIntegrityMonitor(
       ...event,
       client_timestamp: event.client_timestamp ?? stamp(),
     });
+  activeSend = send;
 
   const onVisibility = () => {
     send({
@@ -62,7 +87,7 @@ export function installIntegrityMonitor(
   window.addEventListener("blur", onBlur);
   window.addEventListener("focus", onFocus);
 
-  const clipHandlers: Array<[keyof DocumentEventMap, EventListener]> = [];
+  const clipHandlers: [keyof DocumentEventMap, EventListener][] = [];
   for (const evt of ["copy", "cut", "paste"] as const) {
     const handler = (e: Event) => {
       const target = e.target as HTMLElement | null;
@@ -136,7 +161,8 @@ export function installIntegrityMonitor(
   const devtoolsTimer = window.setInterval(() => {
     const widthGap = window.outerWidth - window.innerWidth;
     const heightGap = window.outerHeight - window.innerHeight;
-    const open = widthGap > DEV_TOOLS_THRESHOLD || heightGap > DEV_TOOLS_THRESHOLD;
+    const open =
+      widthGap > DEV_TOOLS_THRESHOLD || heightGap > DEV_TOOLS_THRESHOLD;
     if (open && !devtoolsFlagged) {
       devtoolsFlagged = true;
       send({ type: "devtools_opened" });
@@ -159,5 +185,8 @@ export function installIntegrityMonitor(
     window.removeEventListener("online", onOnline);
     window.removeEventListener("offline", onOffline);
     window.clearInterval(devtoolsTimer);
+    if (activeSend === send) {
+      activeSend = null;
+    }
   };
 }

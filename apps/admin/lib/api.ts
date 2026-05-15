@@ -1,5 +1,9 @@
+import { createCallApi } from "@repo/api-client";
 import { env } from "@/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export { ApiError } from "@repo/api-client";
+
+import { ApiError } from "@repo/api-client";
 
 export type ModuleStatus = "draft" | "published" | "archived";
 export type Difficulty = "junior" | "mid" | "senior" | "expert";
@@ -11,20 +15,20 @@ export type AssignmentStatus =
   | "expired"
   | "cancelled";
 
-export type ModuleSummary = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  domain: string;
-  target_duration_minutes: number;
-  difficulty: Difficulty;
-  status: ModuleStatus;
-  version: number;
-  question_count: number;
+export interface ModuleSummary {
   created_at: string;
+  description: string | null;
+  difficulty: Difficulty;
+  domain: string;
+  id: string;
   published_at: string | null;
-};
+  question_count: number;
+  slug: string;
+  status: ModuleStatus;
+  target_duration_minutes: number;
+  title: string;
+  version: number;
+}
 
 export type ModuleDetail = ModuleSummary & {
   questions: Array<{
@@ -35,82 +39,84 @@ export type ModuleDetail = ModuleSummary & {
     competency_tags: string[];
     max_points: number;
     time_limit_seconds: number | null;
+    variable_schema?: Record<string, unknown>;
+    rubric?: Record<string, unknown>;
   }>;
 };
 
-export type SubjectSummary = {
-  id: string;
-  type: SubjectType;
-  full_name: string;
-  email: string;
-  metadata: Record<string, unknown>;
+export interface SubjectSummary {
   created_at: string;
-};
+  email: string;
+  full_name: string;
+  id: string;
+  metadata: Record<string, unknown>;
+  type: SubjectType;
+}
 
 export type AssessmentStatus = ModuleStatus;
 
-export type AssessmentSummary = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  status: AssessmentStatus;
-  version: number;
-  module_count: number;
-  question_count: number;
-  total_duration_minutes: number;
+export interface AssessmentSummary {
   created_at: string;
+  description: string | null;
+  id: string;
+  module_count: number;
   published_at: string | null;
-};
+  question_count: number;
+  slug: string;
+  status: AssessmentStatus;
+  title: string;
+  total_duration_minutes: number;
+  version: number;
+}
 
-export type AssessmentModuleEntry = {
+export interface AssessmentModuleEntry {
+  difficulty: Difficulty;
+  domain: string;
   module_id: string;
   position: number;
-  title: string;
-  domain: string;
-  difficulty: Difficulty;
-  target_duration_minutes: number;
   question_count: number;
-};
+  target_duration_minutes: number;
+  title: string;
+}
 
 export type AssessmentDetail = AssessmentSummary & {
   modules: AssessmentModuleEntry[];
 };
 
-export type AssignmentSummary = {
-  id: string;
-  subject_id: string;
-  subject_full_name: string | null;
-  subject_email: string | null;
+export interface AssignmentSummary {
   assessment_id: string | null;
   assessment_title: string | null;
+  completed_at: string | null;
+  created_at: string;
+  expires_at: string;
+  final_score: number | null;
+  id: string;
+  integrity_score: number | null;
+  max_possible_score: number | null;
   module_id: string | null;
   module_title: string | null;
-  status: AssignmentStatus;
-  expires_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  integrity_score: number | null;
-  final_score: number | null;
-  max_possible_score: number | null;
   needs_review: boolean;
-  created_at: string;
-};
+  started_at: string | null;
+  status: AssignmentStatus;
+  subject_email: string | null;
+  subject_full_name: string | null;
+  subject_id: string;
+}
 
-export type AttemptSummary = {
-  id: string;
-  question_template_id: string;
-  rendered_prompt: string;
-  raw_answer: { value: unknown } | null;
-  submitted_at: string | null;
-  score: number | null;
-  max_score: number;
-  score_rationale: string | null;
-  scorer_model?: string | null;
-  scorer_confidence?: number | null;
-  needs_review?: boolean;
+export interface AttemptSummary {
   active_time_seconds: number | null;
-};
+  id: string;
+  max_score: number;
+  needs_review?: boolean;
+  question_template_id: string;
+  raw_answer: { value: unknown } | null;
+  rendered_prompt: string;
+  score: number | null;
+  score_rationale: string | null;
+  scorer_confidence?: number | null;
+  scorer_model?: string | null;
+  submitted_at: string | null;
+}
 
 export type AssignmentDetail = AssignmentSummary & {
   consent_at: string | null;
@@ -118,34 +124,34 @@ export type AssignmentDetail = AssignmentSummary & {
   attempts: AttemptSummary[];
 };
 
-export type AssignmentMagicLink = {
-  assignment_id: string;
-  subject_id: string;
+export interface AssignmentMagicLink {
   assessment_id: string | null;
-  module_id: string | null;
+  assignment_id: string;
   expires_at: string;
   magic_link_url: string;
+  module_id: string | null;
+  subject_id: string;
   token: string;
-};
+}
 
 export type AdminRole = "admin" | "reviewer" | "viewer";
 
-export type AdminMe = {
-  user_id: string;
+export interface AdminMe {
   email: string;
   full_name: string | null;
   role: AdminRole;
-};
-
-export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
+  user_id: string;
 }
 
 async function authHeader(): Promise<Record<string, string>> {
+  // Dynamic import so client bundles that pull a function from this file
+  // for type inference (Turbopack can't fully tree-shake the module graph)
+  // do not also drag `next/headers` into the client. The runtime here is
+  // server-only by design; if a client component ever reaches this code
+  // path the dynamic import would fail loudly at runtime.
+  const { createSupabaseServerClient } = await import(
+    "@/lib/supabase/server"
+  );
   const supabase = await createSupabaseServerClient();
   const {
     data: { session },
@@ -156,31 +162,10 @@ async function authHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${session.access_token}` };
 }
 
-async function callApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${env.INTERNAL_API_URL.replace(/\/$/, "")}${path}`;
-  const auth = await authHeader();
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...auth,
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      /* fall through */
-    }
-    throw new ApiError(detail, res.status);
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
+const callApi = createCallApi({
+  baseUrl: env.INTERNAL_API_URL,
+  getAuthHeader: authHeader,
+});
 
 // Modules
 export const listModules = () => callApi<ModuleSummary[]>("/api/modules");
@@ -204,46 +189,46 @@ export const publishModule = (id: string) =>
     body: JSON.stringify({}),
   });
 export const createModulePreviewMagicLink = (id: string) =>
-  callApi<AssignmentMagicLink>(
-    `/api/modules/${id}/preview-magic-link`,
-    { method: "POST", body: JSON.stringify({}) },
-  );
+  callApi<AssignmentMagicLink>(`/api/modules/${id}/preview-magic-link`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 export const archiveModule = (id: string) =>
   callApi<ModuleSummary>(`/api/modules/${id}/archive`, {
     method: "POST",
     body: JSON.stringify({}),
   });
 
-export type QuestionPayload = {
-  id?: string;
-  position?: number;
-  type: string;
-  prompt_template: string;
-  variable_schema?: Record<string, unknown>;
-  solver_code?: string | null;
-  solver_language?: string;
-  interactive_config?: Record<string, unknown> | null;
-  rubric: Record<string, unknown>;
+export interface QuestionPayload {
   competency_tags?: string[];
-  time_limit_seconds?: number | null;
+  id?: string;
+  interactive_config?: Record<string, unknown> | null;
   max_points?: number;
   metadata?: Record<string, unknown>;
-};
+  position?: number;
+  prompt_template: string;
+  rubric: Record<string, unknown>;
+  solver_code?: string | null;
+  solver_language?: string;
+  time_limit_seconds?: number | null;
+  type: string;
+  variable_schema?: Record<string, unknown>;
+}
 
-export type QuestionRow = {
+export interface QuestionRow {
+  competency_tags: string[];
   id: string;
+  max_points: number;
   module_id: string;
   position: number;
-  type: string;
   prompt_template: string;
-  competency_tags: string[];
-  max_points: number;
   time_limit_seconds: number | null;
-};
+  type: string;
+}
 
 export const createModuleQuestion = (
   moduleId: string,
-  payload: QuestionPayload,
+  payload: QuestionPayload
 ) =>
   callApi<QuestionRow>(
     `/api/modules/${encodeURIComponent(moduleId)}/questions`,
@@ -253,7 +238,7 @@ export const createModuleQuestion = (
 export const patchModuleQuestion = (
   moduleId: string,
   questionId: string,
-  payload: Partial<QuestionPayload>,
+  payload: Partial<QuestionPayload>
 ) =>
   callApi<QuestionRow>(
     `/api/modules/${encodeURIComponent(moduleId)}/questions/${encodeURIComponent(questionId)}`,
@@ -266,36 +251,36 @@ export const deleteModuleQuestion = (moduleId: string, questionId: string) =>
     { method: "DELETE" }
   );
 
-export type AttemptEvent = {
-  id: string;
+export interface AttemptEvent {
   attempt_id: string | null;
-  event_type: string;
-  payload: Record<string, unknown>;
   client_timestamp: string | null;
+  event_type: string;
+  id: string;
+  payload: Record<string, unknown>;
   server_timestamp: string;
   user_agent: string | null;
-};
+}
 
 export const listAssignmentEvents = (assignmentId: string) =>
   callApi<AttemptEvent[]>(
     `/api/assignments/${encodeURIComponent(assignmentId)}/events`
   );
 
-export type ModulePreviewQuestion = {
-  question_template_id: string;
-  position: number;
-  type: string;
-  rendered_prompt: string;
-  max_points: number;
-  time_limit_seconds: number | null;
+export interface ModulePreviewQuestion {
   competency_tags: string[];
   interactive_config: Record<string, unknown> | null;
-};
+  max_points: number;
+  position: number;
+  question_template_id: string;
+  rendered_prompt: string;
+  time_limit_seconds: number | null;
+  type: string;
+}
 
-export type ModulePreviewResponse = {
+export interface ModulePreviewResponse {
   module_id: string;
   questions: ModulePreviewQuestion[];
-};
+}
 
 export const previewModule = (id: string) =>
   callApi<ModulePreviewResponse>(
@@ -373,12 +358,12 @@ export const createSubject = (body: {
 
 // Assignments
 export const listAssignments = (opts?: { needsReview?: boolean }) => {
-  const qs =
-    opts?.needsReview === true
-      ? "?needs_review=true"
-      : opts?.needsReview === false
-        ? "?needs_review=false"
-        : "";
+  let qs = "";
+  if (opts?.needsReview === true) {
+    qs = "?needs_review=true";
+  } else if (opts?.needsReview === false) {
+    qs = "?needs_review=false";
+  }
   return callApi<AssignmentSummary[]>(`/api/assignments${qs}`);
 };
 export const getAssignment = (id: string) =>
@@ -395,10 +380,10 @@ export const createAssignment = (body: {
     body: JSON.stringify({ send_email: true, ...body }),
   });
 
-export type AssignmentBulkResult = {
+export interface AssignmentBulkResult {
   created: AssignmentMagicLink[];
   failed: Array<{ subject_id: string; detail: string }>;
-};
+}
 
 export const bulkCreateAssignments = (body: {
   assessment_id?: string;
@@ -418,11 +403,12 @@ export const cancelAssignment = (id: string) =>
   });
 export const resendAssignmentEmail = (
   id: string,
-  options?: { expires_in_days?: number },
+  options?: { expires_in_days?: number }
 ) => {
   const qs = new URLSearchParams();
-  if (options?.expires_in_days != null)
+  if (options?.expires_in_days != null) {
     qs.set("expires_in_days", String(options.expires_in_days));
+  }
   const q = qs.toString();
   return callApi<AssignmentMagicLink>(
     `/api/assignments/${id}/resend-email${q ? `?${q}` : ""}`,
@@ -443,77 +429,77 @@ export const rescoreAttempt = (attemptId: string) =>
 export const fetchAdminMe = () => callApi<AdminMe>("/api/me");
 
 // Generator
-export type QuestionMix = {
-  mcq_pct?: number | null;
-  short_pct?: number | null;
-  long_pct?: number | null;
+export interface QuestionMix {
   code_pct?: number | null;
   interactive_pct?: number | null;
-};
+  long_pct?: number | null;
+  mcq_pct?: number | null;
+  short_pct?: number | null;
+}
 
-export type GenerationBriefIn = {
-  role_title: string;
-  responsibilities: string;
-  target_duration_minutes: number;
+export interface GenerationBriefIn {
   difficulty: Difficulty;
   domains: string[];
+  notes?: string;
   /** Optional. Omit entirely (or set fields to null) to let the AI choose. */
   question_mix?: QuestionMix | null;
   reference_document_ids: string[];
   required_competencies: string[];
-  notes?: string;
-};
+  responsibilities: string;
+  role_title: string;
+  target_duration_minutes: number;
+}
 
-export type OutlineTopic = {
-  name: string;
+export interface OutlineTopic {
   competency_tags: string[];
-  weight_pct: number;
+  name: string;
   question_count: number;
-  recommended_types: string[];
   rationale: string;
-};
+  recommended_types: string[];
+  weight_pct: number;
+}
 
-export type GeneratedOutline = {
-  title: string;
+export interface GeneratedOutline {
   description: string;
+  estimated_duration_minutes: number;
+  title: string;
   topics: OutlineTopic[];
   total_points: number;
-  estimated_duration_minutes: number;
-};
+}
 
-export type OutlineRunResponse = {
-  run_id: string;
-  outline: GeneratedOutline;
+export interface OutlineRunResponse {
+  latency_ms: number;
   model: string;
+  outline: GeneratedOutline;
+  run_id: string;
   tokens_in: number;
   tokens_out: number;
-  latency_ms: number;
-};
+}
 
-export type GenerationRunRow = {
+export interface GenerationRunRow {
+  created_at: string;
+  error: string | null;
   id: string;
+  input_brief: GenerationBriefIn | Record<string, unknown>;
+  latency_ms: number | null;
+  model: string;
+  outline?: GeneratedOutline;
+  output: Record<string, unknown>;
+  parent_run_id: string | null;
   stage: "outline" | "full" | "single_question" | "revision";
   status: "pending" | "success" | "failed";
-  model: string;
   tokens_in: number | null;
   tokens_out: number | null;
-  latency_ms: number | null;
-  error: string | null;
-  parent_run_id: string | null;
-  input_brief: GenerationBriefIn | Record<string, unknown>;
-  output: Record<string, unknown>;
-  outline?: GeneratedOutline;
-  created_at: string;
-};
+}
 
-export type QuestionGenerationResponse = {
+export interface QuestionGenerationResponse {
+  model: string;
   module_id: string;
   module_run_ids: string[];
   questions_generated: number;
-  model: string;
   total_tokens_in: number;
   total_tokens_out: number;
-};
+}
 
 export const generateOutline = (body: GenerationBriefIn) =>
   callApi<OutlineRunResponse>("/api/generator/outline", {
@@ -522,9 +508,7 @@ export const generateOutline = (body: GenerationBriefIn) =>
   });
 
 export const fetchGenerationRun = (runId: string) =>
-  callApi<GenerationRunRow>(
-    `/api/generator/runs/${encodeURIComponent(runId)}`
-  );
+  callApi<GenerationRunRow>(`/api/generator/runs/${encodeURIComponent(runId)}`);
 
 export const generateQuestions = (body: {
   outline_run_id: string;
@@ -539,19 +523,19 @@ export const generateQuestions = (body: {
   });
 
 // References
-export type ReferenceDocumentSummary = {
-  id: string;
-  title: string;
-  source_url: string | null;
-  domain: string | null;
+export interface ReferenceDocumentSummary {
   chunk_count: number;
   created_at: string;
-};
+  domain: string | null;
+  id: string;
+  source_url: string | null;
+  title: string;
+}
 
-export type ReferenceUploadResponse = {
-  document: ReferenceDocumentSummary;
+export interface ReferenceUploadResponse {
   chunks_inserted: number;
-};
+  document: ReferenceDocumentSummary;
+}
 
 export const listReferences = () =>
   callApi<ReferenceDocumentSummary[]>("/api/references");
@@ -583,15 +567,15 @@ export const deleteReference = (id: string) =>
   });
 
 // Question revision
-export type ReviseQuestionResponse = {
-  question_id: string;
-  run_id: string;
+export interface ReviseQuestionResponse {
+  latency_ms: number;
   model: string;
+  question_id: string;
+  revised: Record<string, unknown>;
+  run_id: string;
   tokens_in: number;
   tokens_out: number;
-  latency_ms: number;
-  revised: Record<string, unknown>;
-};
+}
 
 export const reviseQuestion = (
   questionId: string,
@@ -605,7 +589,7 @@ export const reviseQuestion = (
       | "time_limit_seconds"
       | "rubric"
     >;
-  },
+  }
 ) =>
   callApi<ReviseQuestionResponse>(
     `/api/generator/question/${encodeURIComponent(questionId)}/revise`,
@@ -615,61 +599,83 @@ export const reviseQuestion = (
     }
   );
 
+// Preview variants (spec §6.6). Backend renders sampled prompts for each seed.
+export interface PreviewVariantRow {
+  expected_answer?: unknown;
+  rendered_prompt: string;
+  seed: string;
+  variables: Record<string, unknown>;
+}
+
+export interface PreviewVariantsResponse {
+  variants: PreviewVariantRow[];
+}
+
+export const previewVariants = (body: {
+  variable_schema: Record<string, unknown>;
+  prompt_template: string;
+  seed_count?: number;
+}) =>
+  callApi<PreviewVariantsResponse>("/api/generator/preview-variants", {
+    method: "POST",
+    body: JSON.stringify({ seed_count: 5, ...body }),
+  });
+
 // Benchmarks ---------------------------------------------------------------
 
-export type CompetencyScorePoint = {
-  competency_id: string;
-  score_pct: number;
-  point_total: number;
-  point_possible: number;
+export interface CompetencyScorePoint {
   assignment_id: string;
-  computed_at: string;
-};
-
-export type SubjectCompetencyTrend = {
   competency_id: string;
-  points: CompetencyScorePoint[];
-  latest_score_pct: number;
-  delta_vs_previous: number | null;
-};
+  computed_at: string;
+  point_possible: number;
+  point_total: number;
+  score_pct: number;
+}
 
-export type SubjectCompetencyResponse = {
+export interface SubjectCompetencyTrend {
+  competency_id: string;
+  delta_vs_previous: number | null;
+  latest_score_pct: number;
+  points: CompetencyScorePoint[];
+}
+
+export interface SubjectCompetencyResponse {
   subject_id: string;
   trends: SubjectCompetencyTrend[];
-};
+}
 
-export type CohortHeatmapCell = {
-  subject_id: string;
-  competency_id: string;
-  score_pct: number;
+export interface CohortHeatmapCell {
   assignment_id: string;
+  competency_id: string;
   computed_at: string;
-};
+  score_pct: number;
+  subject_id: string;
+}
 
-export type CohortSubject = {
-  id: string;
-  full_name: string;
+export interface CohortSubject {
   email: string;
+  full_name: string;
+  id: string;
   type: SubjectType;
-};
+}
 
-export type CohortHeatmapResponse = {
-  subjects: CohortSubject[];
-  competencies: string[];
+export interface CohortHeatmapResponse {
   cells: CohortHeatmapCell[];
+  competencies: string[];
+  subjects: CohortSubject[];
   team_average_pct: Record<string, number>;
-};
+}
 
-export type WeakSpot = {
+export interface WeakSpot {
   competency_id: string;
   median_pct: number;
   sample_size: number;
-};
+}
 
-export type WeakSpotsResponse = {
+export interface WeakSpotsResponse {
   threshold_pct: number;
   weak_spots: WeakSpot[];
-};
+}
 
 export const subjectCompetencyScores = (subjectId: string) =>
   callApi<SubjectCompetencyResponse>(
@@ -680,11 +686,29 @@ export const cohortHeatmap = (params: {
   type?: SubjectType;
   domain?: string;
   days?: number;
+  role?: string;
+  start_date?: string;
+  end_date?: string;
 }) => {
   const qs = new URLSearchParams();
-  if (params.type) qs.set("type", params.type);
-  if (params.domain) qs.set("domain", params.domain);
-  if (params.days) qs.set("days", String(params.days));
+  if (params.type) {
+    qs.set("type", params.type);
+  }
+  if (params.domain) {
+    qs.set("domain", params.domain);
+  }
+  if (params.days) {
+    qs.set("days", String(params.days));
+  }
+  if (params.role) {
+    qs.set("role", params.role);
+  }
+  if (params.start_date) {
+    qs.set("start_date", params.start_date);
+  }
+  if (params.end_date) {
+    qs.set("end_date", params.end_date);
+  }
   const q = qs.toString();
   return callApi<CohortHeatmapResponse>(
     `/api/cohorts/heatmap${q ? `?${q}` : ""}`
@@ -696,9 +720,12 @@ export const weakSpots = (params: {
   threshold_pct?: number;
 }) => {
   const qs = new URLSearchParams();
-  if (params.type) qs.set("type", params.type);
-  if (params.threshold_pct != null)
+  if (params.type) {
+    qs.set("type", params.type);
+  }
+  if (params.threshold_pct != null) {
     qs.set("threshold_pct", String(params.threshold_pct));
+  }
   const q = qs.toString();
   return callApi<WeakSpotsResponse>(
     `/api/cohorts/weak-spots${q ? `?${q}` : ""}`
@@ -707,27 +734,27 @@ export const weakSpots = (params: {
 
 // Series -------------------------------------------------------------------
 
-export type SeriesAssignmentSummary = {
+export interface SeriesAssignmentSummary {
   assignment_id: string;
-  sequence_number: number;
-  status: string;
+  completed_at: string | null;
   final_score: number | null;
   max_possible_score: number | null;
-  completed_at: string | null;
-};
+  sequence_number: number;
+  status: string;
+}
 
-export type SeriesSummary = {
-  id: string;
-  subject_id: string;
-  subject_full_name: string | null;
-  subject_email: string | null;
-  name: string;
-  competency_focus: string[];
-  cadence_days: number | null;
-  next_due_at: string | null;
-  created_at: string;
+export interface SeriesSummary {
   assignment_count: number;
-};
+  cadence_days: number | null;
+  competency_focus: string[];
+  created_at: string;
+  id: string;
+  name: string;
+  next_due_at: string | null;
+  subject_email: string | null;
+  subject_full_name: string | null;
+  subject_id: string;
+}
 
 export type SeriesDetail = SeriesSummary & {
   assignments: SeriesAssignmentSummary[];
@@ -751,32 +778,34 @@ export const getSeriesDetail = (id: string) =>
 
 export const attachAssignmentToSeries = (
   seriesId: string,
-  assignmentId: string,
+  assignmentId: string
 ) =>
   callApi<SeriesDetail>(
     `/api/series/${encodeURIComponent(seriesId)}/assignments/${encodeURIComponent(assignmentId)}`,
     { method: "POST", body: JSON.stringify({}) }
   );
 
-export type SeriesIssueNextResponse = {
-  series_id: string;
+export interface SeriesIssueNextResponse {
   assignment_id: string;
-  module_id: string;
-  magic_link_url: string;
   expires_at: string;
-  sequence_number: number;
+  magic_link_url: string;
+  module_id: string;
   next_due_at: string | null;
-};
+  sequence_number: number;
+  series_id: string;
+}
 
 export const issueNextForSeries = (
   seriesId: string,
-  options?: { expires_in_days?: number; send_email?: boolean },
+  options?: { expires_in_days?: number; send_email?: boolean }
 ) => {
   const qs = new URLSearchParams();
-  if (options?.expires_in_days != null)
+  if (options?.expires_in_days != null) {
     qs.set("expires_in_days", String(options.expires_in_days));
-  if (options?.send_email != null)
+  }
+  if (options?.send_email != null) {
     qs.set("send_email", String(options.send_email));
+  }
   const q = qs.toString();
   return callApi<SeriesIssueNextResponse>(
     `/api/series/${encodeURIComponent(seriesId)}/issue-next${q ? `?${q}` : ""}`,
@@ -784,27 +813,87 @@ export const issueNextForSeries = (
   );
 };
 
-export type CompetencyDistributionResponse = {
+// Series trend: longitudinal score per competency across sequence numbers.
+// Backend endpoint added in parallel; see specs/requirements.md §11.4.
+export interface SeriesTrendPoint {
+  assignment_id: string;
+  completed_at: string | null;
+  score_pct: number | null;
+  sequence_number: number;
+}
+
+export interface SeriesTrendLine {
   competency_id: string;
-  sample_size: number;
+  points: SeriesTrendPoint[];
+}
+
+export interface SeriesTrendResponse {
+  series_id: string;
+  trends: SeriesTrendLine[];
+}
+
+export const getSeriesTrend = (id: string) =>
+  callApi<SeriesTrendResponse>(`/api/series/${encodeURIComponent(id)}/trend`);
+
+export interface CompetencyDistributionResponse {
+  competency_id: string;
+  max_pct: number;
+  median_pct: number;
   min_pct: number;
   p25_pct: number;
-  median_pct: number;
   p75_pct: number;
-  max_pct: number;
+  sample_size: number;
   values: number[];
-};
+}
 
 export const competencyDistribution = (params: {
   competency_id: string;
   type?: SubjectType;
   exclude_subject_id?: string;
+  subject_id?: string;
+  assignment_id?: string;
 }) => {
   const qs = new URLSearchParams({ competency_id: params.competency_id });
-  if (params.type) qs.set("type", params.type);
-  if (params.exclude_subject_id)
+  if (params.type) {
+    qs.set("type", params.type);
+  }
+  if (params.exclude_subject_id) {
     qs.set("exclude_subject_id", params.exclude_subject_id);
+  }
+  if (params.subject_id) {
+    qs.set("subject_id", params.subject_id);
+  }
+  if (params.assignment_id) {
+    qs.set("assignment_id", params.assignment_id);
+  }
   return callApi<CompetencyDistributionResponse>(
     `/api/cohorts/distribution?${qs.toString()}`
   );
 };
+
+// Users management (spec §12.1 /settings/users). Internal-user CRUD over
+// /api/users. Self-demotion is server-rejected; the frontend mirrors that
+// check to keep the UI honest before the round-trip.
+export interface AdminUserRow {
+  created_at: string;
+  email: string;
+  full_name: string | null;
+  id: string;
+  role: AdminRole;
+}
+
+export const listAdminUsers = () => callApi<AdminUserRow[]>("/api/users");
+
+export const patchAdminUser = (id: string, body: { role: AdminRole }) =>
+  callApi<AdminUserRow>(`/api/users/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+// Generation run SSE URL. EventSource cannot send Authorization headers, so
+// the admin app proxies the upstream FastAPI stream at /api/generation-events
+// and attaches the Supabase Bearer token server-side. Mirrors the
+// scoring-events proxy. Events: topic_completed, finished, failed.
+export function generationRunEventsUrl(runId: string): string {
+  return `/api/generation-events?run_id=${encodeURIComponent(runId)}`;
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,6 +10,8 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from .attempts import get_assignment_for_token
+
+log = logging.getLogger(__name__)
 
 # Allowed event_type values, mirrored from packages/schemas/src/integrity.ts.
 # Server enforces the closed set so a misbehaving client cannot poison the log
@@ -75,23 +78,44 @@ def record_events(
     default_attempt_id = _current_attempt_id(supabase, assignment["id"])
 
     rows: list[dict[str, Any]] = []
+    dropped_types: list[str] = []
     for event in events:
         event_type = event.get("type")
         if event_type not in ALLOWED_EVENT_TYPES:
+            dropped_types.append(str(event_type))
             continue
         attempt_id = event.get("attempt_id") or default_attempt_id
         if not attempt_id:
+            dropped_types.append(f"{event_type}(no-attempt)")
             continue
+        client_ts = event.get("client_timestamp")
+        # supabase-py serializes via httpx's stdlib json.dumps, which
+        # refuses datetime. Pydantic parses the inbound ISO string into
+        # a datetime; coerce it back to ISO before the PostgREST insert.
+        if hasattr(client_ts, "isoformat"):
+            client_ts = client_ts.isoformat()
         rows.append(
             {
                 "attempt_id": attempt_id,
                 "assignment_id": assignment["id"],
                 "event_type": event_type,
                 "payload": event.get("payload") or {},
-                "client_timestamp": event.get("client_timestamp"),
+                "client_timestamp": client_ts,
                 "user_agent": user_agent,
                 "ip_hash": ip_hash,
             }
+        )
+
+    # Surface divergence between what the client submitted and what we
+    # accepted. Unknown event types are usually a client/server schema
+    # drift, and silent drops have historically masked the parity bug.
+    if dropped_types:
+        log.warning(
+            "integrity events dropped (assignment=%s submitted=%d accepted=%d types=%s)",
+            assignment["id"],
+            len(events),
+            len(rows),
+            sorted(set(dropped_types)),
         )
 
     if not rows:
@@ -125,8 +149,10 @@ def record_heartbeat(
 
     deadline = session_deadline(assignment)
     if deadline and deadline <= datetime.now(UTC):
+        # Spec §10.1 + CLAUDE.md: deadline-expired requests return 409, not
+        # 410. Keeps the status code consistent with submit / save paths.
         raise HTTPException(
-            status_code=status.HTTP_410_GONE,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Assessment time limit has elapsed.",
         )
 
@@ -138,23 +164,19 @@ def record_heartbeat(
     if delta == 0:
         return {"ok": True, "applied": 0, "attempt_id": attempt_id}
 
-    current = (
-        supabase.table("attempts")
-        .select("active_time_seconds")
-        .eq("id", attempt_id)
-        .limit(1)
-        .execute()
-    )
-    rows = current.data or []
-    existing = int(rows[0].get("active_time_seconds") or 0) if rows else 0
-
-    supabase.table("attempts").update(
-        {"active_time_seconds": existing + delta}
-    ).eq("id", attempt_id).execute()
+    # Atomic server-side increment (migration 0009). A read-modify-write
+    # from the API would lose increments under concurrent heartbeats from
+    # the candidate (the candidate fires every 10s and there can be
+    # multiple in flight on a slow network).
+    rpc = supabase.rpc(
+        "increment_attempt_active_seconds",
+        {"p_attempt_id": attempt_id, "p_delta": delta},
+    ).execute()
+    new_total = rpc.data if isinstance(rpc.data, int) else int(rpc.data or 0)
 
     return {
         "ok": True,
         "applied": delta,
         "attempt_id": attempt_id,
-        "total_active_seconds": existing + delta,
+        "total_active_seconds": new_total,
     }

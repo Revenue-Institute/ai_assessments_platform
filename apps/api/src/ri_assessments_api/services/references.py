@@ -4,15 +4,18 @@ OpenAI, store, retrieve top-k by cosine similarity (spec §6.4)."""
 from __future__ import annotations
 
 import io
+import ipaddress
 import logging
+import socket
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
 from supabase import Client
 
-from ..auth import AdminPrincipal
+from ..auth import AdminPrincipal, ensure_role
 from ..config import get_settings
 
 log = logging.getLogger(__name__)
@@ -23,14 +26,6 @@ log = logging.getLogger(__name__)
 # accuracy ever matters, swap in tiktoken here.
 CHUNK_CHAR_TARGET = 3_200
 CHUNK_CHAR_OVERLAP = 400
-
-
-def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
-    if principal.role not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{principal.role}' is not permitted for this action.",
-        )
 
 
 def _openai_client():
@@ -182,7 +177,7 @@ def upload_text(
     domain: str | None,
     source_url: str | None,
 ) -> dict[str, Any]:
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
     chunks = chunk_text(content)
     if not chunks:
         raise HTTPException(
@@ -211,6 +206,56 @@ def upload_text(
     }
 
 
+def _validate_safe_url(url: str) -> None:
+    """SSRF guard. Reject anything that is not http(s) and anything that
+    resolves to a loopback / private / link-local / reserved IP. Admin
+    tokens shouldn't probe internal services or cloud-metadata endpoints
+    (169.254.169.254). Raises 400 on any policy violation."""
+
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in ("http", "https"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only http(s) URLs are allowed for reference ingest.",
+        )
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL is missing a hostname.",
+        )
+    if host.lower() in ("localhost", "ip6-localhost", "ip6-loopback"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Loopback hostnames are not allowed.",
+        )
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not resolve URL host: {host}",
+        ) from exc
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="URL resolves to a non-public IP address.",
+            )
+
+
 def upload_url(
     supabase: Client,
     principal: AdminPrincipal,
@@ -227,6 +272,7 @@ def upload_url(
             detail="trafilatura is not installed on the server.",
         ) from exc
 
+    _validate_safe_url(url)
     downloaded = trafilatura.fetch_url(url)
     if not downloaded:
         raise HTTPException(
@@ -317,7 +363,7 @@ def list_documents(supabase: Client) -> list[dict[str, Any]]:
 
 
 def delete_document(supabase: Client, principal: AdminPrincipal, doc_id: str) -> None:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     supabase.table("reference_documents").delete().eq("id", doc_id).execute()
 
 

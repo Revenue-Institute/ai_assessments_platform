@@ -1,22 +1,13 @@
 import Link from "next/link";
-import {
-  ApiError,
-  type AssessmentSummary,
-  listAssessments,
-} from "@/lib/api";
+import { type AssessmentSummary, listAssessments } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
 
 export default async function AssessmentsPage() {
-  let assessments: AssessmentSummary[] = [];
-  let error: string | null = null;
-  try {
-    assessments = await listAssessments();
-  } catch (e) {
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
-  }
+  const { data, error } = await loadOrApiError(() => listAssessments());
+  const assessments: AssessmentSummary[] = data ?? [];
 
   return (
     <>
@@ -44,7 +35,7 @@ export default async function AssessmentsPage() {
         )}
 
         {assessments.length === 0 && !error ? (
-          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
+          <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">
               No assessments yet. Create your first assessment.
             </p>
@@ -85,12 +76,12 @@ export default async function AssessmentsPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const tone =
-    status === "published"
-      ? "bg-primary/20 text-primary"
-      : status === "archived"
-        ? "bg-muted text-muted-foreground"
-        : "bg-warning/20 text-warning";
+  let tone = "bg-warning/20 text-warning";
+  if (status === "published") {
+    tone = "bg-primary/20 text-primary";
+  } else if (status === "archived") {
+    tone = "bg-muted text-muted-foreground";
+  }
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

@@ -1,7 +1,7 @@
-type Slice = {
+interface Slice {
   competency_id: string;
   score_pct: number;
-};
+}
 
 const SIZE = 320;
 const PADDING = 60;
@@ -34,11 +34,14 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
   return (
     <div className="rounded-xl border border-border/50 bg-muted/20 p-4 text-primary">
       <svg
+        aria-labelledby="competency-radar-title"
         height={SIZE}
+        role="img"
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         width={SIZE}
         xmlns="http://www.w3.org/2000/svg"
       >
+        <title id="competency-radar-title">Competency score radar chart</title>
         {/* concentric rings */}
         {Array.from({ length: RINGS }, (_, i) => {
           const r = ((i + 1) / RINGS) * RADIUS;
@@ -47,7 +50,7 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
               cx={cx}
               cy={cy}
               fill="none"
-              key={`ring-${i}`}
+              key={`ring-${r.toFixed(1)}`}
               r={r}
               stroke="currentColor"
               strokeOpacity={0.1}
@@ -109,12 +112,13 @@ export function CompetencyRadar({ slices }: { slices: Slice[] }) {
           const labelDistance = RADIUS + 20;
           const x = cx + Math.cos(angle) * labelDistance;
           const y = cy + Math.sin(angle) * labelDistance;
-          const anchor =
-            Math.cos(angle) > 0.3
-              ? "start"
-              : Math.cos(angle) < -0.3
-                ? "end"
-                : "middle";
+          const angleCos = Math.cos(angle);
+          let anchor: "start" | "middle" | "end" = "middle";
+          if (angleCos > 0.3) {
+            anchor = "start";
+          } else if (angleCos < -0.3) {
+            anchor = "end";
+          }
           const tag = displayTag(slice.competency_id);
           return (
             <g key={`label-${slice.competency_id}`}>

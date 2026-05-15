@@ -1,0 +1,127 @@
+{
+  "$comment": "Canonical integrity-score fixtures. Both apps/api/tests/test_integrity_parity.py and packages/integrity/test/score.test.ts assert against expected_score. If the formula changes, regenerate expected_score by walking spec section 10.4 and updating both implementations together. Events are the raw event-record form (matches what the API persists in attempt_events).",
+  "fixtures": [
+    {
+      "name": "clean_run_no_events",
+      "events": [],
+      "active_time_seconds": 600,
+      "total_time_seconds": 600,
+      "expected_score": 100
+    },
+    {
+      "name": "visibility_hidden_under_threshold",
+      "events": [
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" }
+      ],
+      "active_time_seconds": 600,
+      "total_time_seconds": 600,
+      "expected_score": 100
+    },
+    {
+      "name": "visibility_hidden_above_threshold",
+      "events": [
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" }
+      ],
+      "active_time_seconds": 600,
+      "total_time_seconds": 600,
+      "expected_score": 94
+    },
+    {
+      "name": "allowed_pastes_excluded",
+      "events": [
+        { "event_type": "paste_attempted", "payload": { "allowed": false } },
+        { "event_type": "paste_attempted", "payload": { "allowed": true } },
+        { "event_type": "paste_attempted", "payload": { "allowed": true } }
+      ],
+      "active_time_seconds": 600,
+      "total_time_seconds": 600,
+      "expected_score": 95
+    },
+    {
+      "name": "devtools_flat_penalty",
+      "events": [
+        { "event_type": "devtools_opened" },
+        { "event_type": "devtools_opened" }
+      ],
+      "active_time_seconds": 600,
+      "total_time_seconds": 600,
+      "expected_score": 85
+    },
+    {
+      "name": "low_active_time_ratio",
+      "events": [],
+      "active_time_seconds": 100,
+      "total_time_seconds": 600,
+      "expected_score": 80
+    },
+    {
+      "name": "combined_heavy",
+      "events": [
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "visibility_hidden" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "focus_lost" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "paste_attempted", "payload": { "allowed": false } },
+        { "event_type": "paste_attempted", "payload": { "allowed": false } },
+        { "event_type": "paste_attempted", "payload": { "allowed": false } },
+        { "event_type": "copy_attempted" },
+        { "event_type": "copy_attempted" },
+        { "event_type": "copy_attempted" },
+        { "event_type": "copy_attempted" },
+        { "event_type": "devtools_opened" },
+        { "event_type": "window_resized" },
+        { "event_type": "window_resized" }
+      ],
+      "active_time_seconds": 100,
+      "total_time_seconds": 600,
+      "expected_score": 7
+    },
+    {
+      "name": "floor_at_zero",
+      "events": [
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" },
+        { "event_type": "fullscreen_exited" }
+      ],
+      "active_time_seconds": 0,
+      "total_time_seconds": 600,
+      "expected_score": 0
+    },
+    {
+      "name": "missing_active_time_skips_ratio_penalty",
+      "events": [],
+      "active_time_seconds": null,
+      "total_time_seconds": 600,
+      "expected_score": 100
+    }
+  ]
+}

@@ -11,7 +11,7 @@ export async function signIn(formData: FormData): Promise<SignInResult> {
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/");
 
-  if (!email || !password) {
+  if (!(email && password)) {
     return { ok: false, error: "Email and password are required." };
   }
 

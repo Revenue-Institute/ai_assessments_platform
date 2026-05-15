@@ -32,7 +32,7 @@ Spec §7.2 calls for one ephemeral n8n user per attempt with a scoped JWT. v1 us
 Spec §15 names BullMQ + Upstash Redis. We use a 30-line `services/queue.py` that LPUSHes JSON envelopes onto a single `ri:scoring:jobs` list and a `worker.py` that BRPOPs them. Same Upstash/Redis store. Swap to BullMQ/RQ/Celery when we need retries with backoff, dead-letter inspection UIs, or scheduled jobs.
 
 ### Embedding dimension
-Default Voyage-3 (1024 dims). The original `0001_init.sql` set `vector(1536)` for OpenAI; `0004_voyage_embeddings.sql` aligns the column to the chosen provider. Pick one provider per deployment.
+Default OpenAI `text-embedding-3-small` (1024 dims via Matryoshka truncation, set through the `dimensions` API parameter). The original `0001_init.sql` set `vector(1536)`; migration `0004_voyage_embeddings.sql` is named historically and aligns the column to `vector(1024)` regardless of provider. Pick one provider per deployment and keep `EMBEDDING_DIMS` aligned with the column.
 
 ### `assessments` is a v1 extension over the spec data model
 Migration `0007_assessments.sql` adds an `assessments` container that groups one or more modules. Assignments now bind to either a module (legacy) or an assessment (multi-module). Rationale and backwards-compat plan are in the migration header.
@@ -88,8 +88,32 @@ without spinning up an attempt.
 
 ## Open spec items not yet implemented
 
-- Generator self-verification loop (§6.3 #10): solver round-trip is simulated in the prompt but not enforced server-side after emission.
-- Fairness pre-publish gate (§8.4): 50-sample sanity rubric is documented but not wired into `POST /api/modules/{id}/publish`.
-- Generator post-emission em-dash sanitizer: relying on the prompt is insufficient; add a strip pass before persistence.
-- WCAG 2.1 AA: timer is solid; consent gate, navigator, and Monaco/React-Flow wrappers need a focused audit.
-- Integration tests beyond `test_health.py` and `test_pii_filter.py`.
+- WCAG 2.1 AA on the diagram (React Flow) and n8n iframe canvases. Timer, consent gate, navigator, and Monaco wrappers are addressed; the canvas runners are documented as "non-keyboard-accessible in v1" with a non-interactive fallback path.
+- Integration test coverage beyond the current `test_health.py`, `test_pii_filter.py`, integrity vitest suite, and admin vitest suite. End-to-end runner tests (E2B / n8n) still pending.
+- Per-attempt n8n user isolation (§7.2): v1 ships with the shared workspace documented above.
+- BullMQ-style retry/dead-letter UI on the scoring queue. v1 has a dead-letter LIST (`ri:scoring:dlq`) plus a daily drain cron (see DEPLOYMENT.md), but no UI to inspect failures.
+- Admin assignment detail page does not yet read `assignments.metadata.email_delivery`. Bounce / spam state currently visible only via SQL.
+
+## Operational follow-ups
+
+These are not v1-blocking but should land before the first external candidate uses the production deployment:
+
+- Rotate every secret listed in `DEPLOYMENT.md > Secrets to rotate and set`. Current `.env.local` values are dev-only and must not appear in any Vercel / Cloud Run env block.
+- Provision the three Sentry projects (`ri-admin`, `ri-candidate`, `ri-api`) and a single `SENTRY_AUTH_TOKEN` with `project:releases` scope. Source-map upload is gated on the token, not on a hosting-provider sentinel.
+- Configure DKIM, SPF, and DMARC DNS records on `assessments.revenueinstitute.com` per Resend's domain-verification wizard before enabling magic-link sends.
+- Set `TRUSTED_PROXY_IPS` on the Cloud Run API service to the load balancer's egress CIDRs so `attempt_events.ip_hash` is computed from the real client IP, not the proxy.
+
+## Other documented divergences
+
+These are deliberate departures from `specs/requirements.md` recorded for reviewer context. None block v1 ship.
+
+- **Package manager: bun, not pnpm.** Spec §2 names pnpm. Repo uses bun 1.3.10 (see `package.json#packageManager`). Workspace protocol and turbo wiring are identical; the swap simplifies the local dev story.
+- **`packages/ui` is `packages/design-system`.** Inherited from the next-forge starter naming, kept to avoid churn against shadcn upstream.
+- **No `infra/docker/` tree.** Each app owns its own Dockerfile under `apps/*/Dockerfile`; the only top-level Docker artifact is `docker-compose.yml` for local dev. Collapses the spec's `infra/docker/` directory.
+- **No `infra/terraform/`.** Spec §3 marks it optional; deferred until we need IaC for the FastAPI + n8n Cloud Run services.
+- **No `apps/email` preview app.** The next-forge React Email scaffold (`apps/email`, `packages/email`) has no callers in the runtime code path, so both were removed. Re-introduce a transactional template package only when an actual sender lands.
+- **Observability stack: Better Stack + Logtail alongside Axiom + Sentry.** Spec §15 only lists Sentry + Axiom; we wire Better Stack uptime and Logtail log ingestion via `@repo/observability` because the team already runs them.
+- **`assessments` extension over base data model.** See migration `0007_assessments.sql`; recorded earlier in this file.
+- **Embedding provider: OpenAI, not Voyage.** Spec §19 defaults to Voyage-3; we picked OpenAI `text-embedding-3-small` for ops familiarity. Migration column dimension and `EMBEDDING_DIMS` are aligned at 1024.
+- **Code-run SSE streaming added (Phase-5 hardening).** Spec §14.3 names a generic `POST /a/{token}/code/run` that streams stdout via SSE. The candidate UI uses the streaming `fetch` API (not `EventSource`, because the request body must be a POST with the code buffer). The backend bridges E2B's blocking `sandbox.process.start_and_wait` to async via `code_runner.run_user_code_streaming`, which spawns the execution on a worker thread and pushes stdout/stderr chunks onto an asyncio queue. Non-streaming callers (`POST /a/{token}/code/test`, the scoring grader) still use the synchronous `run_user_code` entry point.
+- **CI scope.** `.github/workflows/ci.yml` runs ruff + pytest on `apps/api`, bun typecheck on the two Next apps, the copy/boundaries lint (`bun run check`), the integrity vitest suite, the admin vitest suite, and a non-blocking `security-audit` job (pip-audit + bun audit). The schema codegen drift job also runs.

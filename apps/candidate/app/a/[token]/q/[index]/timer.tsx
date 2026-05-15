@@ -25,11 +25,12 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   const seconds = totalSeconds % 60;
   const expired = remainingMs === 0;
 
-  const tone = expired
-    ? "border-destructive/60 bg-destructive/15 text-destructive"
-    : minutes < 5
-      ? "border-warning/60 bg-warning/15 text-warning"
-      : "border-primary/40 bg-primary/10 text-primary";
+  let tone = "border-primary/40 bg-primary/10 text-primary";
+  if (expired) {
+    tone = "border-destructive/60 bg-destructive/15 text-destructive";
+  } else if (minutes < 5) {
+    tone = "border-warning/60 bg-warning/15 text-warning";
+  }
 
   // Quantize for the screen-reader announcement. Above 5 min: announce
   // each whole minute. Under 5 min: announce every 30 s. Final minute:

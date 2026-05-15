@@ -1,16 +1,22 @@
 /*
- * This file configures the initialization of Sentry on the server.
- * The config you add here will be used whenever the server handles a request.
- * https://docs.sentry.io/platforms/javascript/guides/nextjs/
+ * Sentry server-side init. Shared by both Next apps' sentry.server.config.ts
+ * and instrumentation. DSN resolution mirrors client.ts: per-app DSN first,
+ * legacy NEXT_PUBLIC_SENTRY_DSN as fallback (spec §16).
  */
 
 // biome-ignore lint/performance/noNamespaceImport: Sentry SDK convention
 import * as Sentry from "@sentry/nextjs";
-import { keys } from "./keys";
+import { resolveSentryDsn } from "./keys";
 
 export const initializeSentry = (): ReturnType<typeof Sentry.init> =>
   Sentry.init({
-    dsn: keys().NEXT_PUBLIC_SENTRY_DSN,
+    dsn: resolveSentryDsn(),
+
+    environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? "production",
+
+    // PII policy (spec §18). Mirrors the FastAPI service: no raw IPs,
+    // request bodies, or candidate answers are forwarded to Sentry.
+    sendDefaultPii: false,
 
     // Enable logging
     enableLogs: true,

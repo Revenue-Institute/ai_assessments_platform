@@ -2,8 +2,8 @@
 
 import { redirect } from "next/navigation";
 import {
-  addAssessmentModule,
   ApiError,
+  addAssessmentModule,
   archiveAssessment,
   createAssessment,
   patchAssessment,
@@ -11,8 +11,10 @@ import {
   removeAssessmentModule,
   reorderAssessment,
 } from "@/lib/api";
+import type { ActionResult } from "@/lib/api-helpers";
+import { redirectOnApi, runApiAction } from "@/lib/api-helpers";
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+export type { ActionResult } from "@/lib/api-helpers";
 
 export async function createAssessmentAction(input: {
   slug: string;
@@ -24,7 +26,7 @@ export async function createAssessmentAction(input: {
   const title = input.title.trim();
   const description = input.description?.trim() || null;
 
-  if (!slug || !title) {
+  if (!(slug && title)) {
     redirect(
       `/assessments/new?error=${encodeURIComponent("Slug and title are required.")}`
     );
@@ -57,77 +59,49 @@ export async function patchAssessmentAction(
   if (!title) {
     return { ok: false, error: "Title is required." };
   }
-  try {
-    await patchAssessment(id, {
+  return await runApiAction(() =>
+    patchAssessment(id, {
       title,
       description: input.description?.trim() || null,
-    });
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: e.message };
-    throw e;
-  }
+    })
+  );
 }
 
 export async function addAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  try {
-    await addAssessmentModule(id, { module_id: moduleId });
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: e.message };
-    throw e;
-  }
+  return await runApiAction(() =>
+    addAssessmentModule(id, { module_id: moduleId })
+  );
 }
 
 export async function removeAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  try {
-    await removeAssessmentModule(id, moduleId);
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: e.message };
-    throw e;
-  }
+  return await runApiAction(() => removeAssessmentModule(id, moduleId));
 }
 
 export async function reorderAssessmentAction(
   id: string,
   moduleIds: string[]
 ): Promise<ActionResult> {
-  try {
-    await reorderAssessment(id, moduleIds);
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: e.message };
-    throw e;
-  }
+  return await runApiAction(() => reorderAssessment(id, moduleIds));
 }
 
 export async function publishAssessmentAction(id: string): Promise<void> {
-  try {
-    await publishAssessment(id);
-    redirect(`/assessments/${id}?ok=${encodeURIComponent("Published.")}`);
-  } catch (e) {
-    if (e instanceof ApiError) {
-      redirect(`/assessments/${id}?error=${encodeURIComponent(e.message)}`);
-    }
-    throw e;
-  }
+  await redirectOnApi(
+    () => publishAssessment(id),
+    `/assessments/${id}`,
+    "Published."
+  );
 }
 
 export async function archiveAssessmentAction(id: string): Promise<void> {
-  try {
-    await archiveAssessment(id);
-    redirect(`/assessments/${id}?ok=${encodeURIComponent("Archived.")}`);
-  } catch (e) {
-    if (e instanceof ApiError) {
-      redirect(`/assessments/${id}?error=${encodeURIComponent(e.message)}`);
-    }
-    throw e;
-  }
+  await redirectOnApi(
+    () => archiveAssessment(id),
+    `/assessments/${id}`,
+    "Archived."
+  );
 }

@@ -7,14 +7,64 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
-import * as schemas from "../src/index.js";
+import {
+  CodeConfig,
+  DiagramConfig,
+  DifficultyEnum,
+  GeneratedOutline,
+  GeneratedOutlineTopic,
+  GenerationBrief,
+  GenerationStage,
+  IntegrityEvent,
+  IntegrityEventType,
+  Module,
+  ModuleStatus,
+  N8nConfig,
+  NotebookConfig,
+  QuestionMix,
+  QuestionTemplate,
+  QuestionTypeEnum,
+  Rubric,
+  RubricCriterion,
+  ScoringMode,
+  SqlConfig,
+  VariableSchema,
+  VariableSpec,
+} from "../src/index.js";
+
+const schemas = {
+  CodeConfig,
+  DiagramConfig,
+  DifficultyEnum,
+  GeneratedOutline,
+  GeneratedOutlineTopic,
+  GenerationBrief,
+  GenerationStage,
+  IntegrityEvent,
+  IntegrityEventType,
+  Module,
+  ModuleStatus,
+  N8nConfig,
+  NotebookConfig,
+  QuestionMix,
+  QuestionTemplate,
+  QuestionTypeEnum,
+  Rubric,
+  RubricCriterion,
+  ScoringMode,
+  SqlConfig,
+  VariableSchema,
+  VariableSpec,
+};
 
 const outDir = resolve(process.argv[2] ?? "./schemas-out");
 mkdirSync(outDir, { recursive: true });
 
 let written = 0;
 for (const [name, value] of Object.entries(schemas)) {
-  if (!(value instanceof z.ZodType)) continue;
+  if (!(value instanceof z.ZodType)) {
+    continue;
+  }
   const json = z.toJSONSchema(value, { target: "draft-7" });
   // datamodel-code-generator wants a top-level title for the model name.
   const withTitle = { title: name, ...(json as Record<string, unknown>) };

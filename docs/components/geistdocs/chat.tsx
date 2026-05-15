@@ -299,8 +299,10 @@ const ChatInner = ({ basePath, suggestions, isOpen }: ChatInnerProps) => {
               />
               {message.parts
                 .filter((part) => part.type === "text")
-                .map((part, index) => (
-                  <MessageContent key={`${message.id}-${part.type}-${index}`}>
+                .map((part) => (
+                  <MessageContent
+                    key={`${message.id}-${part.type}-${part.text}`}
+                  >
                     <MessageResponse className="text-wrap">
                       {part.text}
                     </MessageResponse>

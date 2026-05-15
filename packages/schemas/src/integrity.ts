@@ -32,5 +32,6 @@ export const IntegrityEvent = z.object({
   type: IntegrityEventType,
   payload: z.record(z.string(), z.any()).default({}),
   client_timestamp: z.string().datetime().optional(),
+  attempt_id: z.string().uuid().optional(),
 });
 export type IntegrityEvent = z.infer<typeof IntegrityEvent>;

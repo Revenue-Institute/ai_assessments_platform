@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import HTTPException, status
 from supabase import Client
 
+from ..auth import decode_candidate_token
+from ..config import get_settings
 from ..models.candidate import (
     CandidateAssignmentView,
     CandidateModuleView,
@@ -22,7 +24,17 @@ def _question_count(module_snapshot: dict[str, Any]) -> int:
 
 def resolve_token(supabase: Client, raw_token: str) -> CandidateAssignmentView:
     """Look up an assignment by its magic-link token. Raises 404/410 on any
-    failure path so we never leak whether a token exists."""
+    failure path so we never leak whether a token exists.
+
+    Verifies the JWT signature, audience, and exp claim BEFORE the DB
+    lookup so a forged or tampered token is rejected without leaking
+    timing information about which token hashes exist. Skipped only when
+    JWT_SIGNING_SECRET is unset (local dev without a configured secret),
+    so production rotation of the secret invalidates outstanding links."""
+
+    if get_settings().jwt_signing_secret:
+        # decode_candidate_token raises 401 on bad sig / wrong aud / exp.
+        decode_candidate_token(raw_token)
 
     token_hash = hash_token(raw_token)
 

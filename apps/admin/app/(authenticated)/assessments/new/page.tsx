@@ -1,18 +1,13 @@
-import { ApiError, listModules, type ModuleSummary } from "@/lib/api";
+import { listModules, type ModuleSummary } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 import { Header } from "../../components/header";
 import { NewAssessmentForm } from "./new-assessment-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewAssessmentPage() {
-  let modules: ModuleSummary[] = [];
-  let error: string | null = null;
-  try {
-    modules = await listModules();
-  } catch (e) {
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
-  }
+  const { data, error } = await loadOrApiError(() => listModules());
+  const modules: ModuleSummary[] = data ?? [];
 
   const publishedModules = modules.filter((m) => m.status === "published");
 

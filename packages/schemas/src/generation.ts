@@ -12,8 +12,8 @@ export type QuestionMix = z.infer<typeof QuestionMix>;
 
 export const GenerationBrief = z.object({
   role_title: z.string(),
-  responsibilities: z.string(),
-  target_duration_minutes: z.number(),
+  responsibilities: z.string().min(1).max(8000),
+  target_duration_minutes: z.number().min(10).max(240),
   difficulty: DifficultyEnum,
   domains: z.array(z.string()),
   /** Optional. Each percentage is independently optional, so the admin can

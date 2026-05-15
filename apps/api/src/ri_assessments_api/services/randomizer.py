@@ -121,9 +121,27 @@ def sample_variables(
 
 
 def render_prompt(template: str, variables: dict[str, Any]) -> str:
-    """Render a Jinja-flavored prompt template (spec §8.2)."""
+    """Render a Jinja-flavored prompt template (spec §8.2).
 
-    return _jinja_env.from_string(template).render(**variables)
+    AI-generated prompts occasionally include characters Jinja2 treats as
+    syntax errors (a stray `?`, `??`, raw `{{`/`}}` inside math notation,
+    etc.). The preview surfaces should never 500 the entire page over a
+    template-syntax glitch in one question, so we degrade gracefully:
+    return the raw template (with a leading note) so reviewers can still
+    see the broken question and fix it via the editor.
+    """
+
+    import logging
+
+    from jinja2 import TemplateError, TemplateSyntaxError
+
+    try:
+        return _jinja_env.from_string(template).render(**variables)
+    except (TemplateSyntaxError, TemplateError) as exc:
+        logging.getLogger(__name__).warning(
+            "render_prompt: bad template, returning raw source. err=%s", exc
+        )
+        return template
 
 
 def question_seed(random_seed: int, question_id: str) -> str:

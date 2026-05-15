@@ -17,7 +17,9 @@ import { useEffect } from "react";
  *, that submission is the candidate's intentional save. */
 export function useUnsavedChangesWarning(dirty: boolean): void {
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty) {
+      return;
+    }
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       // Older browsers required returnValue to be set; modern ones just

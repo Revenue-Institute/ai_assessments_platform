@@ -30,7 +30,7 @@ jobs:
         run: uv run pytest -q
 
   frontend:
-    name: admin + candidate (typecheck)
+    name: admin + candidate (typecheck + tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,22 @@ jobs:
           bun-version: 1.3.10
       - run: bun install --frozen-lockfile
       - run: bun run --filter admin --filter candidate typecheck
+      - name: Admin vitest
+        run: bun --filter admin test
+      - name: Integrity vitest
+        run: bun --filter @repo/integrity test
+
+  lint:
+    name: copy + boundaries lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - name: bun run check (ultracite + check-copy + check-boundaries)
+        run: bun run check
 
   schemas-codegen:
     name: zod -> pydantic codegen drift
@@ -64,3 +80,40 @@ jobs:
             git --no-pager diff
             exit 1
           fi
+
+  # Non-blocking dependency vulnerability scan. Goal is signal for triage,
+  # not gating PRs. Promote to required once findings settle.
+  security-audit:
+    name: security audit (pip-audit + bun audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - name: Sync API deps (with dev group for pip-audit)
+        working-directory: apps/api
+        run: uv sync --frozen
+      - name: pip-audit (apps/api)
+        working-directory: apps/api
+        # pip-audit reads the project metadata + the locked environment uv
+        # just synced. Non-zero exit is allowed by continue-on-error.
+        run: uv run pip-audit --strict
+        continue-on-error: true
+      - name: bun install (workspace)
+        run: bun install --frozen-lockfile
+      - name: bun audit
+        # `bun audit` is the modern invocation; if the runner ships a bun
+        # without it, fall back to npm audit on the workspaces so the job
+        # still produces signal.
+        run: |
+          if bun audit --help >/dev/null 2>&1; then
+            bun audit || true
+          else
+            npm audit --workspaces=true || true
+          fi
+        continue-on-error: true

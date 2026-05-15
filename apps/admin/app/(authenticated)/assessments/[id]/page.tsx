@@ -8,10 +8,7 @@ import {
   type ModuleSummary,
 } from "@/lib/api";
 import { Header } from "../../components/header";
-import {
-  archiveAssessmentAction,
-  publishAssessmentAction,
-} from "../actions";
+import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
 import { AssessmentMetaForm } from "./assessment-meta-form";
 import { AssessmentModulesSection } from "./assessment-modules-section";
 
@@ -35,7 +32,9 @@ export default async function AssessmentDetailPage({
   try {
     [detail, modules] = await Promise.all([getAssessment(id), listModules()]);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
     throw e;
   }
 

@@ -1,7 +1,9 @@
+import { keys as observability } from "@repo/observability/keys";
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 export const env = createEnv({
+  extends: [observability()],
   server: {
     INTERNAL_API_URL: z.string().url().default("http://localhost:8000"),
     JWT_SIGNING_SECRET: z.string().min(1).optional(),

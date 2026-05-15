@@ -1,56 +1,64 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ApiError,
   createSubject,
   listSubjects,
   type SubjectSummary,
   type SubjectType,
 } from "@/lib/api";
+import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ error?: string; ok?: string }>;
+type TypeFilter = "all" | "candidate" | "employee";
+
+type SearchParams = Promise<{
+  error?: string;
+  ok?: string;
+  type?: string;
+}>;
+
+function normalizeFilter(value: string | undefined): TypeFilter {
+  if (value === "all" || value === "candidate" || value === "employee") {
+    return value;
+  }
+  // Spec §12.1: default the /candidates list to candidate-type subjects.
+  return "candidate";
+}
 
 export default async function CandidatesPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const { error, ok } = await searchParams;
+  const { error, ok, type } = await searchParams;
+  const filter = normalizeFilter(type);
 
-  let candidates: SubjectSummary[] = [];
-  let loadError: string | null = null;
-  try {
-    candidates = await listSubjects();
-  } catch (e) {
-    if (e instanceof ApiError) loadError = e.message;
-    else throw e;
-  }
+  const { data, error: loadError } = await loadOrApiError(() => listSubjects());
+  const all: SubjectSummary[] = data ?? [];
+
+  const candidates =
+    filter === "all" ? all : all.filter((c) => c.type === filter);
 
   async function action(formData: FormData): Promise<void> {
     "use server";
-    const type = String(formData.get("type") ?? "candidate") as SubjectType;
+    const submittedType = String(
+      formData.get("type") ?? "candidate"
+    ) as SubjectType;
     const full_name = String(formData.get("full_name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
-    if (!full_name || !email) {
+    if (!(full_name && email)) {
       redirect(
         "/candidates?error=" +
-          encodeURIComponent("Name and email are required."),
+          encodeURIComponent("Name and email are required.")
       );
     }
-    try {
-      await createSubject({ type, full_name, email });
-      redirect(
-        "/candidates?ok=" + encodeURIComponent("Candidate created."),
-      );
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/candidates?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
-    }
+    return redirectOnApi(
+      () => createSubject({ type: submittedType, full_name, email }),
+      "/candidates",
+      "Candidate created."
+    );
   }
 
   return (
@@ -76,6 +84,8 @@ export default async function CandidatesPage({
             {error || loadError || ok}
           </p>
         )}
+
+        <TypeFilterChips active={filter} all={all} />
 
         <form
           action={action}
@@ -120,7 +130,9 @@ export default async function CandidatesPage({
         <ul className="divide-y divide-border/40 rounded-xl border border-border/50 bg-muted/20">
           {candidates.length === 0 ? (
             <li className="px-4 py-3 text-muted-foreground text-sm">
-              No candidates yet.
+              {all.length === 0
+                ? "No candidates yet."
+                : `No ${filter === "all" ? "people" : `${filter}s`} match this filter.`}
             </li>
           ) : (
             candidates.map((c) => (
@@ -146,5 +158,53 @@ export default async function CandidatesPage({
         </ul>
       </div>
     </>
+  );
+}
+
+function TypeFilterChips({
+  active,
+  all,
+}: {
+  active: TypeFilter;
+  all: SubjectSummary[];
+}) {
+  const counts = {
+    all: all.length,
+    candidate: all.filter((c) => c.type === "candidate").length,
+    employee: all.filter((c) => c.type === "employee").length,
+  } as const;
+
+  const options: Array<{ value: TypeFilter; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "candidate", label: "Candidates" },
+    { value: "employee", label: "Employees" },
+  ];
+
+  return (
+    <fieldset
+      aria-label="Filter by subject type"
+      className="flex flex-wrap items-center gap-2 border-0 p-0"
+    >
+      {options.map((opt) => {
+        const isActive = active === opt.value;
+        return (
+          <Link
+            aria-pressed={isActive}
+            className={`rounded border px-3 py-1.5 text-xs transition ${
+              isActive
+                ? "border-primary/60 bg-primary/15 text-primary"
+                : "border-border bg-card text-muted-foreground hover:border-primary/40"
+            }`}
+            href={`/candidates?type=${opt.value}`}
+            key={opt.value}
+          >
+            {opt.label}
+            <span className="ml-1.5 text-[10px] opacity-70">
+              ({counts[opt.value]})
+            </span>
+          </Link>
+        );
+      })}
+    </fieldset>
   );
 }

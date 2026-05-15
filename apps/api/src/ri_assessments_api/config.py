@@ -1,8 +1,13 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Minimum length we require for HMAC / signing secrets outside local dev.
+# 32 bytes is the conventional floor for HS256-style secrets (OWASP and
+# RFC 7518 §3.2 both call out >= 256 bits / 32 bytes for keyed-MAC inputs).
+_MIN_SECRET_LEN = 32
 
 
 class Settings(BaseSettings):
@@ -72,10 +77,67 @@ class Settings(BaseSettings):
     # Computed CORS origins
     cors_origins: list[str] = Field(default_factory=list)
 
+    # Trusted reverse proxies (spec §10, §18: do not honor X-Forwarded-For
+    # unless the immediate peer is one of these). Stored as a raw
+    # comma-separated string from env (pydantic-settings tries to JSON-
+    # parse list-typed fields before validators run, which fails for the
+    # natural "1.2.3.4,5.6.7.8" form); accessor below exposes the parsed
+    # list. Defaults to empty so the unsafe header is ignored when no
+    # proxy is configured.
+    trusted_proxy_ips_raw: str = Field(default="", alias="TRUSTED_PROXY_IPS")
+
+    @property
+    def trusted_proxy_ips(self) -> list[str]:
+        return [item.strip() for item in (self.trusted_proxy_ips_raw or "").split(",") if item.strip()]
+
     def resolve_cors_origins(self) -> list[str]:
         if self.cors_origins:
             return self.cors_origins
         return [self.next_public_admin_url, self.next_public_candidate_url]
+
+    @model_validator(mode="after")
+    def _require_secrets_outside_local(self) -> "Settings":
+        """Spec §18 + CLAUDE.md: fail closed on misconfigured secrets so
+        a non-local deploy can never start with an empty or weak signing
+        key. Local dev is tolerated so contributors can run the API
+        without ceremony; staging and production must satisfy >= 32 chars."""
+
+        if self.app_env == "local":
+            return self
+        for name in ("jwt_signing_secret", "session_cookie_secret"):
+            value = getattr(self, name) or ""
+            if not value:
+                raise ValueError(
+                    f"{name.upper()} is required when APP_ENV={self.app_env!r}."
+                )
+            if len(value) < _MIN_SECRET_LEN:
+                raise ValueError(
+                    f"{name.upper()} must be at least {_MIN_SECRET_LEN} characters "
+                    f"when APP_ENV={self.app_env!r}."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_service_urls(self) -> "Settings":
+        """Sanity-check externally-visible URLs in non-local envs. We do
+        not assert reachability (that is for /health/ready), only that
+        the operator did not paste an obvious typo (http instead of
+        https, missing scheme, etc). Local dev is tolerated so a
+        contributor can point at a local Supabase or skip secrets entirely."""
+
+        if self.app_env == "local":
+            return self
+        if self.supabase_url and not self.supabase_url.startswith("https://"):
+            raise ValueError(
+                "SUPABASE_URL must start with https:// in non-local environments."
+            )
+        if self.database_url and not self.database_url.startswith(
+            ("postgresql://", "postgres://")
+        ):
+            raise ValueError(
+                "DATABASE_URL must use postgresql:// or postgres:// scheme."
+            )
+        return self
 
 
 @lru_cache

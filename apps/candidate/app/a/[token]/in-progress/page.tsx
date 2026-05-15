@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { ApiError, fetchAssignment } from "@/lib/api";
 
-type Params = { token: string };
+interface Params {
+  token: string;
+}
 
 export default async function InProgressGate({
   params,

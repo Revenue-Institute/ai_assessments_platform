@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "clean": "git clean -xdf .cache .turbo dist node_modules",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+    "typecheck": "node -e \"console.log('No typecheck needed for shared TypeScript config package.')\""
   }
 }

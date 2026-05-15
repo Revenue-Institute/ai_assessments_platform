@@ -13,6 +13,27 @@ SubjectType = Literal["candidate", "employee"]
 AssignmentStatus = Literal[
     "pending", "in_progress", "completed", "expired", "cancelled"
 ]
+UserRole = Literal["admin", "reviewer", "viewer"]
+
+
+class ModuleQuestion(BaseModel):
+    """Admin-facing question payload for `GET /api/modules/{id}`. Unlike
+    the candidate view (see services/attempts._sanitize_interactive_config)
+    the admin sees rubric, variable_schema, solver_code, and the full
+    interactive_config so the module editor / preview page can render the
+    bank without spinning up an attempt (spec §12.1, §14.1)."""
+
+    id: str
+    position: int
+    type: str
+    prompt_template: str
+    variable_schema: dict[str, Any] = Field(default_factory=dict)
+    solver_code: str | None = None
+    interactive_config: dict[str, Any] | None = None
+    rubric: dict[str, Any] = Field(default_factory=dict)
+    competency_tags: list[str] = Field(default_factory=list)
+    time_limit_seconds: int | None = None
+    max_points: float = 10.0
 
 
 class ModuleCreateRequest(BaseModel):
@@ -48,7 +69,64 @@ class ModuleSummary(BaseModel):
 
 
 class ModuleDetail(ModuleSummary):
-    questions: list[dict[str, Any]] = Field(default_factory=list)
+    # Typed as ModuleQuestion for the admin module-detail endpoint so the
+    # response includes rubric, variable_schema, solver_code, and
+    # interactive_config. The list[dict] permissive shape stays via the
+    # ModuleQuestion BaseModel which accepts extra keys downstream.
+    questions: list[ModuleQuestion] = Field(default_factory=list)
+
+
+QuestionType = Literal[
+    "mcq",
+    "multi_select",
+    "short_answer",
+    "long_answer",
+    "code",
+    "notebook",
+    "sql",
+    "n8n",
+    "diagram",
+    "scenario",
+]
+
+
+class QuestionTemplateCreate(BaseModel):
+    """Typed body for POST /api/modules/{id}/questions. Mirrors the Zod
+    `QuestionTemplate` in packages/schemas/src/question.ts. `position` is
+    optional; the service appends when omitted."""
+
+    type: QuestionType
+    prompt_template: str = Field(min_length=1)
+    variable_schema: dict[str, Any] = Field(default_factory=dict)
+    solver_code: str | None = None
+    solver_language: Literal["python"] = "python"
+    interactive_config: dict[str, Any] | None = None
+    rubric: dict[str, Any]
+    competency_tags: list[str] = Field(min_length=1)
+    time_limit_seconds: int | None = Field(default=None, ge=30, le=1800)
+    max_points: float = Field(default=10, ge=0, le=100)
+    difficulty: Difficulty
+    metadata: dict[str, Any] | None = None
+    position: int | None = Field(default=None, ge=0)
+
+
+class QuestionTemplatePatch(BaseModel):
+    """Typed body for PATCH /api/modules/{id}/questions/{qid}. Every field
+    optional; the service applies only the keys that were sent."""
+
+    type: QuestionType | None = None
+    prompt_template: str | None = Field(default=None, min_length=1)
+    variable_schema: dict[str, Any] | None = None
+    solver_code: str | None = None
+    solver_language: Literal["python"] | None = None
+    interactive_config: dict[str, Any] | None = None
+    rubric: dict[str, Any] | None = None
+    competency_tags: list[str] | None = Field(default=None, min_length=1)
+    time_limit_seconds: int | None = Field(default=None, ge=30, le=1800)
+    max_points: float | None = Field(default=None, ge=0, le=100)
+    difficulty: Difficulty | None = None
+    metadata: dict[str, Any] | None = None
+    position: int | None = Field(default=None, ge=0)
 
 
 AssessmentStatus = ModuleStatus
@@ -199,3 +277,26 @@ class AssignmentDetail(AssignmentSummary):
     consent_at: datetime | None = None
     total_time_seconds: int | None = None
     attempts: list[AttemptSummary] = Field(default_factory=list)
+
+
+# Settings / users management (spec §12.1 /settings/users) -------------------
+
+
+class UserListItem(BaseModel):
+    """Internal user as surfaced on /settings/users. Mirrors the public.users
+    row (spec §4.1) plus a self flag so the UI can grey-out destructive
+    actions on the signed-in admin's own row."""
+
+    id: str
+    email: str
+    full_name: str | None = None
+    role: UserRole
+    is_self: bool = False
+
+
+class UserListResponse(BaseModel):
+    users: list[UserListItem]
+
+
+class UserRoleUpdate(BaseModel):
+    role: UserRole

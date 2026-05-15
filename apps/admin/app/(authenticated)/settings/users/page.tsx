@@ -1,15 +1,25 @@
-import { ApiError, fetchAdminMe } from "@/lib/api";
+import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
 import { Header } from "../../components/header";
+import { UsersTable } from "./users-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsUsersPage() {
   let me: Awaited<ReturnType<typeof fetchAdminMe>> | null = null;
-  let error: string | null = null;
+  let users: Awaited<ReturnType<typeof listAdminUsers>> = [];
+  let meError: string | null = null;
+  let usersError: string | null = null;
+
   try {
     me = await fetchAdminMe();
   } catch (e) {
-    error = e instanceof ApiError ? e.message : "Could not load profile.";
+    meError = e instanceof ApiError ? e.message : "Could not load profile.";
+  }
+  try {
+    users = await listAdminUsers();
+  } catch (e) {
+    usersError =
+      e instanceof ApiError ? e.message : "Could not load internal users.";
   }
 
   return (
@@ -18,55 +28,88 @@ export default async function SettingsUsersPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
           <p className="eyebrow-label">Your account</p>
-          {error ? (
+          <AccountPanel error={meError} me={me} />
+        </section>
+
+        <section className="rounded-xl border border-border/50 bg-muted/20 p-6">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-medium text-sm">Internal users</h2>
+            <p className="text-muted-foreground text-xs">
+              {users.length} {users.length === 1 ? "account" : "accounts"}
+            </p>
+          </div>
+          {usersError ? (
             <p
-              className="mt-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
               role="alert"
             >
-              {error}
+              {usersError}
             </p>
-          ) : me ? (
-            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
-              <div>
-                <dt className="text-muted-foreground text-xs">Name</dt>
-                <dd className="mt-0.5 font-medium">{me.full_name ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Email</dt>
-                <dd className="mt-0.5 font-medium">{me.email}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Role</dt>
-                <dd className="mt-0.5 font-medium capitalize">{me.role}</dd>
-              </div>
-            </dl>
           ) : (
-            <p className="mt-2 text-muted-foreground text-sm">Loading…</p>
+            <UsersTable currentUserId={me?.user_id ?? null} users={users} />
           )}
         </section>
 
         <section className="rounded-xl border border-border/50 bg-muted/20 p-6">
-          <h2 className="font-medium text-sm">Provisioning new users (v1)</h2>
+          <h2 className="font-medium text-sm">Inviting new users</h2>
+          <p className="mt-2 text-muted-foreground text-sm">
+            Use the Supabase Dashboard for invites. v1 ships role management
+            here; self-serve invitation flow lands in v1.1.
+          </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground text-sm">
             <li>
-              Go to your Supabase project &rarr; <em>Authentication &rarr; Users</em>
-              and invite the email.
+              Open the Supabase project, then Authentication, then Users, and
+              invite the email.
             </li>
             <li>
-              Once they confirm, insert a row into <code>public.users</code> with
-              their <code>auth.users.id</code> and the desired role
-              (<code>admin</code> / <code>reviewer</code> / <code>viewer</code>).
+              Once they confirm, insert a row into <code>public.users</code>{" "}
+              with their <code>auth.users.id</code> and the desired role.
             </li>
             <li>
-              They will be able to sign in immediately at <code>/sign-in</code>.
+              They can sign in at <code>/sign-in</code> and you can adjust their
+              role above.
             </li>
           </ol>
-          <p className="mt-3 text-muted-foreground text-xs">
-            A self-serve invite + role-management UI is on the v1.1 roadmap.
-            Until then this page is read-only by design.
-          </p>
         </section>
       </div>
     </>
+  );
+}
+
+function AccountPanel({
+  error,
+  me,
+}: {
+  error: string | null;
+  me: Awaited<ReturnType<typeof fetchAdminMe>> | null;
+}) {
+  if (error) {
+    return (
+      <p
+        className="mt-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+        role="alert"
+      >
+        {error}
+      </p>
+    );
+  }
+  if (!me) {
+    return <p className="mt-2 text-muted-foreground text-sm">Loading...</p>;
+  }
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+      <div>
+        <dt className="text-muted-foreground text-xs">Name</dt>
+        <dd className="mt-0.5 font-medium">{me.full_name ?? "-"}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Email</dt>
+        <dd className="mt-0.5 font-medium">{me.email}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground text-xs">Role</dt>
+        <dd className="mt-0.5 font-medium capitalize">{me.role}</dd>
+      </div>
+    </dl>
   );
 }

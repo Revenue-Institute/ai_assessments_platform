@@ -19,7 +19,9 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
+        setAll(
+          cookiesToSet: { name: string; options: unknown; value: string }[]
+        ) {
           for (const { name, value } of cookiesToSet) {
             request.cookies.set(name, value);
           }
@@ -27,7 +29,11 @@ export async function updateSession(request: NextRequest) {
             request: { headers: requestHeaders },
           });
           for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
+            response.cookies.set(
+              name,
+              value,
+              options as Parameters<typeof response.cookies.set>[2]
+            );
           }
         },
       },
@@ -56,9 +62,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+  const isPublic = PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(`${p}/`)
+  );
 
-  if (!user && !isPublic) {
+  if (!(user || isPublic)) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
     url.searchParams.set("next", path);

@@ -1,0 +1,212 @@
+name: Deploy to VM
+
+# Push to main -> build images -> SSH-deploy to ri-master.
+#
+# Secrets and variables expected in the GitHub "production" Environment:
+#
+#   --- Infra (3 secrets) ---
+#   DEPLOY_HOST                       ri-master IP or hostname
+#   DEPLOY_USER                       slowisz
+#   DEPLOY_SSH_KEY                    PEM-formatted private key (full text)
+#   DEPLOY_SSH_PORT                   optional, defaults to 22
+#
+#   --- App secrets (16) ---
+#   SUPABASE_ANON_KEY
+#   SUPABASE_SERVICE_ROLE_KEY
+#   SUPABASE_JWT_SECRET
+#   DATABASE_URL
+#   JWT_SIGNING_SECRET                32+ chars
+#   SESSION_COOKIE_SECRET             32+ chars
+#   ANTHROPIC_API_KEY_GENERATION
+#   ANTHROPIC_API_KEY_SCORING
+#   E2B_API_KEY
+#   N8N_ADMIN_API_KEY                 generated post-first-boot via n8n UI
+#   N8N_WEBHOOK_SECRET
+#   UPSTASH_REDIS_URL                 rediss://... full URL incl token
+#   UPSTASH_REDIS_TOKEN
+#   RESEND_API_KEY
+#   RESEND_WEBHOOK_SECRET
+#   OPENAI_API_KEY
+#
+#   --- App variables (5, non-sensitive) ---
+#   SUPABASE_URL                      https://<project>.supabase.co
+#   NEXT_PUBLIC_ADMIN_URL             https://assessments.revenueinstitute.com
+#   NEXT_PUBLIC_CANDIDATE_URL         https://assessments.revenueinstitute.com  (single-host)
+#   NEXT_PUBLIC_API_URL               https://api.assessments.revenueinstitute.com
+#   RESEND_FROM_EMAIL                 assessments@revenueinstitute.com
+#
+# Anything fixed across environments (APP_ENV, EMBEDDING_MODEL, storage bucket
+# names, INTERNAL_API_URL, N8N_HOST, TRUSTED_PROXY_IPS) is hardcoded below
+# rather than stored as a secret/variable.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".vscode/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: revenue-institute/ai_assessments_platform
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, admin, candidate]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: SSH deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://assessments.revenueinstitute.com
+    steps:
+      - name: SSH into VM, compose .env.local from secrets, run deploy.sh
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          # Every variable referenced inside the remote script has to be listed
+          # here so appleboy/ssh-action forwards it through SSH.
+          envs: |
+            GITHUB_SHA,
+            SUPABASE_URL,
+            SUPABASE_ANON_KEY,
+            SUPABASE_SERVICE_ROLE_KEY,
+            SUPABASE_JWT_SECRET,
+            DATABASE_URL,
+            JWT_SIGNING_SECRET,
+            SESSION_COOKIE_SECRET,
+            ANTHROPIC_API_KEY_GENERATION,
+            ANTHROPIC_API_KEY_SCORING,
+            E2B_API_KEY,
+            N8N_ADMIN_API_KEY,
+            N8N_WEBHOOK_SECRET,
+            UPSTASH_REDIS_URL,
+            UPSTASH_REDIS_TOKEN,
+            RESEND_API_KEY,
+            RESEND_FROM_EMAIL,
+            RESEND_WEBHOOK_SECRET,
+            OPENAI_API_KEY,
+            NEXT_PUBLIC_ADMIN_URL,
+            NEXT_PUBLIC_CANDIDATE_URL,
+            NEXT_PUBLIC_API_URL
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /srv/ai_assessments_platform
+            git fetch --quiet origin main
+            git checkout main
+            git pull --ff-only origin main
+
+            # GitHub is the source of truth for production secrets. Compose
+            # .env.local fresh on every deploy from per-secret env vars,
+            # using printf so values containing $, backticks, quotes, or
+            # newlines aren't shell-interpreted. File is 0600, owned by the
+            # deploy user, never committed.
+            umask 077
+            {
+              printf 'APP_ENV=production\n'
+              printf 'NODE_ENV=production\n'
+              printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL"
+              printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$SUPABASE_URL"
+              printf 'SUPABASE_ANON_KEY=%s\n' "$SUPABASE_ANON_KEY"
+              printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$SUPABASE_ANON_KEY"
+              printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
+              printf 'SUPABASE_JWT_SECRET=%s\n' "$SUPABASE_JWT_SECRET"
+              printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+              printf 'JWT_SIGNING_SECRET=%s\n' "$JWT_SIGNING_SECRET"
+              printf 'SESSION_COOKIE_SECRET=%s\n' "$SESSION_COOKIE_SECRET"
+              printf 'ANTHROPIC_API_KEY_GENERATION=%s\n' "$ANTHROPIC_API_KEY_GENERATION"
+              printf 'ANTHROPIC_API_KEY_SCORING=%s\n' "$ANTHROPIC_API_KEY_SCORING"
+              printf 'E2B_API_KEY=%s\n' "$E2B_API_KEY"
+              printf 'N8N_HOST=http://n8n:5678\n'
+              printf 'N8N_ADMIN_API_KEY=%s\n' "$N8N_ADMIN_API_KEY"
+              printf 'N8N_WEBHOOK_SECRET=%s\n' "$N8N_WEBHOOK_SECRET"
+              printf 'UPSTASH_REDIS_URL=%s\n' "$UPSTASH_REDIS_URL"
+              printf 'UPSTASH_REDIS_TOKEN=%s\n' "$UPSTASH_REDIS_TOKEN"
+              printf 'RESEND_API_KEY=%s\n' "$RESEND_API_KEY"
+              printf 'RESEND_FROM_EMAIL=%s\n' "$RESEND_FROM_EMAIL"
+              printf 'RESEND_WEBHOOK_SECRET=%s\n' "$RESEND_WEBHOOK_SECRET"
+              printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+              printf 'EMBEDDING_MODEL=text-embedding-3-small\n'
+              printf 'EMBEDDING_DIMS=1024\n'
+              printf 'SUPABASE_STORAGE_BUCKET_ARTIFACTS=ri-artifacts\n'
+              printf 'SUPABASE_STORAGE_BUCKET_REFERENCES=ri-references\n'
+              printf 'NEXT_PUBLIC_ADMIN_URL=%s\n' "$NEXT_PUBLIC_ADMIN_URL"
+              printf 'NEXT_PUBLIC_CANDIDATE_URL=%s\n' "$NEXT_PUBLIC_CANDIDATE_URL"
+              printf 'NEXT_PUBLIC_API_URL=%s\n' "$NEXT_PUBLIC_API_URL"
+              printf 'INTERNAL_API_URL=http://api:8000\n'
+              printf 'TRUSTED_PROXY_IPS=127.0.0.1\n'
+            } > .env.local
+            chmod 0600 .env.local
+            bash scripts/link-env.sh
+
+            IMAGE_TAG="${GITHUB_SHA}" bash infra/deploy/deploy.sh
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          # Non-sensitive: GitHub Variables (visible in plain text).
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_ADMIN_URL: ${{ vars.NEXT_PUBLIC_ADMIN_URL }}
+          NEXT_PUBLIC_CANDIDATE_URL: ${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
+          # Sensitive: GitHub environment Secrets (masked in logs).
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SIGNING_SECRET: ${{ secrets.JWT_SIGNING_SECRET }}
+          SESSION_COOKIE_SECRET: ${{ secrets.SESSION_COOKIE_SECRET }}
+          ANTHROPIC_API_KEY_GENERATION: ${{ secrets.ANTHROPIC_API_KEY_GENERATION }}
+          ANTHROPIC_API_KEY_SCORING: ${{ secrets.ANTHROPIC_API_KEY_SCORING }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          N8N_ADMIN_API_KEY: ${{ secrets.N8N_ADMIN_API_KEY }}
+          N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
+          UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
+          UPSTASH_REDIS_TOKEN: ${{ secrets.UPSTASH_REDIS_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

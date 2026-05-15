@@ -1,9 +1,6 @@
 import Link from "next/link";
-import {
-  ApiError,
-  type AssignmentSummary,
-  listAssignments,
-} from "@/lib/api";
+import { type AssignmentSummary, listAssignments } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
@@ -15,16 +12,10 @@ export default async function AssignmentsPage({
 }) {
   const { review } = await searchParams;
   const reviewOnly = review === "1";
-  let assignments: AssignmentSummary[] = [];
-  let error: string | null = null;
-  try {
-    assignments = await listAssignments(
-      reviewOnly ? { needsReview: true } : undefined,
-    );
-  } catch (e) {
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
-  }
+  const { data, error } = await loadOrApiError(() =>
+    listAssignments(reviewOnly ? { needsReview: true } : undefined)
+  );
+  const assignments: AssignmentSummary[] = data ?? [];
 
   return (
     <>
@@ -34,7 +25,8 @@ export default async function AssignmentsPage({
           <div>
             <h1 className="font-semibold text-xl">Assignments</h1>
             <p className="text-muted-foreground text-sm">
-              Magic-link assignments. Status and scores update as candidates submit.
+              Magic-link assignments. Status and scores update as candidates
+              submit.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -65,7 +57,7 @@ export default async function AssignmentsPage({
         )}
 
         {assignments.length === 0 && !error ? (
-          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
+          <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">No assignments yet.</p>
             <Link className="btn-primary mt-3 text-sm" href="/assignments/new">
               Issue magic links
@@ -75,13 +67,27 @@ export default async function AssignmentsPage({
           <table className="w-full overflow-hidden rounded-xl border border-border/50 bg-muted/20 text-sm">
             <thead className="bg-muted/40 text-left text-muted-foreground text-xs uppercase">
               <tr>
-                <th className="px-4 py-2">Subject</th>
-                <th className="px-4 py-2">Assessment</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Created</th>
-                <th className="px-4 py-2">Score</th>
-                <th className="px-4 py-2">Review</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2" scope="col">
+                  Subject
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Assessment
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Status
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Created
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Score
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Review
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
@@ -138,14 +144,14 @@ export default async function AssignmentsPage({
 }
 
 function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === "completed"
-      ? "bg-primary/20 text-primary"
-      : status === "in_progress"
-        ? "bg-warning/20 text-warning"
-        : status === "cancelled" || status === "expired"
-          ? "bg-muted text-muted-foreground"
-          : "bg-secondary text-secondary-foreground";
+  let tone = "bg-secondary text-secondary-foreground";
+  if (status === "completed") {
+    tone = "bg-primary/20 text-primary";
+  } else if (status === "in_progress") {
+    tone = "bg-warning/20 text-warning";
+  } else if (status === "cancelled" || status === "expired") {
+    tone = "bg-muted text-muted-foreground";
+  }
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

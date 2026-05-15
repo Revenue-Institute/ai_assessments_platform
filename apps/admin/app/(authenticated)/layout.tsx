@@ -7,6 +7,11 @@ import { canAccessPath } from "@/lib/role-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { GlobalSidebar } from "./components/sidebar";
 
+// Every page under (authenticated) reads cookies + headers for auth and
+// role gating; nothing here is statically renderable. Marking the layout
+// dynamic prevents Next from attempting prerender on any descendant.
+export const dynamic = "force-dynamic";
+
 export default async function AuthenticatedLayout({
   children,
 }: {
@@ -54,7 +59,7 @@ export default async function AuthenticatedLayout({
   return (
     <SidebarProvider>
       <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground focus:font-medium"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:font-medium focus:text-primary-foreground"
         href="#admin-main"
       >
         Skip to main content

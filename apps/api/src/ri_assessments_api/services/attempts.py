@@ -9,12 +9,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from supabase import Client
 
-from .code_runner import grade_code_attempt
-from .diagram_runner import grade_diagram_attempt
-from .n8n_runner import grade_n8n_attempt
-from .notebook_runner import grade_notebook_attempt
 from .randomizer import question_seed, render_prompt, sample_variables
-from .sql_runner import grade_sql_attempt
 
 
 def _parse_ts(value: str | None) -> datetime | None:
@@ -54,8 +49,12 @@ def _ensure_in_progress(assignment: dict[str, Any]) -> None:
         )
     deadline = session_deadline(assignment)
     if deadline and deadline <= datetime.now(UTC):
+        # Spec §10.1 + CLAUDE.md: submissions past the server-authoritative
+        # deadline are rejected with 409 Conflict (resource is no longer in
+        # a state that accepts the action), not 410 Gone (which would imply
+        # the resource itself was removed).
         raise HTTPException(
-            status_code=status.HTTP_410_GONE,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Assessment time limit has elapsed.",
         )
 
@@ -97,15 +96,37 @@ def _sanitize_interactive_config(
 
 
 def get_assignment_for_token(supabase: Client, raw_token: str) -> dict[str, Any]:
-    """Look up the full assignment row for a candidate token."""
+    """Look up the full assignment row for a candidate token.
 
+    Spec §13 + §14.2: every candidate / runner endpoint funnels through
+    here, so this is the single chokepoint where we verify the JWT before
+    touching the database. Validates signature, audience (`ri-assessments-
+    candidate`), and exp; cross-checks the JWT's `assignment_id` claim
+    against the row resolved by token_hash. Any mismatch or signature
+    failure fails closed (401). Skipped only when JWT_SIGNING_SECRET is
+    unset (local dev), which is also when config.py allows an empty
+    secret."""
+
+    from ..auth import decode_candidate_token
+    from ..config import get_settings
     from .tokens import hash_token
+
+    settings = get_settings()
+    claim_assignment_id: str | None = None
+    if settings.jwt_signing_secret:
+        claims = decode_candidate_token(raw_token)
+        claim_assignment_id = claims.get("assignment_id")
+        if not claim_assignment_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token is missing the assignment_id claim.",
+            )
 
     res = (
         supabase.table("assignments")
         .select(
             "id, status, expires_at, started_at, completed_at, "
-            "random_seed, module_snapshot"
+            "random_seed, module_snapshot, metadata"
         )
         .eq("token_hash", hash_token(raw_token))
         .limit(1)
@@ -117,7 +138,18 @@ def get_assignment_for_token(supabase: Client, raw_token: str) -> dict[str, Any]
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assignment not found.",
         )
-    return rows[0]
+    row = rows[0]
+
+    # Defense in depth: even though token_hash is the index key, refuse to
+    # serve the row when the claim's assignment_id disagrees. A leaked
+    # token_hash row with a re-signed JWT pointing at another assignment
+    # would otherwise resolve.
+    if claim_assignment_id is not None and str(row["id"]) != str(claim_assignment_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token does not match the resolved assignment.",
+        )
+    return row
 
 
 def _existing_attempt(
@@ -259,8 +291,10 @@ def submit_answer(
     index: int,
     answer: dict[str, Any] | list[Any] | str | int | float | bool | None,
 ) -> dict[str, Any]:
-    """Saves the candidate answer for a question. Idempotent overwrite
-    until the assignment is completed."""
+    """Saves the candidate answer for a question. Raw answers are immutable
+    once submitted (spec §9.3): the second submission for the same attempt
+    is rejected with 409 so an admin rescore is the only path to a new
+    score."""
 
     assignment = get_assignment_for_token(supabase, raw_token)
     _ensure_in_progress(assignment)
@@ -275,78 +309,29 @@ def submit_answer(
             random_seed=int(assignment["random_seed"]),
             question=question,
         )
+    elif attempt.get("submitted_at") is not None:
+        # Spec §9.3: raw_answer is immutable once submitted. The admin
+        # rescore endpoint is the supported path to revise scoring after
+        # the fact; the candidate cannot overwrite their own submission.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Answer already submitted; rescore via admin if change needed.",
+        )
 
     update: dict[str, Any] = {
         "raw_answer": {"value": answer},
         "submitted_at": datetime.now(UTC).isoformat(),
     }
 
-    # Synchronous grading on submit for the runner-backed types we can
-    # score deterministically. Everything else (rubric_ai, structural_match
-    # for n8n) lands later via score_assignment when the candidate completes.
-    rubric = question.get("rubric") or {}
+    # Notebook submissions still get their .ipynb exported on submit so the
+    # artifact is preserved even if the worker queue stalls later. Scoring
+    # itself (every type, every mode) is deferred to score_assignment via
+    # the queue when the assignment flips to completed: spec §9.1 + spec
+    # §13.1. Synchronous grading on submit used to make this handler block
+    # 5-15s per interactive question while an E2B sandbox spun up; that
+    # made the "Save and continue" button feel broken to candidates and
+    # also double-counted work the scoring orchestrator does anyway.
     qtype = question["type"]
-    config = question.get("interactive_config") or {}
-    max_points = float(question.get("max_points") or 10)
-
-    if (
-        qtype == "code"
-        and rubric.get("scoring_mode") == "test_cases"
-        and isinstance(answer, dict)
-    ):
-        candidate_code = answer.get("code")
-        if isinstance(candidate_code, str) and candidate_code.strip():
-            try:
-                update.update(
-                    grade_code_attempt(
-                        code=candidate_code,
-                        config=config,
-                        max_points=max_points,
-                    )
-                )
-                if update.get("score_rationale"):
-                    update["rubric_version"] = rubric.get("version", "1")
-            except HTTPException:
-                # Sandbox is unavailable; keep the answer but leave score null.
-                # An admin rescore picks this up later (spec §9.3).
-                pass
-
-    if qtype == "sql" and isinstance(answer, dict):
-        candidate_sql = answer.get("sql") or answer.get("text")
-        if isinstance(candidate_sql, str) and candidate_sql.strip():
-            try:
-                update.update(
-                    grade_sql_attempt(
-                        query_sql=candidate_sql,
-                        config=config,
-                        max_points=max_points,
-                    )
-                )
-                if update.get("score_rationale"):
-                    update["rubric_version"] = rubric.get("version", "1")
-            except HTTPException:
-                pass
-
-    if (
-        qtype == "diagram"
-        and rubric.get("scoring_mode") in ("structural_match", "test_cases")
-        and isinstance(answer, dict)
-    ):
-        diagram_payload = answer.get("diagram")
-        if isinstance(diagram_payload, dict):
-            try:
-                update.update(
-                    grade_diagram_attempt(
-                        submission=diagram_payload,
-                        config=config,
-                        max_points=max_points,
-                    )
-                )
-                if update.get("score_rationale"):
-                    update["rubric_version"] = rubric.get("version", "1")
-            except HTTPException:
-                pass
-
     if qtype == "notebook" and isinstance(answer, dict):
         notebook_cells = answer.get("cells")
         if isinstance(notebook_cells, list) and notebook_cells:
@@ -360,39 +345,6 @@ def submit_answer(
             if ipynb_path:
                 existing_meta = attempt.get("metadata") or {}
                 update["metadata"] = {**existing_meta, "ipynb_path": ipynb_path}
-            if rubric.get("scoring_mode") == "test_cases":
-                try:
-                    update.update(
-                        grade_notebook_attempt(
-                            cells=notebook_cells,
-                            config=config,
-                            max_points=max_points,
-                        )
-                    )
-                    if update.get("score_rationale"):
-                        update["rubric_version"] = rubric.get("version", "1")
-                except HTTPException:
-                    pass
-
-    if (
-        qtype == "n8n"
-        and rubric.get("scoring_mode") in ("structural_match", "test_cases")
-        and isinstance(answer, dict)
-    ):
-        workflow_payload = answer.get("workflow")
-        if isinstance(workflow_payload, dict):
-            try:
-                update.update(
-                    grade_n8n_attempt(
-                        submission=workflow_payload,
-                        config=config,
-                        max_points=max_points,
-                    )
-                )
-                if update.get("score_rationale"):
-                    update["rubric_version"] = rubric.get("version", "1")
-            except HTTPException:
-                pass
 
     supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()
 
@@ -403,6 +355,71 @@ def submit_answer(
         "next_index": next_index,
         "total": len(questions),
     }
+
+
+def record_n8n_workflow_id(
+    supabase: Client,
+    *,
+    raw_token: str,
+    question_index: int,
+    workflow_id: str,
+) -> None:
+    """Spec §7.2 + §14.3 ownership: stash the n8n workflow_id on the
+    attempt's metadata so /n8n/export can refuse any id the candidate
+    did not provision through us. The router calls this immediately
+    after a successful provision_workspace; subsequent provisions for
+    the same question overwrite the value (the previous workflow is
+    orphaned on the n8n side, which is the existing behavior)."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    _ensure_in_progress(assignment)
+    question = _question_at(assignment, question_index)
+    attempt = _existing_attempt(supabase, assignment["id"], question["id"])
+    if attempt is None:
+        attempt = _create_attempt(
+            supabase,
+            assignment_id=assignment["id"],
+            random_seed=int(assignment["random_seed"]),
+            question=question,
+        )
+    existing_meta = attempt.get("metadata") or {}
+    new_meta = {**existing_meta, "n8n_workflow_id": str(workflow_id)}
+    supabase.table("attempts").update({"metadata": new_meta}).eq(
+        "id", attempt["id"]
+    ).execute()
+
+
+def verify_n8n_workflow_owner(
+    supabase: Client,
+    *,
+    raw_token: str,
+    question_index: int,
+    workflow_id: str,
+) -> None:
+    """Reject export requests for workflows the candidate did not
+    provision through their own attempt. Fail closed (404) if no
+    workflow_id has been stored yet, so a candidate cannot scrape
+    arbitrary workflows by guessing ids."""
+
+    assignment = get_assignment_for_token(supabase, raw_token)
+    question = _question_at(assignment, question_index)
+    attempt = _existing_attempt(supabase, assignment["id"], question["id"])
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attempt has been provisioned for this question.",
+        )
+    stored = (attempt.get("metadata") or {}).get("n8n_workflow_id")
+    if not stored:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No n8n workflow has been provisioned for this attempt.",
+        )
+    if str(stored) != str(workflow_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Workflow id does not belong to this attempt.",
+        )
 
 
 def complete_assignment(
@@ -435,14 +452,64 @@ def complete_assignment(
 
     supabase.table("assignments").update(update).eq("id", assignment["id"]).execute()
 
-    # Try to enqueue async. Falls back to inline scoring when Redis is
-    # offline so a stack without the worker still produces scores. A
-    # background worker (apps/api/src/ri_assessments_api/worker.py) pulls
-    # the job and runs the same score_assignment path.
     import logging
 
     log = logging.getLogger(__name__)
 
+    # n8n teardown (spec §7.2): iterate the assignment's attempts, find
+    # any n8n questions whose attempt persisted a workflow_id, and call
+    # cleanup_workflow for each. Failures are swallowed per attempt so
+    # one stuck cleanup never blocks completion.
+    try:
+        from .n8n_runner import cleanup_workflow
+
+        questions_by_id = {
+            q.get("id"): q
+            for q in (assignment.get("module_snapshot") or {}).get("questions")
+            or []
+        }
+        attempts_rows = (
+            supabase.table("attempts")
+            .select(
+                "id, question_template_id, metadata, interactive_artifact_url"
+            )
+            .eq("assignment_id", assignment["id"])
+            .execute()
+        ).data or []
+        for attempt in attempts_rows:
+            question = questions_by_id.get(attempt.get("question_template_id"))
+            if not question or question.get("type") != "n8n":
+                continue
+            workflow_id: str | None = None
+            metadata = attempt.get("metadata") or {}
+            if isinstance(metadata, dict):
+                wf = metadata.get("n8n_workflow_id") or metadata.get(
+                    "workflow_id"
+                )
+                if isinstance(wf, str) and wf:
+                    workflow_id = wf
+            if not workflow_id:
+                artifact = attempt.get("interactive_artifact_url")
+                if isinstance(artifact, str) and "/workflow/" in artifact:
+                    workflow_id = (
+                        artifact.rstrip("/").rsplit("/", 1)[-1] or None
+                    )
+            if workflow_id:
+                try:
+                    cleanup_workflow(workflow_id)
+                except Exception as exc:  # pragma: no cover, defensive
+                    log.warning(
+                        "n8n cleanup failed for attempt %s: %s",
+                        attempt.get("id"),
+                        exc,
+                    )
+    except Exception as exc:  # pragma: no cover, defensive
+        log.warning("n8n cleanup pass skipped: %s", exc)
+
+    # Try to enqueue async. Falls back to inline scoring when Redis is
+    # offline so a stack without the worker still produces scores. A
+    # background worker (apps/api/src/ri_assessments_api/worker.py) pulls
+    # the job and runs the same score_assignment path.
     from .queue import enqueue_score_assignment
 
     enqueued = enqueue_score_assignment(assignment["id"])
@@ -460,6 +527,68 @@ def complete_assignment(
                 "scoring failed for assignment %s; admin rescore will retry",
                 assignment["id"],
             )
+
+    # Notify the admin who created the assignment that scoring is in
+    # flight / complete. Best-effort: scoring may still be running in
+    # the worker, in which case score fields will be None and the email
+    # surfaces a "pending" placeholder. Email failures never block the
+    # candidate's completion response.
+    try:
+        meta = (
+            supabase.table("assignments")
+            .select(
+                "created_by, final_score, max_possible_score, "
+                "integrity_score, module_snapshot, assessment_snapshot, "
+                "subjects(full_name, email)"
+            )
+            .eq("id", assignment["id"])
+            .limit(1)
+            .execute()
+        )
+        meta_row = (meta.data or [{}])[0]
+        creator_id = meta_row.get("created_by")
+        if creator_id:
+            admin_q = (
+                supabase.table("users")
+                .select("email, full_name")
+                .eq("id", creator_id)
+                .limit(1)
+                .execute()
+            )
+            admin_row = (admin_q.data or [{}])[0]
+            admin_email = admin_row.get("email")
+            if admin_email:
+                snapshot = (
+                    meta_row.get("assessment_snapshot")
+                    or meta_row.get("module_snapshot")
+                    or {}
+                )
+                subj_row = meta_row.get("subjects") or {}
+                final = meta_row.get("final_score")
+                possible = meta_row.get("max_possible_score")
+                pct: float | None = None
+                if (
+                    isinstance(final, (int, float))
+                    and isinstance(possible, (int, float))
+                    and possible
+                ):
+                    pct = (float(final) / float(possible)) * 100.0
+                from .email import send_result_notification
+
+                send_result_notification(
+                    to_email=admin_email,
+                    admin_full_name=admin_row.get("full_name"),
+                    subject_full_name=subj_row.get("full_name") or "candidate",
+                    module_title=snapshot.get("title", "Assessment"),
+                    final_score_pct=pct,
+                    integrity_score=meta_row.get("integrity_score"),
+                    assignment_id=assignment["id"],
+                )
+    except Exception:  # pragma: no cover, defensive
+        log.exception(
+            "result notification failed for assignment %s",
+            assignment["id"],
+        )
 
     return {
         "assignment_id": assignment["id"],

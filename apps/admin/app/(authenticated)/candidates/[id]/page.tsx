@@ -3,15 +3,16 @@ import { notFound } from "next/navigation";
 import {
   ApiError,
   type AssignmentSummary,
-  competencyDistribution,
   type CompetencyDistributionResponse,
+  competencyDistribution,
   listAssignments,
-  subjectCompetencyScores,
   type SubjectCompetencyTrend,
+  subjectCompetencyScores,
 } from "@/lib/api";
 import { CompetencyRadar } from "../../components/competency-radar";
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
+import { IntegrityScore } from "../../components/integrity-score";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +54,14 @@ export default async function CandidateDetailPage({
       );
     }
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
+    if (e instanceof ApiError) {
+      error = e.message;
+    } else {
+      throw e;
+    }
   }
 
   const radarSlices = trends.map((t) => ({
@@ -92,7 +98,9 @@ export default async function CandidateDetailPage({
 
 function candidateDisplayName(assignments: AssignmentSummary[]): string {
   for (const a of assignments) {
-    if (a.subject_full_name) return a.subject_full_name;
+    if (a.subject_full_name) {
+      return a.subject_full_name;
+    }
   }
   return "Candidate";
 }
@@ -142,7 +150,7 @@ function CompetencyTrendList({
               </p>
               {dist && dist.sample_size > 0 && (
                 <div className="mt-2 border-border/30 border-t pt-2">
-                  <p className="mb-1 text-muted-foreground text-[11px] uppercase tracking-wide">
+                  <p className="mb-1 text-[11px] text-muted-foreground uppercase tracking-wide">
                     vs. team
                   </p>
                   <DistributionBox
@@ -160,7 +168,9 @@ function CompetencyTrendList({
 }
 
 function Sparkline({ points }: { points: number[] }) {
-  if (points.length === 0) return null;
+  if (points.length === 0) {
+    return null;
+  }
   const W = 240;
   const H = 36;
   const max = 100;
@@ -192,7 +202,13 @@ function Sparkline({ points }: { points: number[] }) {
         const x = i * stepX;
         const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
         return (
-          <circle cx={x} cy={y} fill="currentColor" key={i} r={2} />
+          <circle
+            cx={x}
+            cy={y}
+            fill="currentColor"
+            key={`${x.toFixed(1)}-${y.toFixed(1)}-${p}`}
+            r={2}
+          />
         );
       })}
     </svg>
@@ -217,12 +233,24 @@ function AssignmentHistory({
       <table className="w-full text-sm">
         <thead className="text-left text-muted-foreground text-xs uppercase">
           <tr>
-            <th className="px-2 py-1">Module</th>
-            <th className="px-2 py-1">Status</th>
-            <th className="px-2 py-1">Score</th>
-            <th className="px-2 py-1">Integrity</th>
-            <th className="px-2 py-1">Created</th>
-            <th className="px-2 py-1" />
+            <th className="px-2 py-1" scope="col">
+              Module
+            </th>
+            <th className="px-2 py-1" scope="col">
+              Status
+            </th>
+            <th className="px-2 py-1" scope="col">
+              Score
+            </th>
+            <th className="px-2 py-1" scope="col">
+              Integrity
+            </th>
+            <th className="px-2 py-1" scope="col">
+              Created
+            </th>
+            <th className="px-2 py-1" scope="col">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/30">
@@ -238,7 +266,7 @@ function AssignmentHistory({
                   : "-"}
               </td>
               <td className="px-2 py-1.5">
-                {a.integrity_score != null ? a.integrity_score : "-"}
+                <IntegrityScore fallback score={a.integrity_score} />
               </td>
               <td className="px-2 py-1.5 text-muted-foreground text-xs">
                 {new Date(a.created_at).toLocaleString()}

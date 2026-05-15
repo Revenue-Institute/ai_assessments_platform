@@ -1,7 +1,7 @@
-# RI Assessments Platform — local stack.
+# RI Assessments Platform local stack.
 # Brings up: FastAPI, admin (Next.js), candidate (Next.js), self-hosted
-# n8n, redis. Supabase + Voyage + Anthropic + E2B + Resend stay external
-# — point at them via apps/api/.env.local.
+# n8n, redis. Supabase, OpenAI, Anthropic, E2B, and Resend stay external;
+# point at them via apps/api/.env.local.
 #
 # Usage:
 #   cp apps/api/.env.example apps/api/.env.local      # then fill in

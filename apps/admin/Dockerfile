@@ -6,14 +6,16 @@ WORKDIR /repo
 COPY package.json bun.lock turbo.json tsconfig.json biome.jsonc ./
 COPY packages packages
 COPY apps/admin/package.json apps/admin/package.json
-COPY apps/email/package.json apps/email/package.json
 RUN bun install
 
 FROM node:22-alpine AS builder
 RUN npm install -g bun
 WORKDIR /repo
 COPY --from=deps /repo /repo
-COPY .env.local* ./
+# Intentionally do NOT copy .env.local. Build-time env files bake
+# secrets into the image. Vercel and Cloud Run inject env vars at
+# runtime; the Next.js build only needs NEXT_PUBLIC_* values that the
+# host platform passes through normally.
 COPY apps/admin apps/admin
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV ANALYZE=false

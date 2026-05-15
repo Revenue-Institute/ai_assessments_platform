@@ -1,3 +1,4 @@
+import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -15,12 +16,12 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-type ModulePreviewBlock = {
+interface ModulePreviewBlock {
+  error: string | null;
   moduleId: string;
   moduleTitle: string;
   preview: ModulePreviewResponse | null;
-  error: string | null;
-};
+}
 
 export default async function AssessmentPreviewPage({
   params,
@@ -33,7 +34,9 @@ export default async function AssessmentPreviewPage({
   try {
     detail = await getAssessment(id);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
     throw e;
   }
 
@@ -85,9 +88,8 @@ export default async function AssessmentPreviewPage({
             <p className="eyebrow-label">Read-only review</p>
             <p className="text-muted-foreground text-sm">
               Variables are sampled deterministically and answer-revealing
-              fields are stripped. To drive the live experience (Monaco
-              run / test, server timer, integrity monitor), open as a
-              candidate.
+              fields are stripped. To drive the live experience (Monaco run /
+              test, server timer, integrity monitor), open as a candidate.
             </p>
           </div>
           <form action={openAsCandidate}>
@@ -170,15 +172,13 @@ export default async function AssessmentPreviewPage({
                             </p>
                           </header>
 
-                          <h3 className="mb-2 whitespace-pre-wrap font-medium text-base">
-                            {q.rendered_prompt}
-                          </h3>
+                          <div className="mb-3">
+                            <PromptMarkdown source={q.rendered_prompt} />
+                          </div>
 
                           {q.competency_tags.length > 0 && (
                             <p className="mb-3 text-muted-foreground text-xs">
-                              {q.competency_tags
-                                .map((t) => `#${t}`)
-                                .join("  ")}
+                              {q.competency_tags.map((t) => `#${t}`).join("  ")}
                             </p>
                           )}
 

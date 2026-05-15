@@ -7,10 +7,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from supabase import Client
 
-from ..auth import AdminPrincipal, issue_candidate_token
+from ..auth import AdminPrincipal, ensure_role, issue_candidate_token
 from ..config import get_settings
 from ..models.admin import (
     AssessmentCreateRequest,
@@ -28,19 +28,15 @@ from ..models.admin import (
     ModuleCreateRequest,
     ModuleDetail,
     ModulePatchRequest,
+    ModuleQuestion,
     ModuleSummary,
     SubjectCreateRequest,
     SubjectSummary,
+    UserListItem,
+    UserListResponse,
 )
+from ..models.interactive import validate_interactive_config
 from .tokens import candidate_token_url, hash_token
-
-
-def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
-    if principal.role not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{principal.role}' is not permitted for this action.",
-        )
 
 
 def _module_summary(row: dict[str, Any]) -> ModuleSummary:
@@ -96,12 +92,18 @@ def list_modules(supabase: Client) -> list[ModuleSummary]:
 
 
 def get_module(supabase: Client, module_id: str) -> ModuleDetail:
+    # Admin module-detail endpoint (spec §14.1 `GET /api/modules/{id}`).
+    # Returns the full question_templates payload including rubric,
+    # variable_schema, solver_code, and interactive_config so the admin UI
+    # can edit / preview without firing extra round-trips. The candidate
+    # path (services/attempts.py) is where sanitization happens, not here.
     res = (
         supabase.table("modules")
         .select(
             "id, slug, title, description, domain, target_duration_minutes, "
             "difficulty, status, version, created_at, published_at, "
             "question_templates(id, position, type, prompt_template, "
+            "variable_schema, solver_code, interactive_config, rubric, "
             "competency_tags, max_points, time_limit_seconds)"
         )
         .eq("id", module_id)
@@ -112,9 +114,25 @@ def get_module(supabase: Client, module_id: str) -> ModuleDetail:
     if not rows:
         raise HTTPException(status_code=404, detail="Module not found.")
     row = rows[0]
-    questions = sorted(
+    raw_questions = sorted(
         row.get("question_templates") or [], key=lambda q: q.get("position", 0)
     )
+    questions = [
+        ModuleQuestion(
+            id=q["id"],
+            position=int(q.get("position") or 0),
+            type=q["type"],
+            prompt_template=q.get("prompt_template") or "",
+            variable_schema=q.get("variable_schema") or {},
+            solver_code=q.get("solver_code"),
+            interactive_config=q.get("interactive_config"),
+            rubric=q.get("rubric") or {},
+            competency_tags=list(q.get("competency_tags") or []),
+            time_limit_seconds=q.get("time_limit_seconds"),
+            max_points=float(q.get("max_points") or 10),
+        )
+        for q in raw_questions
+    ]
     return ModuleDetail(
         id=row["id"],
         slug=row["slug"],
@@ -137,7 +155,7 @@ def create_module(
     principal: AdminPrincipal,
     payload: ModuleCreateRequest,
 ) -> ModuleSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     inserted = (
         supabase.table("modules")
         .insert(
@@ -168,7 +186,7 @@ def patch_module(
     module_id: str,
     payload: ModulePatchRequest,
 ) -> ModuleSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not update:
         return get_module(supabase, module_id)
@@ -184,12 +202,55 @@ def patch_module(
 def publish_module(
     supabase: Client, principal: AdminPrincipal, module_id: str
 ) -> ModuleSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     detail = get_module(supabase, module_id)
     if detail.question_count == 0:
         raise HTTPException(
             status_code=409,
             detail="Cannot publish a module with zero questions.",
+        )
+
+    # Spec §11.1: every question_template must tag at least one valid
+    # competency. Load the canonical taxonomy and reject publish with a
+    # 409 listing offending question positions when any question carries
+    # zero tags or tags that aren't in the taxonomy.
+    from .generator import _taxonomy_ids
+
+    tag_rows = (
+        supabase.table("question_templates")
+        .select("id, position, competency_tags")
+        .eq("module_id", module_id)
+        .order("position")
+        .execute()
+    ).data or []
+    valid_ids = _taxonomy_ids()
+    invalid_positions: list[dict[str, Any]] = []
+    for row in tag_rows:
+        tags = [t for t in (row.get("competency_tags") or []) if isinstance(t, str)]
+        if not tags:
+            invalid_positions.append(
+                {"position": row.get("position"), "reason": "no tags"}
+            )
+            continue
+        out_of_taxonomy = [t for t in tags if t not in valid_ids]
+        if out_of_taxonomy:
+            invalid_positions.append(
+                {
+                    "position": row.get("position"),
+                    "reason": "tags not in taxonomy",
+                    "tags": out_of_taxonomy,
+                }
+            )
+    if invalid_positions:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Module cannot be published: one or more questions carry "
+                    "missing or out-of-taxonomy competency_tags."
+                ),
+                "offending_questions": invalid_positions,
+            },
         )
 
     # Spec §8.4 fairness validation: pull every question's full template,
@@ -226,7 +287,7 @@ def create_question(
     slot. Caller supplies the full QuestionTemplate shape (typically
     JSON-edited in the admin UI)."""
 
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     # Confirm the module exists and grab the next position.
     existing = (
         supabase.table("question_templates")
@@ -247,7 +308,9 @@ def create_question(
         "variable_schema": payload.get("variable_schema") or {},
         "solver_code": payload.get("solver_code"),
         "solver_language": payload.get("solver_language") or "python",
-        "interactive_config": payload.get("interactive_config"),
+        "interactive_config": validate_interactive_config(
+            payload["type"], payload.get("interactive_config")
+        ),
         "rubric": payload["rubric"],
         "competency_tags": payload.get("competency_tags") or [],
         "time_limit_seconds": payload.get("time_limit_seconds"),
@@ -268,7 +331,7 @@ def patch_question(
     question_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     allowed_keys = {
         "position",
@@ -289,6 +352,27 @@ def patch_question(
         raise HTTPException(
             status_code=400, detail="No editable fields supplied."
         )
+
+    if "interactive_config" in update:
+        # Resolve the effective type (the patch may be changing it). Falls
+        # back to the existing row when the patch leaves type unset.
+        new_type = update.get("type")
+        if not new_type:
+            existing = (
+                supabase.table("question_templates")
+                .select("type")
+                .eq("id", question_id)
+                .eq("module_id", module_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Question not found.")
+            new_type = existing.data[0]["type"]
+        update["interactive_config"] = validate_interactive_config(
+            new_type, update["interactive_config"]
+        )
+
     update["updated_at"] = datetime.now(UTC).isoformat()
 
     res = (
@@ -310,7 +394,7 @@ def delete_question(
     module_id: str,
     question_id: str,
 ) -> None:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     supabase.table("question_templates").delete().eq("id", question_id).eq(
         "module_id", module_id
     ).execute()
@@ -326,7 +410,7 @@ def preview_module(
     reviewers can walk the assessment exactly as a candidate would, with
     answer-revealing fields stripped (spec §13.2)."""
 
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     from .attempts import _sanitize_interactive_config
     from .randomizer import question_seed, render_prompt, sample_variables
@@ -372,7 +456,7 @@ def preview_module(
 def archive_module(
     supabase: Client, principal: AdminPrincipal, module_id: str
 ) -> ModuleSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     supabase.table("modules").update(
         {"status": "archived", "updated_at": datetime.now(UTC).isoformat()}
     ).eq("id", module_id).execute()
@@ -429,7 +513,7 @@ def create_subject(
     principal: AdminPrincipal,
     payload: SubjectCreateRequest,
 ) -> SubjectSummary:
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
     inserted = (
         supabase.table("subjects")
         .insert(
@@ -531,11 +615,38 @@ def list_assessments(supabase: Client) -> list[AssessmentSummary]:
         .order("created_at", desc=True)
         .execute()
     )
-    out: list[AssessmentSummary] = []
-    for row in res.data or []:
-        modules = _assessment_module_rows(supabase, row["id"])
-        out.append(_assessment_summary(row, modules))
-    return out
+    rows = res.data or []
+    if not rows:
+        return []
+
+    # Batch the per-assessment module aggregates into a single query, instead
+    # of looping _assessment_module_rows N times. We only need module_count,
+    # question_count, and total_duration_minutes for the summary; no need to
+    # fetch the full module detail or sort by position.
+    am_res = (
+        supabase.table("assessment_modules")
+        .select(
+            "assessment_id, "
+            "modules(target_duration_minutes, question_templates(id))"
+        )
+        .in_("assessment_id", [r["id"] for r in rows])
+        .execute()
+    )
+    by_assessment: dict[str, list[dict[str, Any]]] = {}
+    for am in am_res.data or []:
+        module = am.get("modules") or {}
+        by_assessment.setdefault(am["assessment_id"], []).append(
+            {
+                "target_duration_minutes": module.get(
+                    "target_duration_minutes", 0
+                ),
+                "question_count": len(module.get("question_templates") or []),
+            }
+        )
+    return [
+        _assessment_summary(row, by_assessment.get(row["id"], []))
+        for row in rows
+    ]
 
 
 def get_assessment_detail(
@@ -579,7 +690,7 @@ def create_assessment(
     principal: AdminPrincipal,
     payload: AssessmentCreateRequest,
 ) -> AssessmentSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     # slug uniqueness across published versions; for v1 we simply require
     # the slug to be unused. Versioning lands when we publish updated copies.
@@ -635,7 +746,7 @@ def patch_assessment(
     assessment_id: str,
     payload: AssessmentPatchRequest,
 ) -> AssessmentSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     update: dict[str, Any] = {}
     if payload.title is not None:
         update["title"] = payload.title
@@ -659,7 +770,7 @@ def add_assessment_module(
     assessment_id: str,
     payload: AssessmentModuleAddRequest,
 ) -> AssessmentDetail:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     # Confirm both rows exist.
     a_check = (
@@ -700,14 +811,25 @@ def add_assessment_module(
         else len(existing)
     )
 
-    # Shift later positions if inserting in the middle.
-    for m in existing:
-        if m["position"] >= position:
-            supabase.table("assessment_modules").update(
-                {"position": m["position"] + 1}
-            ).eq("assessment_id", assessment_id).eq(
-                "module_id", m["module_id"]
-            ).execute()
+    # Two-phase shift so we don't trip the unique (assessment_id, position)
+    # constraint mid-update. Walking `existing` ascending and bumping each
+    # by 1 collides on the very first row when inserting at the head, since
+    # `_assessment_module_rows` returns rows ordered by position. Mirror the
+    # pattern used by reorder_assessment_modules: bump every shifted row to
+    # an out-of-band band first, then assign the final positions.
+    to_shift = [m for m in existing if m["position"] >= position]
+    for m in to_shift:
+        supabase.table("assessment_modules").update(
+            {"position": m["position"] + 1000}
+        ).eq("assessment_id", assessment_id).eq(
+            "module_id", m["module_id"]
+        ).execute()
+    for m in to_shift:
+        supabase.table("assessment_modules").update(
+            {"position": m["position"] + 1}
+        ).eq("assessment_id", assessment_id).eq(
+            "module_id", m["module_id"]
+        ).execute()
 
     supabase.table("assessment_modules").insert(
         {
@@ -726,7 +848,7 @@ def remove_assessment_module(
     assessment_id: str,
     module_id: str,
 ) -> AssessmentDetail:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     a_check = (
         supabase.table("assessments")
@@ -766,7 +888,7 @@ def reorder_assessment_modules(
     assessment_id: str,
     payload: AssessmentReorderRequest,
 ) -> AssessmentDetail:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     existing = _assessment_module_rows(supabase, assessment_id)
     existing_ids = {m["module_id"] for m in existing}
@@ -798,7 +920,7 @@ def reorder_assessment_modules(
 def publish_assessment(
     supabase: Client, principal: AdminPrincipal, assessment_id: str
 ) -> AssessmentSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
 
     modules = _assessment_module_rows(supabase, assessment_id)
     if not modules:
@@ -838,7 +960,7 @@ def publish_assessment(
 def archive_assessment(
     supabase: Client, principal: AdminPrincipal, assessment_id: str
 ) -> AssessmentSummary:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     supabase.table("assessments").update(
         {
             "status": "archived",
@@ -856,9 +978,17 @@ def archive_assessment(
 
 
 def _assessment_snapshot(
-    supabase: Client, assessment_id: str
+    supabase: Client,
+    assessment_id: str,
+    *,
+    allow_unpublished: bool = False,
 ) -> dict[str, Any]:
-    """Build the frozen assessment + modules + questions snapshot."""
+    """Build the frozen assessment + modules + questions snapshot.
+
+    `allow_unpublished` is used by the admin preview flow ("Open as
+    candidate" on a draft) so reviewers can validate authoring end-to-end
+    without flipping the assessment to published first.
+    """
 
     a_q = (
         supabase.table("assessments")
@@ -871,7 +1001,7 @@ def _assessment_snapshot(
     if not a_rows:
         raise HTTPException(status_code=404, detail="Assessment not found.")
     assessment = a_rows[0]
-    if assessment["status"] != "published":
+    if not allow_unpublished and assessment["status"] != "published":
         raise HTTPException(
             status_code=409,
             detail="Cannot assign an assessment that is not published.",
@@ -964,7 +1094,12 @@ def _assessment_snapshot(
     }
 
 
-def _module_snapshot(supabase: Client, module_id: str) -> dict[str, Any]:
+def _module_snapshot(
+    supabase: Client,
+    module_id: str,
+    *,
+    allow_unpublished: bool = False,
+) -> dict[str, Any]:
     """Build the frozen module+questions snapshot for an assignment."""
 
     module_q = (
@@ -981,7 +1116,7 @@ def _module_snapshot(supabase: Client, module_id: str) -> dict[str, Any]:
     if not module_rows:
         raise HTTPException(status_code=404, detail="Module not found.")
     module = module_rows[0]
-    if module["status"] != "published":
+    if not allow_unpublished and module["status"] != "published":
         raise HTTPException(
             status_code=409,
             detail="Cannot assign a module that is not published.",
@@ -1141,8 +1276,17 @@ def create_assignment(
     payload: AssignmentCreateRequest,
     *,
     send_email: bool = True,
+    preview: bool = False,
 ) -> AssignmentMagicLink:
-    _ensure_role(principal, "admin", "reviewer")
+    # Spec §13: only admins can mint magic links to real candidates. The
+    # frontend mirrors this in role-policy.ts (/assignments/new is admin-
+    # gated). The admin preview flow ("Open as candidate" on a draft)
+    # routes through here with preview=True so reviewers + admins can
+    # validate authoring on drafts without publishing first.
+    if preview:
+        ensure_role(principal, "admin", "reviewer")
+    else:
+        ensure_role(principal, "admin")
     settings = get_settings()
 
     if not payload.assessment_id and not payload.module_id:
@@ -1156,10 +1300,14 @@ def create_assignment(
     snapshot: dict[str, Any]
     if payload.assessment_id:
         assessment_id = payload.assessment_id
-        snapshot = _assessment_snapshot(supabase, assessment_id)
+        snapshot = _assessment_snapshot(
+            supabase, assessment_id, allow_unpublished=preview
+        )
     else:
         module_id = payload.module_id
-        snapshot = _module_snapshot(supabase, module_id)
+        snapshot = _module_snapshot(
+            supabase, module_id, allow_unpublished=preview
+        )
 
     subject_q = (
         supabase.table("subjects")
@@ -1210,15 +1358,22 @@ def create_assignment(
     if send_email and subject_row.get("email"):
         # Best-effort. Failures are logged inside the email service; we don't
         # block the API response since the admin can always copy the URL.
+        # The Resend message id (when delivery succeeds) is persisted on
+        # assignments.metadata.message_id so the resend webhook can join
+        # delivery events precisely instead of fuzzy-matching by recipient.
         from .email import send_magic_link
 
-        send_magic_link(
+        result = send_magic_link(
             to_email=subject_row["email"],
             subject_full_name=subject_row.get("full_name") or "there",
             module_title=snapshot.get("title", "Assessment"),
             magic_link_url=magic_link_url,
             expires_at=expires_at,
         )
+        if result.ok and result.message_id:
+            supabase.table("assignments").update(
+                {"metadata": {"message_id": result.message_id}}
+            ).eq("id", assignment_id_new).execute()
 
     return AssignmentMagicLink(
         assignment_id=assignment_id_new,
@@ -1248,7 +1403,7 @@ def create_preview_magic_link(
     user id so each reviewer gets their own. Re-using the row across
     sessions keeps the assignment list tidy."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
     if not module_id and not assessment_id:
         raise HTTPException(
             status_code=400,
@@ -1297,7 +1452,9 @@ def create_preview_magic_link(
         expires_in_days=1,
         send_email=False,
     )
-    return create_assignment(supabase, principal, payload, send_email=False)
+    return create_assignment(
+        supabase, principal, payload, send_email=False, preview=True
+    )
 
 
 def bulk_create_assignments(
@@ -1313,7 +1470,7 @@ def bulk_create_assignments(
     """Issue one magic link per subject. Failures on individual subjects do
     not abort the batch; admin sees the per-subject outcome list."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin")
     if not assessment_id and not module_id:
         raise HTTPException(
             status_code=400,
@@ -1355,7 +1512,9 @@ def resend_assignment_email(
     link the candidate may have. Refuses to resend on completed or
     cancelled assignments."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    # Resending mints a fresh token; same authority as create_assignment,
+    # so admin only.
+    ensure_role(principal, "admin")
     settings = get_settings()
     res = (
         supabase.table("assignments")
@@ -1411,16 +1570,34 @@ def resend_assignment_email(
     )
     subject_row = (subj.data or [{}])[0]
     if subject_row.get("email"):
-        from .email import send_magic_link
+        # Use the dedicated "we resent your link" template so the body is
+        # honest about being a reissue and existing recipients aren't
+        # confused by a duplicate first-time invite.
+        from .email import send_resend_notification
 
         snapshot = row.get("assessment_snapshot") or row.get("module_snapshot") or {}
-        send_magic_link(
+        result = send_resend_notification(
             to_email=subject_row["email"],
             subject_full_name=subject_row.get("full_name") or "there",
             module_title=snapshot.get("title", "Assessment"),
             magic_link_url=magic_link_url,
             expires_at=new_expiry,
         )
+        if result.ok and result.message_id:
+            # Merge into existing metadata so we don't blow away the
+            # delivery log accumulated by the resend webhook.
+            existing_meta = (
+                supabase.table("assignments")
+                .select("metadata")
+                .eq("id", assignment_id)
+                .limit(1)
+                .execute()
+            )
+            current = (existing_meta.data or [{}])[0].get("metadata") or {}
+            current["message_id"] = result.message_id
+            supabase.table("assignments").update(
+                {"metadata": current}
+            ).eq("id", assignment_id).execute()
 
     return AssignmentMagicLink(
         assignment_id=assignment_id,
@@ -1515,8 +1692,153 @@ def list_attempt_events(
 def cancel_assignment(
     supabase: Client, principal: AdminPrincipal, assignment_id: str
 ) -> AssignmentDetail:
-    _ensure_role(principal, "admin")
+    ensure_role(principal, "admin")
     supabase.table("assignments").update({"status": "cancelled"}).eq(
         "id", assignment_id
     ).execute()
+
+    # Notify the candidate (best-effort). Lookup the email + snapshot
+    # title; skip silently when the subject has no email on file. Email
+    # failures never block the cancel response since the DB state has
+    # already flipped to `cancelled`.
+    try:
+        ctx = (
+            supabase.table("assignments")
+            .select(
+                "subject_id, module_snapshot, assessment_snapshot, "
+                "subjects(full_name, email)"
+            )
+            .eq("id", assignment_id)
+            .limit(1)
+            .execute()
+        )
+        row = (ctx.data or [{}])[0]
+        subject = row.get("subjects") or {}
+        if subject.get("email"):
+            snapshot = (
+                row.get("assessment_snapshot")
+                or row.get("module_snapshot")
+                or {}
+            )
+            from .email import send_cancellation_notification
+
+            send_cancellation_notification(
+                to_email=subject["email"],
+                subject_full_name=subject.get("full_name") or "there",
+                module_title=snapshot.get("title", "Assessment"),
+            )
+    except Exception:  # pragma: no cover, defensive
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "cancel_assignment notification failed for %s", assignment_id
+        )
+
     return get_assignment_detail(supabase, assignment_id)
+
+
+# Settings / users management (spec §12.1 /settings/users) ------------------
+
+
+_VALID_ROLES: tuple[str, ...] = ("admin", "reviewer", "viewer")
+
+
+def list_users(
+    supabase: Client, principal: AdminPrincipal
+) -> UserListResponse:
+    """List every row in public.users for the admin /settings/users page.
+
+    Admin-only: viewers and reviewers should not see the team roster (spec
+    §12.1 places user management under /settings/users, an admin-only
+    surface). The signed-in admin's row is marked with `is_self=True` so
+    the UI can grey-out destructive self-actions client-side; the
+    self-demotion guard is still enforced server-side in
+    update_user_role()."""
+
+    ensure_role(principal, "admin")
+    res = (
+        supabase.table("users")
+        .select("id, email, full_name, role")
+        .order("email")
+        .execute()
+    )
+    rows = res.data or []
+    users: list[UserListItem] = []
+    for row in rows:
+        role = row.get("role")
+        if role not in _VALID_ROLES:
+            # Defensive: a row with an unrecognized role would otherwise
+            # break the response_model validation. Skip rather than 500.
+            continue
+        users.append(
+            UserListItem(
+                id=row["id"],
+                email=row.get("email") or "",
+                full_name=row.get("full_name"),
+                role=role,  # type: ignore[arg-type]
+                is_self=row["id"] == principal.user_id,
+            )
+        )
+    return UserListResponse(users=users)
+
+
+def update_user_role(
+    supabase: Client,
+    principal: AdminPrincipal,
+    *,
+    target_user_id: str,
+    new_role: str,
+) -> UserListItem:
+    """Update the role on public.users for `target_user_id`. Admin-only.
+
+    Refuses self-demotion: an admin cannot strip their own admin role,
+    which would otherwise let the last admin lock the org out of the
+    /settings/users surface. The Supabase Dashboard remains the recovery
+    path (operators with the service role can override directly)."""
+
+    ensure_role(principal, "admin")
+    if new_role not in _VALID_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid role '{new_role}'. Allowed: "
+                + ", ".join(_VALID_ROLES)
+            ),
+        )
+
+    if target_user_id == principal.user_id and new_role != "admin":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "You cannot remove your own admin role. Ask another admin "
+                "to demote you, or use the Supabase Dashboard."
+            ),
+        )
+
+    existing = (
+        supabase.table("users")
+        .select("id, email, full_name, role")
+        .eq("id", target_user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = existing.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    updated = (
+        supabase.table("users")
+        .update(
+            {"role": new_role, "updated_at": datetime.now(UTC).isoformat()}
+        )
+        .eq("id", target_user_id)
+        .execute()
+    )
+    row = (updated.data or rows)[0]
+    return UserListItem(
+        id=row["id"],
+        email=row.get("email") or "",
+        full_name=row.get("full_name"),
+        role=new_role,  # type: ignore[arg-type]
+        is_self=row["id"] == principal.user_id,
+    )

@@ -3,8 +3,8 @@
 import {
   addEdge,
   Background,
-  Controls,
   type Connection,
+  Controls,
   type Edge,
   type Node,
   ReactFlow,
@@ -13,24 +13,25 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useState } from "react";
+import { emitIntegrityEvent } from "@repo/integrity/browser";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
-type DiagramConfig = {
-  starter_nodes?: Array<{
-    id?: string;
-    label?: string;
-    type?: string;
-    position?: { x: number; y: number };
-  }>;
+interface DiagramConfig {
+  palette?: Array<{ type: string; label: string }>;
   starter_edges?: Array<{
     id?: string;
     source: string;
     target: string;
     label?: string;
   }>;
-  palette?: Array<{ type: string; label: string }>;
-};
+  starter_nodes?: Array<{
+    id?: string;
+    label?: string;
+    type?: string;
+    position?: { x: number; y: number };
+  }>;
+}
 
 type Saved =
   | {
@@ -62,7 +63,7 @@ const newNodeId = (): string => `n${Date.now().toString(36)}-${nextId++}`;
 function bootstrapNodes(config: DiagramConfig, saved: Saved): Node[] {
   const source = saved?.nodes?.length
     ? saved.nodes
-    : config.starter_nodes ?? [];
+    : (config.starter_nodes ?? []);
   return source.map((n, i) => ({
     id: n.id ?? newNodeId(),
     type: n.type ?? "default",
@@ -74,7 +75,7 @@ function bootstrapNodes(config: DiagramConfig, saved: Saved): Node[] {
 function bootstrapEdges(config: DiagramConfig, saved: Saved): Edge[] {
   const source = saved?.edges?.length
     ? saved.edges
-    : config.starter_edges ?? [];
+    : (config.starter_edges ?? []);
   return source.map((e) => ({
     id: e.id ?? `e-${e.source}-${e.target}-${newNodeId()}`,
     source: e.source,
@@ -104,25 +105,66 @@ function DiagramCanvas({
   config: DiagramConfig;
   initialAnswer: Saved;
 }) {
-  const initialNodes = useMemo(() => bootstrapNodes(config, initialAnswer), [config, initialAnswer]);
-  const initialEdges = useMemo(() => bootstrapEdges(config, initialAnswer), [config, initialAnswer]);
+  const initialNodes = useMemo(
+    () => bootstrapNodes(config, initialAnswer),
+    [config, initialAnswer]
+  );
+  const initialEdges = useMemo(
+    () => bootstrapEdges(config, initialAnswer),
+    [config, initialAnswer]
+  );
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
-  const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(
-    null
-  );
+  const [renaming, setRenaming] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
 
   useUnsavedChangesWarning(
     JSON.stringify({ nodes, edges }) !==
       JSON.stringify({ nodes: initialNodes, edges: initialEdges })
   );
 
+  // Debounce diagram saves into a single `interactive_state_saved` event
+  // every 2 seconds. The graph mutates on every drag tick, so emitting
+  // unthrottled would flood the integrity log.
+  const lastSerializedRef = useRef<string>("");
+  useEffect(() => {
+    const serialized = JSON.stringify({
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        label: (n.data as { label?: string })?.label ?? "",
+        position: n.position,
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+      })),
+    });
+    if (serialized === lastSerializedRef.current) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      lastSerializedRef.current = serialized;
+      emitIntegrityEvent("interactive_state_saved", {
+        node_count: nodes.length,
+        edge_count: edges.length,
+      });
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [nodes, edges]);
+
   const palette = config.palette?.length ? config.palette : FALLBACK_PALETTE;
 
   const onConnect = useCallback(
     (conn: Connection) =>
       setEdges((current) =>
-        addEdge({ ...conn, id: `e-${conn.source}-${conn.target}-${Date.now()}` }, current)
+        addEdge(
+          { ...conn, id: `e-${conn.source}-${conn.target}-${Date.now()}` },
+          current
+        )
       ),
     [setEdges]
   );
@@ -133,7 +175,10 @@ function DiagramCanvas({
         ...current,
         {
           id: newNodeId(),
-          type: item.type === "input" || item.type === "output" ? item.type : "default",
+          type:
+            item.type === "input" || item.type === "output"
+              ? item.type
+              : "default",
           data: { label: item.label },
           position: {
             x: 60 + ((current.length * 60) % 360),
@@ -151,7 +196,9 @@ function DiagramCanvas({
   }, []);
 
   const commitRename = useCallback(() => {
-    if (!renaming) return;
+    if (!renaming) {
+      return;
+    }
     setNodes((current) =>
       current.map((n) =>
         n.id === renaming.id
@@ -198,14 +245,21 @@ function DiagramCanvas({
             {item.label}
           </button>
         ))}
-        <span className="ml-auto text-muted-foreground">
-          Drag to position · double-click to rename · drag from a node edge to connect
+        <span
+          className="ml-auto text-muted-foreground"
+          id="diagram-canvas-help"
+        >
+          Drag to position, double-click to rename, drag from a node edge to
+          connect.
         </span>
       </div>
 
       <div
+        aria-describedby="diagram-canvas-help"
+        aria-label="Process diagram editor"
         className="h-[420px] overflow-hidden rounded border border-border bg-card"
         data-allow-paste="true"
+        role="application"
       >
         <ReactFlow
           edges={edges}
@@ -225,19 +279,24 @@ function DiagramCanvas({
         <div className="flex items-center gap-2 rounded border border-border bg-card p-2 text-xs">
           <span className="text-muted-foreground">Rename node:</span>
           <input
+            aria-label="Rename node"
             autoFocus
             className="flex-1 rounded border border-border bg-background px-2 py-1"
             onChange={(e) =>
               setRenaming({ id: renaming.id, label: e.target.value })
             }
             onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") setRenaming(null);
+              if (e.key === "Enter") {
+                commitRename();
+              }
+              if (e.key === "Escape") {
+                setRenaming(null);
+              }
             }}
             value={renaming.label}
           />
           <button
-            className="rounded bg-primary px-2 py-1 text-primary-foreground font-medium"
+            className="rounded bg-primary px-2 py-1 font-medium text-primary-foreground"
             onClick={commitRename}
             type="button"
           >

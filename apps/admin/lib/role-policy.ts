@@ -26,7 +26,7 @@ const ROLE_RANK: Record<AdminRole, number> = {
 
 export function minimumRoleForPath(path: string): AdminRole {
   const sorted = [...ROUTE_MIN_ROLE].sort(
-    (a, b) => b.prefix.length - a.prefix.length,
+    (a, b) => b.prefix.length - a.prefix.length
   );
   for (const entry of sorted) {
     if (path === entry.prefix || path.startsWith(`${entry.prefix}/`)) {

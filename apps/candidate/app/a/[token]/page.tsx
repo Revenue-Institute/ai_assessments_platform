@@ -2,7 +2,9 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { ApiError, fetchAssignment, postConsent } from "@/lib/api";
 
-type Params = { token: string };
+interface Params {
+  token: string;
+}
 type SearchParams = Promise<{ error?: string }>;
 
 export default async function CandidateLandingPage({
@@ -25,8 +27,8 @@ export default async function CandidateLandingPage({
     if (error instanceof ApiError) {
       return (
         <ErrorView
-          status={error.status}
           message={error.message}
+          status={error.status}
           token={token}
         />
       );
@@ -41,8 +43,8 @@ export default async function CandidateLandingPage({
   if (assignment.status === "completed") {
     return (
       <NoticeView
-        title="Already submitted"
         body="This assessment has already been submitted. Thanks for completing it."
+        title="Already submitted"
       />
     );
   }
@@ -66,7 +68,7 @@ export default async function CandidateLandingPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12 animate-reveal">
+    <main className="mx-auto flex min-h-screen max-w-2xl animate-reveal flex-col gap-6 px-6 py-12">
       <header className="space-y-2">
         <p className="eyebrow-label">Revenue Institute</p>
         <h1 className="font-semibold text-3xl">{assignment.module.title}</h1>
@@ -88,7 +90,9 @@ export default async function CandidateLandingPage({
         </div>
         <div>
           <dt className="eyebrow-label">Questions</dt>
-          <dd className="mt-1 font-medium">{assignment.module.question_count}</dd>
+          <dd className="mt-1 font-medium">
+            {assignment.module.question_count}
+          </dd>
         </div>
         <div>
           <dt className="eyebrow-label">Link expires</dt>
@@ -112,9 +116,9 @@ export default async function CandidateLandingPage({
         </ul>
         <p className="text-muted-foreground">
           The assessment runs in fullscreen. You will be asked to enter
-          fullscreen on the next screen and we log any exits. Your answers
-          are saved to your record; we review every submission before
-          sending final results.
+          fullscreen on the next screen and we log any exits. Your answers are
+          saved to your record; we review every submission before sending final
+          results.
         </p>
       </section>
 
@@ -159,12 +163,12 @@ function ErrorView({
   message: string;
   token: string;
 }) {
-  const headline =
-    status === 410
-      ? "Link expired"
-      : status === 404
-        ? "Link not recognized"
-        : "Something went wrong";
+  let headline = "Something went wrong";
+  if (status === 410) {
+    headline = "Link expired";
+  } else if (status === 404) {
+    headline = "Link not recognized";
+  }
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
       <h1 className="font-semibold text-2xl">{headline}</h1>
@@ -175,4 +179,3 @@ function ErrorView({
     </main>
   );
 }
-

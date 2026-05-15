@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -10,12 +11,14 @@ from supabase import Client
 from ..auth import AdminPrincipal, require_admin_jwt
 from ..db import get_supabase
 from ..models.benchmarks import (
+    CandidateAssignmentDistributionResponse,
     CohortHeatmapResponse,
     CompetencyDistributionResponse,
     SeriesCreateRequest,
     SeriesDetail,
     SeriesIssueNextResponse,
     SeriesSummary,
+    SeriesTrendResponse,
     SubjectCompetencyResponse,
     WeakSpotsResponse,
 )
@@ -48,9 +51,24 @@ def cohorts_heatmap(
     type: str | None = Query(default=None, alias="type"),
     domain: str | None = None,
     days: int = Query(default=365, ge=1, le=3650),
+    role: str | None = Query(
+        default=None,
+        description=(
+            "Filter subjects by metadata.role_applied_for. Matches the "
+            "value stored on subjects.metadata."
+        ),
+    ),
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> CohortHeatmapResponse:
     return benchmarks_service.cohort_heatmap(
-        supabase, subject_type=type, domain=domain, days=days
+        supabase,
+        subject_type=type,
+        domain=domain,
+        days=days,
+        role=role,
+        start_date=start_date,
+        end_date=end_date,
     )
 
 
@@ -73,12 +91,47 @@ def cohorts_distribution(
     competency_id: str = Query(min_length=1),
     type: str | None = Query(default=None, alias="type"),
     exclude_subject_id: str | None = None,
+    subject_id: str | None = Query(
+        default=None,
+        description=(
+            "When provided, the response carries subject_score_pct and "
+            "subject_percentile (peer rank, spec §11.2). The subject is "
+            "automatically excluded from the peer cohort."
+        ),
+    ),
 ) -> CompetencyDistributionResponse:
     return benchmarks_service.competency_distribution(
         supabase,
         competency_id=competency_id,
         subject_type=type,
         exclude_subject_id=exclude_subject_id,
+        subject_id=subject_id,
+    )
+
+
+# Candidate-vs-team overlay (spec §11.3) -----------------------------------
+
+
+@router.get(
+    "/api/candidates/{subject_id}/competency-distribution",
+    response_model=CandidateAssignmentDistributionResponse,
+)
+def candidate_assignment_distribution(
+    subject_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+    assignment_id: str = Query(min_length=1),
+    type: str | None = Query(default="employee", alias="type"),
+) -> CandidateAssignmentDistributionResponse:
+    """Returns the per-competency p25 / p50 / p75 distribution plus the
+    subject's own score for ONLY the competencies covered by the given
+    assignment. Drives the candidate-vs-team overlay on the assignment
+    results page (spec §11.3)."""
+
+    return benchmarks_service.assignment_competency_distribution(
+        supabase,
+        subject_id=subject_id,
+        assignment_id=assignment_id,
+        subject_type=type,
     )
 
 
@@ -107,6 +160,20 @@ def get_series(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> SeriesDetail:
     return series_service.get_series_detail(supabase, series_id)
+
+
+@router.get(
+    "/api/series/{series_id}/trend", response_model=SeriesTrendResponse
+)
+def get_series_trend(
+    series_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> SeriesTrendResponse:
+    """Per-competency score timeline across the series, ordered by
+    sequence_number (spec §11.4). Frontend renders one trend line per
+    competency on the series detail page."""
+
+    return series_service.get_series_trend(supabase, series_id)
 
 
 @router.post(

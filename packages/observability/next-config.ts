@@ -1,10 +1,26 @@
 import { withLogtail } from "@logtail/next";
 import { withSentryConfig } from "@sentry/nextjs";
-import { keys } from "./keys";
+import { keys, type ObservabilityApp, resolveSentryProject } from "./keys";
 
-export const sentryConfig: Parameters<typeof withSentryConfig>[1] = {
+/**
+ * Build the Sentry build-plugin config for a given Next app.
+ *
+ * Per spec §15 and §16 the admin and candidate apps each upload
+ * source maps to their own Sentry project. The plugin reads
+ * SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT_{ADMIN,CANDIDATE}
+ * at build time. Older deploys that still set the shared
+ * SENTRY_PROJECT keep working via the fallback in resolveSentryProject().
+ */
+export const buildSentryConfig = (
+  app?: ObservabilityApp
+): Parameters<typeof withSentryConfig>[1] => ({
   org: keys().SENTRY_ORG,
-  project: keys().SENTRY_PROJECT,
+  project: resolveSentryProject(app),
+
+  // The Sentry plugin picks SENTRY_AUTH_TOKEN up automatically from
+  // process.env, but listing it here keeps the contract explicit for
+  // anyone reading this file.
+  authToken: keys().SENTRY_AUTH_TOKEN,
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
@@ -39,15 +55,23 @@ export const sentryConfig: Parameters<typeof withSentryConfig>[1] = {
      */
     automaticVercelMonitors: true,
   },
-};
+});
 
-export const withSentry = (sourceConfig: object): object => {
+// Legacy export kept for back-compat with any caller importing the
+// raw config object. Equivalent to buildSentryConfig() with no app
+// hint, i.e. it falls through to SENTRY_PROJECT.
+export const sentryConfig = buildSentryConfig();
+
+export const withSentry = (
+  sourceConfig: object,
+  app?: ObservabilityApp
+): object => {
   const configWithTranspile = {
     ...sourceConfig,
     transpilePackages: ["@sentry/nextjs"],
   };
 
-  return withSentryConfig(configWithTranspile, sentryConfig);
+  return withSentryConfig(configWithTranspile, buildSentryConfig(app));
 };
 
 export const withLogging = (config: object): object => {

@@ -1,17 +1,24 @@
-import { notFound, redirect } from "next/navigation";
+import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import {
   ApiError,
   type AttemptEvent,
+  type CompetencyDistributionResponse,
   cancelAssignment,
+  competencyDistribution,
   getAssignment,
   listAssignmentEvents,
-  resendAssignmentEmail,
   rescoreAssignment,
   rescoreAttempt,
+  resendAssignmentEmail,
+  subjectCompetencyScores,
 } from "@/lib/api";
+import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
+import { IntegrityScore } from "../../components/integrity-score";
 import { IntegrityEventTimeline } from "./integrity-timeline";
+import { ScoringListener } from "./scoring-listener";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +35,9 @@ export default async function AssignmentDetailPage({
   try {
     detail = await getAssignment(id);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
     throw e;
   }
 
@@ -37,6 +46,59 @@ export default async function AssignmentDetailPage({
     events = await listAssignmentEvents(id);
   } catch {
     // Soft fail: timeline is auxiliary; the rest of the page still loads.
+  }
+
+  // Spec §11.3 candidate-vs-team overlay: pull competency scores for this
+  // subject, restrict to the ones tied to this assignment, then fetch the
+  // matching team distribution for each one. Soft-fails so the existing
+  // attempts + integrity timeline still render if the benchmark endpoints
+  // are unavailable.
+  const distributionRows: Array<{
+    candidate_score_pct: number;
+    competency_id: string;
+    stats: CompetencyDistributionResponse;
+  }> = [];
+  try {
+    const subjectScores = await subjectCompetencyScores(detail.subject_id);
+    const candidateForAssignment = subjectScores.trends
+      .map((trend) => {
+        const point = trend.points.find((p) => p.assignment_id === id);
+        if (!point) {
+          return null;
+        }
+        return {
+          competency_id: trend.competency_id,
+          score_pct: point.score_pct,
+        };
+      })
+      .filter(
+        (row): row is { competency_id: string; score_pct: number } =>
+          row != null
+      );
+
+    const distributions = await Promise.all(
+      candidateForAssignment.map((row) =>
+        competencyDistribution({
+          competency_id: row.competency_id,
+          subject_id: detail.subject_id,
+          assignment_id: id,
+          exclude_subject_id: detail.subject_id,
+        })
+          .then((stats) => ({
+            candidate_score_pct: row.score_pct,
+            competency_id: row.competency_id,
+            stats,
+          }))
+          .catch(() => null)
+      )
+    );
+    for (const d of distributions) {
+      if (d) {
+        distributionRows.push(d);
+      }
+    }
+  } catch {
+    // Distributions are best-effort; assignment detail must still load.
   }
 
   async function cancel(): Promise<void> {
@@ -81,7 +143,9 @@ export default async function AssignmentDetailPage({
   async function rescoreOne(formData: FormData): Promise<void> {
     "use server";
     const attemptId = String(formData.get("attempt_id") ?? "");
-    if (!attemptId) return;
+    if (!attemptId) {
+      return;
+    }
     try {
       await rescoreAttempt(attemptId);
       redirect(`/assignments/${id}`);
@@ -95,37 +159,12 @@ export default async function AssignmentDetailPage({
 
   return (
     <>
-      <Header page={detail.subject_full_name ?? "Assignment"} pages={["Assignments"]} />
+      <Header
+        page={detail.subject_full_name ?? "Assignment"}
+        pages={["Assignments"]}
+      />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <nav
-          aria-label="Related entities"
-          className="flex flex-wrap gap-3 text-muted-foreground text-xs"
-        >
-          {detail.subject_id && (
-            <Link
-              className="hover:text-primary hover:underline"
-              href={`/candidates/${detail.subject_id}`}
-            >
-              {"↗ Candidate: "}
-              {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
-            </Link>
-          )}
-          {detail.assessment_id ? (
-            <Link
-              className="hover:text-primary hover:underline"
-              href={`/assessments/${detail.assessment_id}`}
-            >
-              ↗ Assessment: {detail.assessment_title ?? detail.assessment_id.slice(0, 8)}
-            </Link>
-          ) : detail.module_id ? (
-            <Link
-              className="hover:text-primary hover:underline"
-              href={`/modules/${detail.module_id}`}
-            >
-              ↗ Module: {detail.module_title ?? detail.module_id.slice(0, 8)}
-            </Link>
-          ) : null}
-        </nav>
+        <RelatedEntities detail={detail} />
 
         <section className="grid grid-cols-1 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 sm:grid-cols-2 md:grid-cols-4">
           <Stat label="Status" value={detail.status} />
@@ -136,16 +175,17 @@ export default async function AssignmentDetailPage({
           <Stat
             label="Score"
             value={
-              detail.final_score != null && detail.max_possible_score != null
-                ? `${detail.final_score} / ${detail.max_possible_score}`
-                : "-"
+              <span className="inline-flex items-center gap-2">
+                {detail.final_score != null && detail.max_possible_score != null
+                  ? `${detail.final_score} / ${detail.max_possible_score}`
+                  : "-"}
+                <ScoringListener assignmentId={id} />
+              </span>
             }
           />
           <Stat
             label="Integrity"
-            value={
-              detail.integrity_score != null ? `${detail.integrity_score}` : "-"
-            }
+            value={<IntegrityScore fallback score={detail.integrity_score} />}
           />
           <Stat
             label="Started"
@@ -181,20 +221,22 @@ export default async function AssignmentDetailPage({
           <h2 className="mb-3 font-medium text-sm">Attempts</h2>
           {detail.attempts.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No attempts yet. Attempts are created lazily when the candidate views each question.
+              No attempts yet. Attempts are created lazily when the candidate
+              views each question.
             </p>
           ) : (
             <ol className="space-y-3 text-sm">
               {detail.attempts.map((a, i) => (
                 <li
-                  className="rounded border border-border/40 bg-background/30 p-3"
+                  className="scroll-mt-20 rounded border border-border/40 bg-background/30 p-3 target:ring-2 target:ring-primary/60"
+                  id={`attempt-${a.id}`}
                   key={a.id}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium">
                       Question {i + 1}
                       {a.needs_review && (
-                        <span className="ml-2 rounded bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning uppercase tracking-wide">
+                        <span className="ml-2 rounded bg-warning/20 px-2 py-0.5 font-medium text-[10px] text-warning uppercase tracking-wide">
                           Needs review
                         </span>
                       )}
@@ -203,9 +245,9 @@ export default async function AssignmentDetailPage({
                       {a.submitted_at ? "submitted" : "in progress"}
                     </p>
                   </div>
-                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground text-xs">
-                    {a.rendered_prompt}
-                  </p>
+                  <div className="prompt-markdown-condensed mt-1 line-clamp-3 text-muted-foreground text-xs">
+                    <PromptMarkdown source={a.rendered_prompt} />
+                  </div>
                   {a.raw_answer && (
                     <details className="mt-2">
                       <summary className="cursor-pointer text-muted-foreground text-xs hover:text-primary">
@@ -258,50 +300,144 @@ export default async function AssignmentDetailPage({
         </section>
 
         <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
+          <h2 className="mb-3 font-medium text-sm">
+            Competency distribution vs team
+          </h2>
+          {distributionRows.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No team distribution available yet. Scores land here once this
+              assignment has scored competencies and a team baseline exists.
+            </p>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {distributionRows.map((row) => (
+                <li
+                  className="rounded border border-border/40 bg-background/30 p-3"
+                  key={row.competency_id}
+                >
+                  <p className="font-medium text-sm">{row.competency_id}</p>
+                  <p className="mt-0.5 text-muted-foreground text-xs">
+                    Candidate {Math.round(row.candidate_score_pct)}% vs team
+                  </p>
+                  <div className="mt-2">
+                    <DistributionBox
+                      candidateScore={row.candidate_score_pct}
+                      stats={row.stats}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
           <h2 className="mb-3 font-medium text-sm">Integrity timeline</h2>
           <IntegrityEventTimeline events={events} />
         </section>
 
-        <div className="flex flex-wrap gap-2">
-          {detail.status === "completed" && (
-            <form action={rescoreAll}>
-              <button
-                className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-                type="submit"
-              >
-                Rescore all attempts
-              </button>
-            </form>
-          )}
-          {detail.status !== "completed" &&
-            detail.status !== "cancelled" &&
-            detail.status !== "expired" && (
-              <>
-                <form action={resendEmail}>
-                  <button
-                    className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-                    type="submit"
-                  >
-                    Resend magic link
-                  </button>
-                </form>
-                <form action={cancel}>
-                  <button
-                    className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm hover:bg-destructive/25"
-                    type="submit"
-                  >
-                    Cancel assignment
-                  </button>
-                </form>
-              </>
-            )}
-        </div>
+        <AssignmentActions
+          cancel={cancel}
+          rescoreAll={rescoreAll}
+          resendEmail={resendEmail}
+          status={detail.status}
+        />
       </div>
     </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function RelatedEntities({
+  detail,
+}: {
+  detail: Awaited<ReturnType<typeof getAssignment>>;
+}) {
+  return (
+    <nav
+      aria-label="Related entities"
+      className="flex flex-wrap gap-3 text-muted-foreground text-xs"
+    >
+      {detail.subject_id && (
+        <Link
+          className="hover:text-primary hover:underline"
+          href={`/candidates/${detail.subject_id}`}
+        >
+          {"↗ Candidate: "}
+          {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
+        </Link>
+      )}
+      {detail.assessment_id && (
+        <Link
+          className="hover:text-primary hover:underline"
+          href={`/assessments/${detail.assessment_id}`}
+        >
+          ↗ Assessment:{" "}
+          {detail.assessment_title ?? detail.assessment_id.slice(0, 8)}
+        </Link>
+      )}
+      {!detail.assessment_id && detail.module_id && (
+        <Link
+          className="hover:text-primary hover:underline"
+          href={`/modules/${detail.module_id}`}
+        >
+          ↗ Module: {detail.module_title ?? detail.module_id.slice(0, 8)}
+        </Link>
+      )}
+    </nav>
+  );
+}
+
+function AssignmentActions({
+  cancel,
+  rescoreAll,
+  resendEmail,
+  status,
+}: {
+  cancel: () => Promise<void>;
+  rescoreAll: () => Promise<void>;
+  resendEmail: () => Promise<void>;
+  status: string;
+}) {
+  const canManageLink =
+    status !== "completed" && status !== "cancelled" && status !== "expired";
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {status === "completed" && (
+        <form action={rescoreAll}>
+          <button
+            className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
+            type="submit"
+          >
+            Rescore all attempts
+          </button>
+        </form>
+      )}
+      {canManageLink && (
+        <>
+          <form action={resendEmail}>
+            <button
+              className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
+              type="submit"
+            >
+              Resend magic link
+            </button>
+          </form>
+          <form action={cancel}>
+            <button
+              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm hover:bg-destructive/25"
+              type="submit"
+            >
+              Cancel assignment
+            </button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <p className="text-muted-foreground text-xs uppercase tracking-wide">

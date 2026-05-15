@@ -4,10 +4,10 @@ export type Database = Record<string, unknown>;
 
 export type AssessmentsClient = SupabaseClient<Database>;
 
-type ServerClientArgs = {
-  url: string;
+interface ServerClientArgs {
   serviceRoleKey: string;
-};
+  url: string;
+}
 
 export function createServerClient({
   url,
@@ -18,10 +18,10 @@ export function createServerClient({
   });
 }
 
-type AnonClientArgs = {
-  url: string;
+interface AnonClientArgs {
   anonKey: string;
-};
+  url: string;
+}
 
 export function createAnonClient({
   url,

@@ -26,7 +26,7 @@ EOF
   exit 2
 fi
 
-# 2. Re-run the symlink wiring. Idempotent — replaces stale links,
+# 2. Re-run the symlink wiring. Idempotent: replaces stale links,
 # leaves real files alone, prints what it did.
 bash scripts/link-env.sh
 
@@ -38,7 +38,7 @@ if ! ENV_FILE=.env.local bash scripts/check-env.sh all; then
   exit 1
 fi
 
-# 4. Confirm uv + bun are available — turbo dev will surface the same
+# 4. Confirm uv + bun are available; turbo dev will surface the same
 # error eventually but a precheck is friendlier.
 for bin in bun uv; do
   if ! command -v "$bin" >/dev/null 2>&1; then

@@ -12,10 +12,16 @@ export async function createSupabaseServerClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
+        setAll(
+          cookiesToSet: { name: string; options: unknown; value: string }[]
+        ) {
           try {
             for (const { name, value, options } of cookiesToSet) {
-              cookieStore.set(name, value, options);
+              cookieStore.set(
+                name,
+                value,
+                options as Parameters<typeof cookieStore.set>[2]
+              );
             }
           } catch {
             // Server components cannot set cookies; this is expected when

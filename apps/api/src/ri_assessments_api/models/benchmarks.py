@@ -127,3 +127,69 @@ class CompetencyDistributionResponse(BaseModel):
         default_factory=list,
         description="All score_pct values in the cohort, sorted ascending.",
     )
+    # Spec §11.2: peer percentile per subject per competency. Populated when
+    # the caller passes a subject_score or subject_id reference; null when
+    # the queried subject has no score for this competency.
+    subject_percentile: float | None = Field(
+        default=None,
+        description=(
+            "Percentile rank (0 to 100) of the queried subject's latest "
+            "score within the peer distribution. None when the subject "
+            "has no score or no peer cohort exists."
+        ),
+    )
+    subject_score_pct: float | None = Field(
+        default=None,
+        description=(
+            "The subject's own latest score_pct for this competency, "
+            "echoed back so the UI can render their dot on the boxplot."
+        ),
+    )
+
+
+# Series trend (spec §11.4 'trend of each competency across sequence_number')
+
+
+class SeriesTrendPoint(BaseModel):
+    sequence_number: int
+    assignment_id: str
+    score_pct: float
+    point_total: float
+    point_possible: float
+    completed_at: datetime | None = None
+
+
+class SeriesTrendResponse(BaseModel):
+    series_id: str
+    subject_id: str
+    competency_focus: list[str]
+    # Keyed by competency_id; value is the per-sequence score timeline. UI
+    # renders one trend line per competency.
+    trends: dict[str, list[SeriesTrendPoint]] = Field(default_factory=dict)
+
+
+# Assignment-scoped competency distribution (spec §11.3 candidate-vs-team) --
+
+
+class AssignmentCompetencyDistribution(BaseModel):
+    competency_id: str
+    sample_size: int
+    min_pct: float
+    p25_pct: float
+    median_pct: float
+    p75_pct: float
+    max_pct: float
+    subject_score_pct: float | None = None
+    subject_percentile: float | None = None
+
+
+class CandidateAssignmentDistributionResponse(BaseModel):
+    """Per-competency distribution view scoped to a single assignment so the
+    assignment results page can render the candidate-vs-team overlay
+    against only the competencies covered by that assignment (spec §11.3)."""
+
+    subject_id: str
+    assignment_id: str
+    distributions: list[AssignmentCompetencyDistribution] = Field(
+        default_factory=list
+    )

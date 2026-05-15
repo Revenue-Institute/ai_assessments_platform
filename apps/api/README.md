@@ -32,13 +32,86 @@ apps/api/
 │   └── seed_test_assignment.py       Creates a test assignment, prints magic-link URL
 └── src/ri_assessments_api/
     ├── main.py                       FastAPI app entrypoint
+    ├── worker.py                     Long-running scoring worker (Redis BRPOP loop)
     ├── config.py                     pydantic-settings, all env vars from spec §16
     ├── db.py                         Supabase service-role client
     ├── auth.py                       Supabase JWT + signed magic-link tokens
+    ├── logging_config.py             Structured JSON logging + PII redaction
     ├── models/                       Hand-written Pydantic, kept in sync with @repo/schemas
-    ├── services/                     Token, assignment, etc. business logic
-    └── routers/                      one file per route group
+    │   ├── admin.py                  module / assessment / assignment / attempt response shapes
+    │   ├── benchmarks.py             cohort + competency rollup shapes
+    │   ├── candidate.py              consent, heartbeat, event-batch, runner I/O shapes
+    │   ├── generator.py              GenerationBrief, GeneratedOutline, QuestionTemplate
+    │   └── interactive.py            CodeConfig, N8nConfig, NotebookConfig, DiagramConfig, SqlConfig
+    ├── prompts/                      Python string templates for Claude system prompts
+    │   ├── outline.py
+    │   ├── questions.py
+    │   ├── revision.py
+    │   └── scoring.py
+    ├── services/                     Business logic, called from routers
+    │   ├── admin.py                  CRUD + role checks for admin surfaces
+    │   ├── assignments.py            Create / cancel / resend / dispatch series
+    │   ├── attempts.py               Server-authoritative timer, heartbeat, submit
+    │   ├── benchmarks.py             Cohort + competency rollups
+    │   ├── code_runner.py            E2B wrapper, sync `run_user_code` + async `run_user_code_streaming`
+    │   ├── diagram_runner.py
+    │   ├── email.py                  Resend client + webhook verifier
+    │   ├── generator.py              Outline + question generation pipeline
+    │   ├── integrity.py              Event ingest + score computation
+    │   ├── n8n_runner.py             Shared-workspace provisioner + diff grader
+    │   ├── notebook_runner.py
+    │   ├── notebook_export.py
+    │   ├── pii.py                    Redaction filter applied by logging_config
+    │   ├── queue.py                  Redis LIST scoring queue (LPUSH / BRPOP)
+    │   ├── randomizer.py             Seeded variable sampling + prompt rendering
+    │   ├── references.py             Reference upload + embedding (text-embedding-3-small, 1024 dims)
+    │   ├── scoring.py                Orchestrator: dispatches per rubric.scoring_mode
+    │   ├── series.py                 Assessment series cadence + dispatch
+    │   ├── solver_runner.py          Trusted-Python solver execution in E2B
+    │   ├── sql_runner.py
+    │   └── tokens.py                 Magic-link JWT sign + verify
+    └── routers/                      One file per route group
+        ├── admin.py                  /api/* admin endpoints, JWT auth
+        ├── benchmarks.py             /api/cohorts/*, /api/subjects/{id}/competency-scores
+        ├── candidate.py              /a/{token}/* magic-link endpoints (rate-limited)
+        ├── debug.py                  Internal-only utilities (gated to local + admin)
+        ├── generator.py              /api/generator/* (outline, questions, revise, preview-variants)
+        ├── health.py                 /health liveness; /health/ready readiness
+        ├── references.py             /api/references/*
+        └── webhooks.py               /webhooks/resend (Svix-verified)
 ```
+
+## Worker process
+
+The scoring queue is a Redis LIST drained by a long-lived worker
+process. In production, run it as a sibling Cloud Run service or
+Cloud Run Job (not the public FastAPI service):
+
+```sh
+uv run python -m ri_assessments_api.worker
+```
+
+The worker reads `ri:scoring:jobs` via `BRPOP`, executes the relevant
+runner grade, persists results, and emits SSE events to the admin
+dashboard. Failures land on `ri:scoring:dlq` and are surfaced by the
+`ri-rescore-dead-letter` cron documented in `DEPLOYMENT.md`.
+
+## Database migrations
+
+Migrations live in `packages/db/migrations/00NN_*.sql` and are applied
+in lexical order by an idempotent helper that tracks state in
+`public._migrations`:
+
+```sh
+# From repo root
+bun --filter api migrate
+
+# Or directly
+cd apps/api && uv run python scripts/apply_migrations.py
+```
+
+See `DEPLOYMENT.md > Migration order` for a one-line description of
+every migration in the current tree.
 
 ## End-to-end smoke test (candidate flow)
 

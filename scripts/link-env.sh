@@ -33,7 +33,7 @@ link() {
   if [[ -L "$link_path" ]]; then
     rm "$link_path"
   elif [[ -e "$link_path" ]]; then
-    echo "warn: $link_path is a real file, not a symlink — leaving it alone." >&2
+    echo "warn: $link_path is a real file, not a symlink, leaving it alone." >&2
     echo "      Move it aside if you want this script to manage it." >&2
     return
   fi
@@ -50,7 +50,7 @@ api_link="apps/api/.env"
 if [[ -L "$api_link" ]]; then
   rm "$api_link"
 elif [[ -e "$api_link" ]]; then
-  echo "warn: $api_link is a real file, not a symlink — leaving it alone." >&2
+  echo "warn: $api_link is a real file, not a symlink, leaving it alone." >&2
 else
   ln -s "../../.env.local" "$api_link"
   echo "linked: $api_link -> ../../.env.local"

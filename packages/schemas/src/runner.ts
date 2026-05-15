@@ -1,39 +1,39 @@
 import type { Rubric } from "./question.js";
 
-export type ProvisionResult = {
+export interface ProvisionResult {
   embed_url?: string;
-  session_token?: string;
   initial_state: unknown;
-};
+  session_token?: string;
+}
 
-export type GradeBreakdown = {
+export interface GradeBreakdown {
   criterion_id: string;
-  score: number;
   max: number;
   note: string;
-};
-
-export type GradeResult = {
   score: number;
+}
+
+export interface GradeResult {
+  breakdown: GradeBreakdown[];
   max_score: number;
   rationale: string;
-  breakdown: GradeBreakdown[];
-};
+  score: number;
+}
 
 export interface InteractiveRunner<TConfig, TState, TArtifact> {
-  provision(
-    attemptId: string,
-    config: TConfig,
-    variables: Record<string, unknown>
-  ): Promise<ProvisionResult>;
-  loadState(attemptId: string): Promise<TState>;
-  saveState(attemptId: string, state: TState): Promise<void>;
-  submit(attemptId: string): Promise<TArtifact>;
   grade(
     artifact: TArtifact,
     config: TConfig,
     rubric: Rubric,
     variables: Record<string, unknown>
   ): Promise<GradeResult>;
+  loadState(attemptId: string): Promise<TState>;
+  provision(
+    attemptId: string,
+    config: TConfig,
+    variables: Record<string, unknown>
+  ): Promise<ProvisionResult>;
+  saveState(attemptId: string, state: TState): Promise<void>;
+  submit(attemptId: string): Promise<TArtifact>;
   teardown(attemptId: string): Promise<void>;
 }

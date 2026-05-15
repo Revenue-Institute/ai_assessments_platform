@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -29,7 +30,10 @@ from ..prompts.scoring import SCORING_SYSTEM_PROMPT, SUBMIT_SCORE_TOOL
 log = logging.getLogger(__name__)
 
 SCORING_MODEL = "claude-sonnet-4-6"
-SCORER_VERSION = "1"
+# Scorer version blends a manual schema tag with the short git sha so a
+# rescore after a code change is distinguishable in attempt_scores_history.
+# GIT_SHA is set by CI / docker build; falls back to "dev" locally.
+SCORER_VERSION = f"1+{os.environ.get('GIT_SHA', 'dev')[:8]}"
 LOW_CONFIDENCE_THRESHOLD = 0.6
 
 
@@ -180,7 +184,10 @@ def _score_rubric_ai(
     client = _client()
     response = client.messages.create(
         model=SCORING_MODEL,
-        max_tokens=4_000,
+        # 4k was tight for multi-criterion rubrics with detailed notes;
+        # 8k gives the model headroom on long rubric breakdowns without
+        # forcing truncation that would trip submit_score schema validation.
+        max_tokens=8_000,
         output_config={"effort": "high"},
         system=[
             {
@@ -297,6 +304,11 @@ def score_attempt(
                 "score_rationale": rationale,
                 "scorer_model": "deterministic-exact",
                 "scorer_version": SCORER_VERSION,
+                # Deterministic scorers don't carry residual uncertainty:
+                # confidence is 1.0, needs_review is cleared so a rescore
+                # after a previous low-confidence AI pass clears the flag.
+                "scorer_confidence": 1.0,
+                "needs_review": False,
             }
         )
 
@@ -314,6 +326,8 @@ def score_attempt(
                 "score_rationale": rationale,
                 "scorer_model": "deterministic-numeric",
                 "scorer_version": SCORER_VERSION,
+                "scorer_confidence": 1.0,
+                "needs_review": False,
             }
         )
 
@@ -330,6 +344,15 @@ def score_attempt(
                 "rubric_version": ai["rubric_version"],
             }
         )
+        # Spec §9.2: persist the per-criterion breakdown so reviewers can
+        # audit which criteria drove the score. Column lands via migration
+        # 0017_attempt_score_breakdown.sql (owned by the migrations agent);
+        # Supabase will accept the write once the column exists. TODO:
+        # request 0017_attempt_score_breakdown.sql migration with column
+        # `score_breakdown jsonb`.
+        breakdown = ai.get("_breakdown")
+        if breakdown is not None:
+            update["score_breakdown"] = breakdown
 
     elif mode == "structural_match":
         # diagram + n8n submissions are graded synchronously at submit
@@ -351,6 +374,30 @@ def score_attempt(
 
     update["updated_at"] = datetime.now(UTC).isoformat()
     supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()
+
+    # Spec §9.1, §14.4: fan out a per-attempt event so admins watching
+    # the assignment detail page see the score flip the moment each
+    # attempt lands, instead of waiting for the assignment-level
+    # scoring_completed event at the end. Best-effort; failures are
+    # swallowed inside queue_service.publish_scoring_event.
+    try:
+        from . import queue as queue_service
+
+        assignment_id = attempt.get("assignment_id")
+        if assignment_id and "score" in update:
+            queue_service.publish_scoring_event(
+                {
+                    "type": "scoring_attempt",
+                    "assignment_id": assignment_id,
+                    "attempt_id": attempt["id"],
+                    "score": update.get("score"),
+                    "max": float(attempt.get("max_score") or 0),
+                    "needs_review": bool(update.get("needs_review", False)),
+                }
+            )
+    except Exception:  # pragma: no cover, defensive
+        log.debug("scoring_attempt event publish failed", exc_info=True)
+
     return update
 
 
@@ -360,10 +407,10 @@ def _attempts_for_assignment(
     res = (
         supabase.table("attempts")
         .select(
-            "id, question_template_id, raw_answer, expected_answer, "
-            "rendered_prompt, score, max_score, score_rationale, "
-            "scorer_model, scorer_version, scorer_confidence, needs_review, "
-            "active_time_seconds"
+            "id, assignment_id, question_template_id, raw_answer, "
+            "expected_answer, rendered_prompt, score, max_score, "
+            "score_rationale, scorer_model, scorer_version, "
+            "scorer_confidence, needs_review, active_time_seconds"
         )
         .eq("assignment_id", assignment_id)
         .execute()
@@ -511,27 +558,87 @@ def _replace_competency_scores(
     supabase.table("competency_scores").insert(rows).execute()
 
 
-def score_assignment(
+def _maybe_insert_training_suggestions(
+    supabase: Client,
+    *,
+    subject_id: str,
+    rollups: list[dict[str, Any]],
+) -> None:
+    """Spec §11.5 training-loop hook. For each competency rollup below 60%,
+    insert a row into `training_suggestions` so the panel can surface it.
+    Only fires for employee subjects; candidates don't get suggestions.
+
+    Idempotent: skips when an undismissed row already exists for the
+    (subject_id, competency_id) pair. Wrapped in try/except so a missing
+    column / table / FK never blocks scoring."""
+
+    try:
+        subj_q = (
+            supabase.table("subjects")
+            .select("id, type")
+            .eq("id", subject_id)
+            .limit(1)
+            .execute()
+        )
+        subj_rows = subj_q.data or []
+        if not subj_rows or subj_rows[0].get("type") != "employee":
+            return
+
+        low_rollups = [r for r in rollups if float(r.get("score_pct") or 0) < 60]
+        if not low_rollups:
+            return
+
+        # Dedup against existing undismissed suggestions.
+        comp_ids = [r["competency_id"] for r in low_rollups]
+        existing_q = (
+            supabase.table("training_suggestions")
+            .select("competency_id, dismissed_at")
+            .eq("subject_id", subject_id)
+            .in_("competency_id", comp_ids)
+            .execute()
+        )
+        held = {
+            row["competency_id"]
+            for row in (existing_q.data or [])
+            if row.get("dismissed_at") is None
+        }
+        now = datetime.now(UTC).isoformat()
+        new_rows = [
+            {
+                "id": str(uuid.uuid4()),
+                "subject_id": subject_id,
+                "competency_id": r["competency_id"],
+                "suggested_at": now,
+            }
+            for r in low_rollups
+            if r["competency_id"] not in held
+        ]
+        if new_rows:
+            supabase.table("training_suggestions").insert(new_rows).execute()
+    except Exception as exc:  # pragma: no cover, defensive
+        log.warning("training_suggestions insert skipped: %s", exc)
+
+
+def _recompute_assignment_aggregates(
     supabase: Client, assignment_id: str
 ) -> dict[str, Any]:
-    """Scores every unscored attempt, writes assignment-level rollups,
-    computes integrity score from attempt_events, and upserts
-    competency_scores. Returns the aggregate payload."""
+    """Re-derive assignment-level rollups (final_score, max_possible_score,
+    integrity_score, competency_scores) from the current attempt rows.
+    Extracted from `score_assignment` so `rescore_attempt` can call it
+    without re-running Claude across every sibling attempt."""
 
     assignment = _assignment_row(supabase, assignment_id)
     snapshot = assignment.get("module_snapshot") or {}
 
     attempts = _attempts_for_assignment(supabase, assignment_id)
-    for a in attempts:
-        # Re-fetch isn't needed; we score from the in-memory attempt.
-        score_attempt(supabase, attempt=a, module_snapshot=snapshot)
-
-    # Re-read attempts now that scores are written.
-    attempts = _attempts_for_assignment(supabase, assignment_id)
 
     final_score = round(sum(float(a.get("score") or 0) for a in attempts), 2)
-    max_possible_score = round(sum(float(a.get("max_score") or 0) for a in attempts), 2)
-    active_time = sum(int(a.get("active_time_seconds") or 0) for a in attempts) or None
+    max_possible_score = round(
+        sum(float(a.get("max_score") or 0) for a in attempts), 2
+    )
+    active_time = (
+        sum(int(a.get("active_time_seconds") or 0) for a in attempts) or None
+    )
 
     events = (
         supabase.table("attempt_events")
@@ -564,6 +671,13 @@ def score_assignment(
         rollups=rollups,
     )
 
+    # Spec §11.5 training-loop hook (v1.1 wired, not auto-populated):
+    # insert training_suggestions for employee subjects whose rollups
+    # land below 60 percent. Failures here never break scoring.
+    _maybe_insert_training_suggestions(
+        supabase, subject_id=assignment["subject_id"], rollups=rollups
+    )
+
     return {
         "assignment_id": assignment_id,
         "final_score": final_score,
@@ -571,6 +685,24 @@ def score_assignment(
         "integrity_score": integrity,
         "competency_rollups": rollups,
     }
+
+
+def score_assignment(
+    supabase: Client, assignment_id: str
+) -> dict[str, Any]:
+    """Scores every unscored attempt, writes assignment-level rollups,
+    computes integrity score from attempt_events, and upserts
+    competency_scores. Returns the aggregate payload."""
+
+    assignment = _assignment_row(supabase, assignment_id)
+    snapshot = assignment.get("module_snapshot") or {}
+
+    attempts = _attempts_for_assignment(supabase, assignment_id)
+    for a in attempts:
+        # Re-fetch isn't needed; we score from the in-memory attempt.
+        score_attempt(supabase, attempt=a, module_snapshot=snapshot)
+
+    return _recompute_assignment_aggregates(supabase, assignment_id)
 
 
 # -- Rescore + audit -------------------------------------------------------
@@ -582,8 +714,13 @@ def rescore_attempt(
     attempt_id: str,
     recorded_by: str | None,
 ) -> dict[str, Any]:
-    """Snapshot the current score into attempt_scores_history, then re-score
-    just this attempt and re-derive assignment rollups."""
+    """Re-score just this attempt and re-derive assignment rollups.
+
+    The prior score is snapshotted into attempt_scores_history automatically
+    by the BEFORE UPDATE trigger installed in migration 0011. We do a
+    follow-up UPDATE on the freshest history row to stamp recorded_by so
+    audit attribution is preserved.
+    """
 
     res = (
         supabase.table("attempts")
@@ -603,24 +740,48 @@ def rescore_attempt(
         raise HTTPException(status_code=404, detail="Attempt not found.")
     attempt = rows[0]
 
-    supabase.table("attempt_scores_history").insert(
-        {
-            "attempt_id": attempt_id,
-            "score": attempt.get("score"),
-            "max_score": attempt.get("max_score"),
-            "score_rationale": attempt.get("score_rationale"),
-            "scorer_model": attempt.get("scorer_model"),
-            "scorer_version": attempt.get("scorer_version"),
-            "rubric_version": attempt.get("rubric_version"),
-            "scorer_confidence": attempt.get("scorer_confidence"),
-            "recorded_by": recorded_by,
-        }
-    ).execute()
-
     assignment = _assignment_row(supabase, attempt["assignment_id"])
     snapshot = assignment.get("module_snapshot") or {}
 
+    # Only the target attempt gets re-scored. Iterating score_assignment
+    # would re-bill Claude across every sibling attempt for what is
+    # supposed to be a single-attempt rescore (spec §9.3 explicitly
+    # frames rescore_attempt as a one-shot audit retry). Aggregates land
+    # via _recompute_assignment_aggregates below.
     score_attempt(supabase, attempt=attempt, module_snapshot=snapshot)
 
-    aggregate = score_assignment(supabase, attempt["assignment_id"])
+    if recorded_by:
+        _stamp_history_recorded_by(supabase, attempt_id, recorded_by)
+
+    aggregate = _recompute_assignment_aggregates(
+        supabase, attempt["assignment_id"]
+    )
     return aggregate
+
+
+def _stamp_history_recorded_by(
+    supabase: Client, attempt_id: str, recorded_by: str
+) -> None:
+    """Tag the freshest attempt_scores_history row for this attempt with
+    recorded_by. The trigger writes recorded_by = NULL; this follow-up
+    UPDATE preserves admin attribution without re-snapshotting the row."""
+
+    try:
+        latest = (
+            supabase.table("attempt_scores_history")
+            .select("id")
+            .eq("attempt_id", attempt_id)
+            .is_("recorded_by", "null")
+            .order("recorded_at", desc=True)
+            .limit(1)
+            .execute()
+        ).data or []
+        if latest:
+            supabase.table("attempt_scores_history").update(
+                {"recorded_by": recorded_by}
+            ).eq("id", latest[0]["id"]).execute()
+    except Exception:
+        log.exception(
+            "Failed to stamp recorded_by on history row for attempt %s",
+            attempt_id,
+        )

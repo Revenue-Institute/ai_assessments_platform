@@ -1,11 +1,11 @@
 import {
-  ApiError,
   type CohortHeatmapResponse,
   cohortHeatmap,
   type SubjectType,
-  weakSpots,
   type WeakSpotsResponse,
+  weakSpots,
 } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 import { CompetencyHeatmap } from "../components/competency-heatmap";
 import { Header } from "../components/header";
 
@@ -16,10 +16,34 @@ type SearchParams = Promise<{
   domain?: string;
   days?: string;
   threshold?: string;
+  role?: string;
+  start_date?: string;
+  end_date?: string;
 }>;
 
 const SUBJECT_TYPES: Array<SubjectType | ""> = ["", "candidate", "employee"];
 const DAYS_OPTIONS = ["30", "90", "180", "365", "730"];
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseIsoDate(value: string | undefined): string | undefined {
+  if (value && ISO_DATE_RE.test(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function resolveDays(
+  usingExplicitWindow: boolean,
+  rawDays: string | undefined
+): number | undefined {
+  if (usingExplicitWindow) {
+    return;
+  }
+  if (rawDays) {
+    return Number.parseInt(rawDays, 10);
+  }
+  return 365;
+}
 
 export default async function CohortsPage({
   searchParams,
@@ -29,28 +53,41 @@ export default async function CohortsPage({
   const params = await searchParams;
   const subjectType = (params.type || undefined) as SubjectType | undefined;
   const domain = params.domain?.trim() || undefined;
-  const days = params.days ? Number.parseInt(params.days, 10) : 365;
+  const role = params.role?.trim() || undefined;
+  const startDate = parseIsoDate(params.start_date);
+  const endDate = parseIsoDate(params.end_date);
+  // When an explicit date window is provided, ignore the rolling-days input
+  // so the backend doesn't double-clip the range.
+  const usingExplicitWindow = Boolean(startDate || endDate);
+  const days = resolveDays(usingExplicitWindow, params.days);
   const threshold = params.threshold
     ? Math.max(0, Math.min(100, Number.parseFloat(params.threshold)))
     : 60;
 
-  let heatmap: CohortHeatmapResponse = {
+  const emptyHeatmap: CohortHeatmapResponse = {
     subjects: [],
     competencies: [],
     cells: [],
     team_average_pct: {},
   };
-  let weak: WeakSpotsResponse = { threshold_pct: threshold, weak_spots: [] };
-  let error: string | null = null;
-  try {
-    [heatmap, weak] = await Promise.all([
-      cohortHeatmap({ type: subjectType, domain, days }),
+  const emptyWeak: WeakSpotsResponse = {
+    threshold_pct: threshold,
+    weak_spots: [],
+  };
+  const { data, error } = await loadOrApiError(() =>
+    Promise.all([
+      cohortHeatmap({
+        type: subjectType,
+        domain,
+        days,
+        role,
+        start_date: startDate,
+        end_date: endDate,
+      }),
       weakSpots({ type: subjectType, threshold_pct: threshold }),
-    ]);
-  } catch (e) {
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
-  }
+    ])
+  );
+  const [heatmap, weak] = data ?? [emptyHeatmap, emptyWeak];
 
   return (
     <>
@@ -59,8 +96,9 @@ export default async function CohortsPage({
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
           <h1 className="font-semibold text-xl">Cohort benchmarks</h1>
           <p className="text-muted-foreground text-sm">
-            Latest score per (subject, competency). Filter by subject type or
-            domain. Weak-spot detection runs across the same filter.
+            Latest score per (subject, competency). Filter by subject type,
+            domain, role applied for, or an explicit date range. Weak-spot
+            detection runs across the same filter.
           </p>
         </section>
 
@@ -98,11 +136,23 @@ export default async function CohortsPage({
           </label>
           <label className="space-y-1">
             <span className="block text-muted-foreground text-xs uppercase">
+              Role
+            </span>
+            <input
+              className="rounded border border-border/60 bg-background px-3 py-1.5 text-sm"
+              defaultValue={role ?? ""}
+              name="role"
+              placeholder="e.g. SDR, RevOps Manager"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-muted-foreground text-xs uppercase">
               Window (days)
             </span>
             <select
-              className="rounded border border-border/60 bg-background px-3 py-1.5 text-sm"
-              defaultValue={String(days)}
+              className="rounded border border-border/60 bg-background px-3 py-1.5 text-sm disabled:opacity-50"
+              defaultValue={String(days ?? 365)}
+              disabled={usingExplicitWindow}
               name="days"
             >
               {DAYS_OPTIONS.map((d) => (
@@ -111,6 +161,30 @@ export default async function CohortsPage({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-muted-foreground text-xs uppercase">
+              Start date
+            </span>
+            <input
+              className="rounded border border-border/60 bg-background px-3 py-1.5 text-sm"
+              defaultValue={startDate ?? ""}
+              max={endDate ?? undefined}
+              name="start_date"
+              type="date"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-muted-foreground text-xs uppercase">
+              End date
+            </span>
+            <input
+              className="rounded border border-border/60 bg-background px-3 py-1.5 text-sm"
+              defaultValue={endDate ?? ""}
+              min={startDate ?? undefined}
+              name="end_date"
+              type="date"
+            />
           </label>
           <label className="space-y-1">
             <span className="block text-muted-foreground text-xs uppercase">

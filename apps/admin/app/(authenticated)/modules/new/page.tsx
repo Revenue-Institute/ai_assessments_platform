@@ -25,17 +25,23 @@ export default async function NewModuleWizardPage({
   async function action(formData: FormData): Promise<void> {
     "use server";
     const role_title = String(formData.get("role_title") ?? "").trim();
-    const responsibilities = String(formData.get("responsibilities") ?? "").trim();
+    const responsibilities = String(
+      formData.get("responsibilities") ?? ""
+    ).trim();
     const target_duration_minutes = Number.parseInt(
       String(formData.get("target_duration_minutes") ?? "45"),
       10
     );
-    const difficulty = String(formData.get("difficulty") ?? "mid") as Difficulty;
+    const difficulty = String(
+      formData.get("difficulty") ?? "mid"
+    ) as Difficulty;
     const domains = String(formData.get("domains") ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const required_competencies = String(formData.get("required_competencies") ?? "")
+    const required_competencies = String(
+      formData.get("required_competencies") ?? ""
+    )
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
@@ -74,7 +80,7 @@ export default async function NewModuleWizardPage({
       notes,
     };
 
-    if (!role_title || !responsibilities) {
+    if (!(role_title && responsibilities)) {
       redirect(
         "/modules/new?error=" +
           encodeURIComponent("Role title and responsibilities are required.")
@@ -86,7 +92,7 @@ export default async function NewModuleWizardPage({
       redirect(`/modules/new/${result.run_id}`);
     } catch (e) {
       if (e instanceof ApiError) {
-        redirect("/modules/new?error=" + encodeURIComponent(e.message));
+        redirect(`/modules/new?error=${encodeURIComponent(e.message)}`);
       }
       throw e;
     }
@@ -98,9 +104,7 @@ export default async function NewModuleWizardPage({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-6">
           <div>
-            <p className="eyebrow-label">
-              Step 1 of 2 · Brief
-            </p>
+            <p className="eyebrow-label">Step 1 of 2 · Brief</p>
             <h1 className="mt-1 font-semibold text-2xl">Describe the role</h1>
             <p className="mt-1 max-w-prose text-muted-foreground text-sm">
               The AI generator turns a role description into a balanced outline
@@ -124,21 +128,29 @@ export default async function NewModuleWizardPage({
           </p>
         )}
 
-        <form action={action} className="grid max-w-3xl gap-4 rounded-xl border border-border/50 bg-muted/20 p-4">
-          <Field label="Role title" name="role_title" placeholder="HubSpot Workflows Architect" required />
+        <form
+          action={action}
+          className="grid max-w-3xl gap-4 rounded-xl border border-border/50 bg-muted/20 p-4"
+        >
           <Field
+            label="Role title"
+            name="role_title"
+            placeholder="HubSpot Workflows Architect"
+            required
+          />
+          <Field
+            defaultValue={DEFAULT_RESPONSIBILITIES}
             label="Responsibilities"
             name="responsibilities"
             placeholder="Paste from JD or write 4-8 bullet points"
-            defaultValue={DEFAULT_RESPONSIBILITIES}
             textarea
           />
           <div className="grid grid-cols-2 gap-3">
             <Field
+              defaultValue="45"
               label="Target duration (minutes)"
               name="target_duration_minutes"
               type="number"
-              defaultValue="45"
             />
             <label className="space-y-1">
               <span className="text-sm">Difficulty</span>
@@ -166,14 +178,14 @@ export default async function NewModuleWizardPage({
           />
 
           <fieldset className="space-y-3 rounded border border-border/40 bg-background/30 p-3">
-            <legend className="px-1 eyebrow-label">
+            <legend className="eyebrow-label px-1">
               Question mix (%) (optional)
             </legend>
             <p className="text-muted-foreground text-xs">
-              Leave every box blank to let the AI choose the mix from the
-              role and responsibilities. Set one or more to constrain the
-              AI; remaining blanks are filled to total 100%. Filled values
-              must sum to at most 100.
+              Leave every box blank to let the AI choose the mix from the role
+              and responsibilities. Set one or more to constrain the AI;
+              remaining blanks are filled to total 100%. Filled values must sum
+              to at most 100.
             </p>
             <div className="grid grid-cols-5 gap-3">
               <NumField label="mcq" name="mcq_pct" />
@@ -184,13 +196,18 @@ export default async function NewModuleWizardPage({
             </div>
           </fieldset>
 
-          <Field label="Notes for the generator (optional)" name="notes" textarea />
+          <Field
+            label="Notes for the generator (optional)"
+            name="notes"
+            textarea
+          />
 
           <button className="btn-primary text-sm" type="submit">
             Generate outline
           </button>
           <p className="text-muted-foreground text-xs">
-            The first call typically takes 10-25 seconds. You'll review the outline before any questions are written.
+            The first call typically takes 10-25 seconds. You'll review the
+            outline before any questions are written.
           </p>
         </form>
       </div>
@@ -200,9 +217,13 @@ export default async function NewModuleWizardPage({
 
 function optionalPct(form: FormData, name: string): number | null {
   const raw = String(form.get(name) ?? "").trim();
-  if (raw === "") return null;
+  if (raw === "") {
+    return null;
+  }
   const v = Number.parseFloat(raw);
-  if (!Number.isFinite(v) || v < 0 || v > 100) return null;
+  if (!Number.isFinite(v) || v < 0 || v > 100) {
+    return null;
+  }
   return v;
 }
 
@@ -226,12 +247,13 @@ function Field({
   const className =
     "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
-    <label className="space-y-1">
+    <label className="space-y-1" htmlFor={name}>
       <span className="text-sm">{label}</span>
       {textarea ? (
         <textarea
           className={`${className} h-32`}
           defaultValue={defaultValue}
+          id={name}
           name={name}
           placeholder={placeholder}
         />
@@ -239,6 +261,7 @@ function Field({
         <input
           className={className}
           defaultValue={defaultValue}
+          id={name}
           name={name}
           placeholder={placeholder}
           required={required}
@@ -249,13 +272,7 @@ function Field({
   );
 }
 
-function NumField({
-  label,
-  name,
-}: {
-  label: string;
-  name: string;
-}) {
+function NumField({ label, name }: { label: string; name: string }) {
   return (
     <label className="space-y-1">
       <span className="text-muted-foreground text-xs">{label}</span>

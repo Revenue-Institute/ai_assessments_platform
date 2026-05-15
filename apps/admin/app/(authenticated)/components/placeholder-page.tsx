@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { Header } from "./header";
 
-type PlaceholderPageProps = {
+interface PlaceholderPageProps {
+  children?: ReactNode;
+  description: string;
   page: string;
   pages?: string[];
-  description: string;
   phase: string;
-  children?: ReactNode;
-};
+}
 
 export function PlaceholderPage({
   page,

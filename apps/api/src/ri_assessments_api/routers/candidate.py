@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from supabase import Client
 
+from ..config import get_settings
 from ..db import get_supabase
 from ..models.candidate import (
     CandidateAssignmentView,
@@ -41,10 +45,16 @@ from ..services.attempts import (
     complete_assignment,
     get_assignment_for_token,
     get_or_create_attempt_view,
+    record_n8n_workflow_id,
     save_draft_answer,
     submit_answer,
+    verify_n8n_workflow_owner,
 )
-from ..services.code_runner import run_test_suite, run_user_code
+from ..services.code_runner import (
+    run_test_suite,
+    run_user_code,
+    run_user_code_streaming,
+)
 from ..services.integrity import record_events, record_heartbeat
 from ..services.n8n_runner import (
     export_workflow,
@@ -53,17 +63,94 @@ from ..services.n8n_runner import (
 from ..services.notebook_runner import run_notebook
 from ..services.sql_runner import run_sql
 
+# Rate limiting (spec §14.3, §18: bound abuse on the runner endpoints).
+# slowapi is the canonical FastAPI integration. It is NOT yet declared in
+# apps/api/pyproject.toml, and that file is owned by the platform agent,
+# so we import it conditionally: when present, we wire real per-token
+# limits; when absent, `_rate_limit` is a no-op decorator so existing
+# tests and dev environments keep working unchanged.
+# TODO: add `slowapi>=0.1.9` to apps/api/pyproject.toml dependencies.
+try:  # pragma: no cover - environment-dependent import
+    from slowapi import Limiter
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
+
+    def _rate_limit_key(request: Request) -> str:
+        """Per-token keying: the candidate token in the path is the unit
+        of work we want to bound. Falls back to remote_address (admin
+        clients hitting these via curl in dev) so the limiter never
+        crashes when the path param isn't a candidate token."""
+        token = request.path_params.get("token") if hasattr(request, "path_params") else None
+        if token:
+            return f"candidate:{token}"
+        return get_remote_address(request)
+
+    _limiter: Limiter | None = Limiter(key_func=_rate_limit_key)
+
+    def _rate_limit(spec: str):
+        return _limiter.limit(spec)
+
+    _RATE_LIMIT_ENABLED = True
+except Exception:  # pragma: no cover - slowapi missing
+    _limiter = None
+    RateLimitExceeded = None  # type: ignore[assignment]
+
+    def _rate_limit(spec: str):
+        """No-op when slowapi is unavailable. Routes still serve, just
+        without per-token throttling. Replace once slowapi is on the
+        dependency list."""
+
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    _RATE_LIMIT_ENABLED = False
+
+
 router = APIRouter(tags=["candidate"])
+
+log = logging.getLogger(__name__)
+
+
+def _resolve_client_ip(request: Request) -> str | None:
+    """Spec §18: hash candidate IPs, never store raw, and only honor
+    X-Forwarded-For when the immediate peer is a configured trusted proxy.
+    An untrusted peer setting that header could otherwise spoof arbitrary
+    client IPs into the integrity log. `settings.trusted_proxy_ips` is
+    empty by default so the unsafe header is ignored unless an operator
+    explicitly opts in via TRUSTED_PROXY_IPS."""
+
+    settings = get_settings()
+    peer = request.client.host if request.client else None
+    trusted = set(settings.trusted_proxy_ips or [])
+    if peer and peer in trusted:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            # First entry is the original client per RFC 7239 conventions.
+            return forwarded.split(",")[0].strip() or peer
+    return peer
 
 
 def _ip_hash_from_request(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    raw_ip = forwarded.split(",")[0].strip() if forwarded else (
-        request.client.host if request.client else None
-    )
+    """Hash the resolved client IP with HMAC-SHA256 keyed by
+    SESSION_COOKIE_SECRET. Using a keyed hash (rather than a bare
+    sha256()) prevents trivial rainbow-table lookups against the
+    attempt_events.ip_hash column; the secret stays server-side so an
+    attacker holding only DB rows cannot reverse the IPs."""
+
+    raw_ip = _resolve_client_ip(request)
     if not raw_ip:
         return None
-    return hashlib.sha256(raw_ip.encode("utf-8")).hexdigest()
+    settings = get_settings()
+    secret = (settings.session_cookie_secret or "").encode("utf-8")
+    if not secret:
+        # Local dev path with no secret configured: degrade to a plain
+        # SHA-256 so the column is still populated. config.py refuses to
+        # start in staging / production without a secret, so the keyed
+        # path is the only one that runs there.
+        return hashlib.sha256(raw_ip.encode("utf-8")).hexdigest()
+    return hmac.new(secret, raw_ip.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _user_agent(request: Request) -> str | None:
@@ -136,7 +223,9 @@ def save_question(
 
 
 @router.post("/{token}/heartbeat", response_model=HeartbeatResponse)
+@_rate_limit("60/minute")
 def heartbeat(
+    request: Request,
     token: str,
     body: HeartbeatRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -146,10 +235,11 @@ def heartbeat(
 
 
 @router.post("/{token}/events", response_model=EventsResponse)
+@_rate_limit("30/minute")
 def events(
+    request: Request,
     token: str,
     body: EventsRequest,
-    request: Request,
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> EventsResponse:
     accepted = record_events(
@@ -221,18 +311,60 @@ def _config_for_code_question(
     return config
 
 
-@router.post("/{token}/code/run", response_model=CodeRunResponse)
-def code_run(
+@router.post("/{token}/code/run", response_model=None)
+@_rate_limit("30/minute")
+async def code_run(
+    request: Request,
     token: str,
     body: CodeRunRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
-) -> CodeRunResponse:
+    stream: Annotated[bool, Query()] = False,
+) -> CodeRunResponse | StreamingResponse:
+    """Execute the candidate's current buffer in an E2B sandbox
+    (spec §7.1, §14.3).
+
+    Default (`stream=false`): returns a buffered `CodeRunResponse` with
+    aggregated stdout/stderr/exit_code (existing behavior, kept for
+    back-compat).
+
+    `stream=true`: returns `text/event-stream` SSE frames emitted as
+    each stdout/stderr line arrives in the sandbox. Frame shapes:
+      data: {"type": "started", "language": str, "time_limit_ms": int}
+      data: {"type": "stdout",  "chunk": str}
+      data: {"type": "stderr",  "chunk": str}
+      data: {"type": "exit",    "exit_code": int, "runtime_ms": int,
+              "timed_out": bool, "error": str|None}
+    Plus periodic ": keepalive" comments to defeat proxy idle timeouts.
+    The candidate frontend wires EventSource against this URL with
+    `?stream=true`; this router only exposes the variant. Rate limit
+    and the upstream JWT-token / question-type verification in
+    _config_for_code_question apply identically to both shapes."""
+
     config = _config_for_code_question(supabase, token, body.question_index)
+    language = config.get("language", "python")
+    packages = list(config.get("packages") or [])
+    time_limit_ms = int(config.get("time_limit_exec_ms") or 10_000)
+
+    if stream:
+        return StreamingResponse(
+            run_user_code_streaming(
+                code=body.code,
+                language=language,
+                packages=packages,
+                time_limit_ms=time_limit_ms,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     result = run_user_code(
         code=body.code,
-        language=config.get("language", "python"),
-        packages=list(config.get("packages") or []),
-        time_limit_ms=int(config.get("time_limit_exec_ms") or 10_000),
+        language=language,
+        packages=packages,
+        time_limit_ms=time_limit_ms,
     )
     return CodeRunResponse(
         stdout=result.stdout,
@@ -244,7 +376,9 @@ def code_run(
 
 
 @router.post("/{token}/code/test", response_model=CodeTestResponse)
+@_rate_limit("30/minute")
 def code_test(
+    request: Request,
     token: str,
     body: CodeTestRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -298,7 +432,9 @@ def _config_for_sql_question(supabase: Client, token: str, index: int) -> dict:
 
 
 @router.post("/{token}/sql/query", response_model=SqlQueryResponse)
+@_rate_limit("60/minute")
 def sql_query(
+    request: Request,
     token: str,
     body: SqlQueryRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -341,7 +477,9 @@ def _config_for_notebook_question(
 
 
 @router.post("/{token}/notebook/run", response_model=NotebookRunResponse)
+@_rate_limit("30/minute")
 def notebook_run(
+    request: Request,
     token: str,
     body: NotebookRunRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -369,7 +507,9 @@ def notebook_run(
 
 
 @router.post("/{token}/notebook/run-cell", response_model=NotebookRunResponse)
+@_rate_limit("60/minute")
 def notebook_run_cell(
+    request: Request,
     token: str,
     body: NotebookCellRunRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -482,11 +622,29 @@ def _provision_n8n(
         (assignment.get("module_snapshot") or {}).get("title") or "RI Workflow"
     )
     result = provision_workspace(starter_workflow=starter, title=str(title))
+    # Spec §7.2 + §14.3: bind the freshly provisioned workflow to the
+    # attempt's metadata so /n8n/export can refuse any other workflow id.
+    # n8n_runner.py owns the actual provisioning call; ownership tracking
+    # lives in services/attempts.py (in this agent's scope) which is why
+    # the recording lives here rather than inside provision_workspace.
+    try:
+        record_n8n_workflow_id(
+            supabase,
+            raw_token=token,
+            question_index=question_index,
+            workflow_id=result.workflow_id,
+        )
+    except HTTPException:
+        # Refuse the embed if we can't record ownership, leaving an
+        # un-owned workflow would defeat the export check.
+        raise
     return N8nEmbedResponse(workflow_id=result.workflow_id, embed_url=result.embed_url)
 
 
 @router.post("/{token}/n8n/embed", response_model=N8nEmbedResponse)
+@_rate_limit("10/minute")
 def n8n_embed(
+    request: Request,
     token: str,
     body: N8nEmbedRequest,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -515,5 +673,15 @@ def n8n_export(
 ) -> N8nExportResponse:
     # Validates question type and ensures we own the workflow lookup path.
     _config_for_n8n_question(supabase, token, body.question_index)
+    # Spec §7.2 + §14.3 ownership check: only the workflow_id that we
+    # recorded on the attempt's metadata at provision time may be
+    # exported through this token. Any other id (a candidate guessing,
+    # or a leaked id from another tenant) is rejected.
+    verify_n8n_workflow_owner(
+        supabase,
+        raw_token=token,
+        question_index=body.question_index,
+        workflow_id=body.workflow_id,
+    )
     workflow = export_workflow(body.workflow_id)
     return N8nExportResponse(workflow_id=body.workflow_id, workflow=workflow)

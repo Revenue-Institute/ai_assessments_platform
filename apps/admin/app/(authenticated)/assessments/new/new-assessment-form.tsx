@@ -21,11 +21,10 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
 
-  const derivedSlug = useMemo(() => (slugTouched ? slug : sluggify(title)), [
-    title,
-    slug,
-    slugTouched,
-  ]);
+  const derivedSlug = useMemo(
+    () => (slugTouched ? slug : sluggify(title)),
+    [title, slug, slugTouched]
+  );
 
   function toggleModule(id: string) {
     setSelected((prev) =>
@@ -36,7 +35,9 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
   function moveUp(id: string) {
     setSelected((prev) => {
       const i = prev.indexOf(id);
-      if (i <= 0) return prev;
+      if (i <= 0) {
+        return prev;
+      }
       const next = prev.slice();
       [next[i - 1], next[i]] = [next[i] as string, next[i - 1] as string];
       return next;
@@ -46,7 +47,9 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
   function moveDown(id: string) {
     setSelected((prev) => {
       const i = prev.indexOf(id);
-      if (i < 0 || i >= prev.length - 1) return prev;
+      if (i < 0 || i >= prev.length - 1) {
+        return prev;
+      }
       const next = prev.slice();
       [next[i], next[i + 1]] = [next[i + 1] as string, next[i] as string];
       return next;
@@ -67,7 +70,9 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
 
   const modulesById = useMemo(() => {
     const m = new Map<string, ModuleSummary>();
-    for (const mod of modules) m.set(mod.id, mod);
+    for (const mod of modules) {
+      m.set(mod.id, mod);
+    }
     return m;
   }, [modules]);
 
@@ -133,14 +138,14 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
         </p>
 
         {modules.length === 0 ? (
-          <p className="rounded border border-dashed border-border/60 bg-background/30 px-3 py-4 text-center text-muted-foreground text-xs">
+          <p className="rounded border border-border/60 border-dashed bg-background/30 px-3 py-4 text-center text-muted-foreground text-xs">
             No published modules available yet. Publish at least one module
             first, then come back.
           </p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded border border-border/40 bg-background/30 p-2">
-              <p className="mb-2 eyebrow-label">Selected ({selected.length})</p>
+              <p className="eyebrow-label mb-2">Selected ({selected.length})</p>
               {selected.length === 0 ? (
                 <p className="px-2 py-3 text-muted-foreground text-xs">
                   Nothing selected yet.
@@ -149,7 +154,9 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                 <ol className="space-y-1">
                   {selected.map((id, i) => {
                     const m = modulesById.get(id);
-                    if (!m) return null;
+                    if (!m) {
+                      return null;
+                    }
                     return (
                       <li
                         className="flex items-center gap-2 rounded border border-border/40 bg-muted/30 px-2 py-1 text-xs"
@@ -193,7 +200,7 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
               )}
             </div>
             <div className="rounded border border-border/40 bg-background/30 p-2">
-              <p className="mb-2 eyebrow-label">
+              <p className="eyebrow-label mb-2">
                 Available ({unselected.length})
               </p>
               {unselected.length === 0 ? (

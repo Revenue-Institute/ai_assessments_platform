@@ -18,18 +18,26 @@ export const DifficultyEnum = z.enum(["junior", "mid", "senior", "expert"]);
 export type Difficulty = z.infer<typeof DifficultyEnum>;
 
 export const VariableSpec = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("int"),
-    min: z.number(),
-    max: z.number(),
-    step: z.number().default(1),
-  }),
-  z.object({
-    kind: z.literal("float"),
-    min: z.number(),
-    max: z.number(),
-    decimals: z.number().default(2),
-  }),
+  z
+    .object({
+      kind: z.literal("int"),
+      min: z.number(),
+      max: z.number(),
+      step: z.number().default(1),
+    })
+    .refine((d) => d.min <= d.max && d.step > 0, {
+      message: "int VariableSpec requires min <= max and step > 0",
+    }),
+  z
+    .object({
+      kind: z.literal("float"),
+      min: z.number(),
+      max: z.number(),
+      decimals: z.number().default(2),
+    })
+    .refine((d) => d.min <= d.max, {
+      message: "float VariableSpec requires min <= max",
+    }),
   z.object({
     kind: z.literal("choice"),
     options: z.array(z.string()).min(2),
@@ -68,9 +76,9 @@ export type RubricCriterion = z.infer<typeof RubricCriterion>;
 
 export const Rubric = z.object({
   version: z.string().default("1"),
-  criteria: z.array(RubricCriterion),
+  criteria: z.array(RubricCriterion).min(1),
   scoring_mode: ScoringMode,
-  tolerance: z.number().optional(),
+  tolerance: z.number().nonnegative().optional(),
   test_cases: z.array(z.any()).optional(),
 });
 export type Rubric = z.infer<typeof Rubric>;
@@ -84,10 +92,10 @@ export const QuestionTemplate = z.object({
   solver_language: z.literal("python").default("python"),
   interactive_config: z.any().optional(),
   rubric: Rubric,
-  competency_tags: z.array(z.string()),
-  time_limit_seconds: z.number().optional(),
-  max_points: z.number().default(10),
+  competency_tags: z.array(z.string()).min(1),
+  time_limit_seconds: z.number().int().min(30).max(1800).optional(),
+  max_points: z.number().max(100).default(10),
   difficulty: DifficultyEnum,
-  metadata: z.record(z.string(), z.any()).default({}),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 export type QuestionTemplate = z.infer<typeof QuestionTemplate>;

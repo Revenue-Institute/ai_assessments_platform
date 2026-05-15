@@ -1,11 +1,8 @@
-import type {
-  CohortHeatmapResponse,
-  CohortSubject,
-} from "@/lib/api";
+import type { CohortHeatmapResponse, CohortSubject } from "@/lib/api";
 
-type Props = {
+interface Props {
   data: CohortHeatmapResponse;
-};
+}
 
 export function CompetencyHeatmap({ data }: Props) {
   if (
@@ -31,17 +28,24 @@ export function CompetencyHeatmap({ data }: Props) {
       <table className="border-collapse text-xs">
         <thead className="sticky top-0 z-10 bg-muted text-left">
           <tr>
-            <th className="sticky left-0 z-20 bg-muted px-3 py-2 font-medium">
+            <th
+              className="sticky left-0 z-20 bg-muted px-3 py-2 font-medium"
+              scope="col"
+            >
               Subject
             </th>
             {data.competencies.map((c) => (
               <th
-                className="border-border/30 border-l px-2 py-2 font-medium align-bottom"
+                className="border-border/30 border-l px-2 py-2 align-bottom font-medium"
                 key={c}
+                scope="col"
               >
                 <span
                   className="block whitespace-nowrap"
-                  style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                  style={{
+                    writingMode: "vertical-rl",
+                    transform: "rotate(180deg)",
+                  }}
                 >
                   {tagShort(c)}
                 </span>
@@ -51,10 +55,7 @@ export function CompetencyHeatmap({ data }: Props) {
         </thead>
         <tbody>
           {data.subjects.map((subject) => (
-            <tr
-              className="border-border/30 border-t"
-              key={subject.id}
-            >
+            <tr className="border-border/30 border-t" key={subject.id}>
               <SubjectCell subject={subject} />
               {data.competencies.map((c) => {
                 const score = lookup.get(cellKey(subject.id, c));
@@ -63,9 +64,12 @@ export function CompetencyHeatmap({ data }: Props) {
             </tr>
           ))}
           <tr className="border-border/40 border-t-2 bg-muted/40 font-medium">
-            <td className="sticky left-0 bg-muted/40 px-3 py-2">
+            <th
+              className="sticky left-0 bg-muted/40 px-3 py-2 text-left"
+              scope="row"
+            >
               Team avg
-            </td>
+            </th>
             {data.competencies.map((c) => {
               const avg = data.team_average_pct[c];
               return <ScoreCell key={c} score={avg} />;
@@ -79,12 +83,15 @@ export function CompetencyHeatmap({ data }: Props) {
 
 function SubjectCell({ subject }: { subject: CohortSubject }) {
   return (
-    <td className="sticky left-0 z-10 max-w-[240px] bg-background px-3 py-2 align-middle">
+    <th
+      className="sticky left-0 z-10 max-w-[240px] bg-background px-3 py-2 text-left align-middle font-normal"
+      scope="row"
+    >
       <p className="truncate font-medium">{subject.full_name}</p>
-      <p className="truncate text-muted-foreground text-[11px]">
+      <p className="truncate text-[11px] text-muted-foreground">
         {subject.email} · {subject.type}
       </p>
-    </td>
+    </th>
   );
 }
 
@@ -125,6 +132,8 @@ function tagShort(id: string): string {
 const STOP_LOW = "rgb(127 29 29)"; // dark destructive
 const STOP_MID = "rgb(146 64 14)"; // dark warning
 const STOP_HIGH = "rgb(10 143 93)"; // brand forest
+const RGB_RE = /rgb\(([^)]+)\)/;
+const RGB_SPLIT_RE = /[ ,]+/;
 
 function scoreColor(score: number): string {
   const clamped = Math.max(0, Math.min(100, score));
@@ -145,10 +154,12 @@ function mix(a: string, b: string, t: number): string {
 }
 
 function parseRgb(input: string): number[] {
-  const m = input.match(/rgb\(([^)]+)\)/);
-  if (!m) return [0, 0, 0];
+  const m = input.match(RGB_RE);
+  if (!m) {
+    return [0, 0, 0];
+  }
   return m[1]
-    .split(/[ ,]+/)
+    .split(RGB_SPLIT_RE)
     .map((s) => Number.parseInt(s, 10))
     .slice(0, 3);
 }

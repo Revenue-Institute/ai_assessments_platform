@@ -31,7 +31,7 @@ export default async function SignInPage({
       </header>
 
       <form action={handleSignIn} className="space-y-3">
-        <input type="hidden" name="next" value={next ?? ""} />
+        <input name="next" type="hidden" value={next ?? ""} />
         <div className="space-y-1">
           <label className="text-sm" htmlFor="email">
             Email

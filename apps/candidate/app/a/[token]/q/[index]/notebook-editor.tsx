@@ -1,36 +1,78 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import { emitIntegrityEvent } from "@repo/integrity/browser";
 import { useMemo, useState } from "react";
 import { env } from "@/env";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
-type Cell = { type: "code" | "markdown"; source: string };
+interface Cell {
+  // Stable id so React keys survive content edits. Crypto.randomUUID is
+  // available in every browser the candidate app supports (Safari 15.4+,
+  // Chrome 92+, Firefox 95+).
+  id: string;
+  source: string;
+  type: "code" | "markdown";
+}
 
-type CellOutput = {
-  index: number;
-  type: string;
-  stdout: string;
-  stderr: string;
+function newCellId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `cell-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function ensureCellIds(
+  cells: Array<Partial<Cell> & { source: string; type: Cell["type"] }>
+): Cell[] {
+  return cells.map((c) => ({
+    id: c.id ?? newCellId(),
+    source: c.source,
+    type: c.type,
+  }));
+}
+
+interface CellOutput {
   error: string | null;
+  index: number;
   runtime_ms: number;
-};
+  stderr: string;
+  stdout: string;
+  type: string;
+}
 
-type RunResponse = {
+interface RunResponse {
   cells: CellOutput[];
   runtime_ms: number;
   timed_out: boolean;
-};
+}
 
-const STARTER_CELL: Cell = {
-  type: "code",
-  source: "# Use the cells below to load and analyze the data.\n",
-};
+const TRAILING_SLASH_RE = /\/$/;
 
-function bootstrapCells(initial: Cell[] | undefined, starter?: Cell[]): Cell[] {
-  if (initial && initial.length > 0) return initial;
-  if (starter && starter.length > 0) return starter;
-  return [STARTER_CELL];
+function makeStarterCell(): Cell {
+  return {
+    id: newCellId(),
+    type: "code",
+    source: "# Use the cells below to load and analyze the data.\n",
+  };
+}
+
+function bootstrapCells(
+  initial:
+    | Array<Partial<Cell> & { source: string; type: Cell["type"] }>
+    | undefined,
+  starter?: Array<Partial<Cell> & { source: string; type: Cell["type"] }>
+): Cell[] {
+  if (initial && initial.length > 0) {
+    return ensureCellIds(initial);
+  }
+  if (starter && starter.length > 0) {
+    return ensureCellIds(starter);
+  }
+  return [makeStarterCell()];
 }
 
 export function NotebookRenderer({
@@ -41,8 +83,13 @@ export function NotebookRenderer({
 }: {
   token: string;
   questionIndex: number;
-  config: { dataset_urls?: string[]; starter_cells?: Cell[] };
-  initialCells: Cell[] | undefined;
+  config: {
+    dataset_urls?: string[];
+    starter_cells?: Array<{ id?: string; source: string; type: Cell["type"] }>;
+  };
+  initialCells:
+    | Array<{ id?: string; source: string; type: Cell["type"] }>
+    | undefined;
 }) {
   const initialBootstrapped = useMemo(
     () => bootstrapCells(initialCells, config.starter_cells),
@@ -57,7 +104,13 @@ export function NotebookRenderer({
     JSON.stringify(cells) !== JSON.stringify(initialBootstrapped)
   );
 
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
+
+  function makeCellOnMount(i: number): OnMount {
+    return (editor) => {
+      editor.updateOptions({ ariaLabel: `Cell ${i + 1} code editor` });
+    };
+  }
 
   function updateCell(i: number, source: string) {
     setCells((current) =>
@@ -74,21 +127,12 @@ export function NotebookRenderer({
   function addCell(after: number, type: Cell["type"]) {
     setCells((current) => [
       ...current.slice(0, after + 1),
-      { type, source: "" },
+      { id: newCellId(), type, source: "" },
       ...current.slice(after + 1),
     ]);
   }
 
   function deleteCell(i: number) {
-    const cell = cells[i];
-    const hasContent = cell?.source?.trim().length > 0;
-    if (
-      hasContent &&
-      typeof window !== "undefined" &&
-      !window.confirm("Delete this cell? Its contents won't be recoverable.")
-    ) {
-      return;
-    }
     setCells((current) =>
       current.length === 1 ? current : current.filter((_, idx) => idx !== i)
     );
@@ -103,6 +147,17 @@ export function NotebookRenderer({
     setRunning(true);
     setNetworkError(null);
     setOutputs({});
+    // Emit one event per code cell, matching the spec event name
+    // `notebook_cell_run` (§5.3). Markdown cells are skipped because the
+    // server-side runner skips them too.
+    for (const cell of cells) {
+      if (cell.type === "code") {
+        emitIntegrityEvent("notebook_cell_run", {
+          question_index: questionIndex,
+          cell_id: cell.id,
+        });
+      }
+    }
     try {
       const res = await fetch(
         `${apiBase}/a/${encodeURIComponent(token)}/notebook/run`,
@@ -119,7 +174,9 @@ export function NotebookRenderer({
       }
       const data = (await res.json()) as RunResponse;
       const map: Record<number, CellOutput> = {};
-      for (const out of data.cells) map[out.index] = out;
+      for (const out of data.cells) {
+        map[out.index] = out;
+      }
       setOutputs(map);
     } catch (e) {
       setNetworkError(e instanceof Error ? e.message : "Network error.");
@@ -149,7 +206,7 @@ export function NotebookRenderer({
 
       <div className="flex items-center gap-2 text-xs">
         <button
-          className="rounded bg-primary px-3 py-2 text-primary-foreground font-medium hover:bg-neon hover:text-deep-navy disabled:opacity-50"
+          className="rounded bg-primary px-3 py-2 font-medium text-primary-foreground hover:bg-neon hover:text-deep-navy disabled:opacity-50"
           disabled={running}
           onClick={runAll}
           type="button"
@@ -171,13 +228,14 @@ export function NotebookRenderer({
         {cells.map((cell, i) => (
           <li
             className="space-y-2 rounded-lg border border-border bg-card p-3"
-            key={i}
+            key={cell.id}
           >
             <div className="flex items-center gap-2 text-xs">
               <span className="font-medium text-muted-foreground">
                 Cell {i + 1}
               </span>
               <select
+                aria-label={`Cell ${i + 1} type`}
                 className="rounded border border-border bg-card px-2 py-1"
                 onChange={(e) => setCellType(i, e.target.value as Cell["type"])}
                 value={cell.type}
@@ -212,30 +270,40 @@ export function NotebookRenderer({
             </div>
 
             {cell.type === "code" ? (
-              <div
-                className="overflow-hidden rounded border border-border"
+              <fieldset
+                aria-label={`Cell ${i + 1} code editor`}
+                className="overflow-hidden rounded border border-border p-0"
                 data-allow-paste="true"
               >
                 <Editor
                   defaultLanguage="python"
                   height="180px"
                   onChange={(value) => updateCell(i, value ?? "")}
+                  onMount={makeCellOnMount(i)}
                   options={{
                     minimap: { enabled: false },
                     fontSize: 13,
                     scrollBeyondLastLine: false,
+                    ariaLabel: "Cell code editor",
                   }}
                   theme="vs-dark"
                   value={cell.source}
                 />
-              </div>
+              </fieldset>
             ) : (
-              <textarea
-                className="h-32 w-full rounded border border-border bg-card p-2 text-sm leading-6"
-                onChange={(e) => updateCell(i, e.target.value)}
-                placeholder="# Markdown notes..."
-                value={cell.source}
-              />
+              // Markdown cells are user-authored prose. Paste/copy should
+              // behave like code cells so candidates can move notes
+              // around. Spec §10.2 explicitly carves out
+              // `data-allow-paste="true"` zones from the clipboard block.
+              <fieldset className="p-0" data-allow-paste="true">
+                <textarea
+                  aria-label={`Cell ${i + 1} markdown notes`}
+                  className="h-32 w-full rounded border border-border bg-card p-2 text-sm leading-6"
+                  onChange={(e) => updateCell(i, e.target.value)}
+                  placeholder="# Markdown notes..."
+                  value={cell.source}
+                />
+              </fieldset>
             )}
 
             {outputs[i] && cell.type === "code" && (
@@ -249,7 +317,7 @@ export function NotebookRenderer({
 }
 
 function CellOutputView({ output }: { output: CellOutput }) {
-  if (!output.stdout && !output.stderr && !output.error) {
+  if (!(output.stdout || output.stderr || output.error)) {
     return (
       <p className="text-muted-foreground text-xs">
         No output. ({output.runtime_ms} ms)

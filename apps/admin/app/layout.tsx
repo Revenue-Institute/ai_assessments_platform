@@ -1,7 +1,7 @@
-import { brandFontShell } from "@repo/design-system/lib/fonts";
-import { ThemeProvider } from "@repo/design-system/providers/theme";
 import { Toaster } from "@repo/design-system/components/ui/sonner";
 import { TooltipProvider } from "@repo/design-system/components/ui/tooltip";
+import { brandFontShell } from "@repo/design-system/lib/fonts";
+import { ThemeProvider } from "@repo/design-system/providers/theme";
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import localFont from "next/font/local";

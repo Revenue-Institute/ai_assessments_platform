@@ -18,22 +18,22 @@
  */
 :root {
   /* Brand palette, raw values, exposed as utilities via @theme below. */
-  --brand-forest: #0A8F5D;
-  --brand-neon: #12D68E;
+  --brand-forest: #0a8f5d;
+  --brand-neon: #12d68e;
   --brand-deep-navy: #020617;
-  --brand-slate-navy: #0F172A;
-  --brand-light-base: #F8FAFC;
-  --brand-eyebrow: #64748B;
-  --brand-border-light: #E2E8F0;
-  --brand-border-mid: #CBD5E1;
-  --brand-border-dark: #94A3B8;
+  --brand-slate-navy: #0f172a;
+  --brand-light-base: #f8fafc;
+  --brand-eyebrow: #64748b;
+  --brand-border-light: #e2e8f0;
+  --brand-border-mid: #cbd5e1;
+  --brand-border-dark: #94a3b8;
 
   /* Semantic tokens, light mode default. */
   --background: var(--brand-light-base);
   --foreground: var(--brand-slate-navy);
-  --card: #FFFFFF;
+  --card: #ffffff;
   --card-foreground: var(--brand-slate-navy);
-  --popover: #FFFFFF;
+  --popover: #ffffff;
   --popover-foreground: var(--brand-slate-navy);
   --primary: hsl(158, 83%, 46%);
   --primary-foreground: var(--brand-deep-navy);
@@ -43,8 +43,11 @@
   --muted-foreground: var(--brand-eyebrow);
   --accent: hsl(158, 83%, 46%);
   --accent-foreground: var(--brand-deep-navy);
-  --destructive: hsl(0, 72%, 51%);
-  --destructive-foreground: #FFFFFF;
+  /* Destructive lifted from hsl(0, 72%, 51%) (~4.0:1 on Deep Navy) to
+   * hsl(0, 75%, 60%) which clears 4.5:1 against #020617 per spec §18
+   * WCAG 2.1 AA contrast minimum. Foreground stays white for buttons. */
+  --destructive: hsl(0, 75%, 60%);
+  --destructive-foreground: #ffffff;
   --warning: hsl(38, 92%, 50%);
   --warning-foreground: var(--brand-deep-navy);
   --success: var(--brand-forest);
@@ -55,9 +58,9 @@
   --chart-2: var(--brand-neon);
   --chart-3: hsl(220, 14%, 30%);
   --chart-4: hsl(217, 32%, 60%);
-  --chart-5: hsl(0, 72%, 51%);
+  --chart-5: hsl(0, 75%, 60%);
   --radius: 0.25rem; /* Spec: 4px */
-  --sidebar: #FFFFFF;
+  --sidebar: #ffffff;
   --sidebar-foreground: var(--brand-slate-navy);
   --sidebar-primary: hsl(158, 83%, 46%);
   --sidebar-primary-foreground: var(--brand-deep-navy);
@@ -84,7 +87,9 @@
   --muted-foreground: hsl(215, 20%, 65%);
   --accent: hsl(158, 83%, 46%);
   --accent-foreground: var(--brand-deep-navy);
-  --destructive: hsl(0, 72%, 51%);
+  /* Same lift as the light theme; on Deep Navy backgrounds the lighter
+   * red clears WCAG 2.1 AA (4.5:1 text contrast). */
+  --destructive: hsl(0, 75%, 60%);
   --destructive-foreground: var(--brand-light-base);
   --warning: hsl(38, 92%, 55%);
   --warning-foreground: var(--brand-deep-navy);
@@ -96,7 +101,7 @@
   --chart-2: var(--brand-forest);
   --chart-3: hsl(217, 32%, 60%);
   --chart-4: hsl(220, 14%, 30%);
-  --chart-5: hsl(0, 72%, 51%);
+  --chart-5: hsl(0, 75%, 60%);
   --sidebar: var(--brand-slate-navy);
   --sidebar-foreground: var(--brand-light-base);
   --sidebar-primary: hsl(158, 83%, 46%);
@@ -183,8 +188,8 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    @apply bg-background text-foreground;
   }
 }
 
@@ -219,11 +224,19 @@
  * with -0.02em tracking; body uses Satoshi (Inter stand-in until the
  * licensed Satoshi files are dropped in). */
 @layer base {
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-heading);
     letter-spacing: -0.02em;
   }
-  code, pre, kbd, samp {
+  code,
+  pre,
+  kbd,
+  samp {
     font-family: var(--font-mono);
   }
 }
@@ -235,27 +248,30 @@
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
+  color: var(--brand-eyebrow);
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--brand-eyebrow);
 }
 
 @utility btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--brand-forest);
-  color: #FFFFFF;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 16px;
   padding: 14px 28px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  background-color: var(--brand-forest);
   border-radius: 4px;
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover:not(:disabled) {
-    background-color: var(--brand-neon);
     color: var(--brand-deep-navy);
+    background-color: var(--brand-neon);
     box-shadow: 0 4px 12px rgba(18, 214, 142, 0.25);
   }
   &:focus-visible {
@@ -263,8 +279,8 @@
     outline-offset: 2px;
   }
   &:disabled {
-    opacity: 0.5;
     cursor: not-allowed;
+    opacity: 0.5;
   }
 }
 
@@ -272,19 +288,21 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: transparent;
-  color: var(--brand-slate-navy);
-  font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: 16px;
   padding: 14px 28px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--brand-slate-navy);
+  background-color: transparent;
   border: 1px solid var(--brand-border-mid);
   border-radius: 4px;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 
   &:hover:not(:disabled) {
-    border-color: var(--brand-border-dark);
     background-color: var(--brand-light-base);
+    border-color: var(--brand-border-dark);
   }
   &:focus-visible {
     outline: 2px solid var(--brand-neon);
@@ -296,18 +314,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: transparent;
-  color: #FFFFFF;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: 16px;
   padding: 14px 28px;
-  border: 2px solid #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: transparent;
+  border: 2px solid #ffffff;
   border-radius: 4px;
   transition: background-color 0.2s ease;
 
   &:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.1);
   }
   &:focus-visible {
     outline: 2px solid var(--brand-neon);
@@ -316,12 +334,14 @@
 }
 
 @utility card-base {
-  background-color: var(--card);
+  padding: 24px;
   color: var(--card-foreground);
+  background-color: var(--card);
   border: 1px solid var(--brand-border-light);
   border-radius: 4px;
-  padding: 24px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     border-color: var(--brand-border-mid);
@@ -334,16 +354,32 @@
  * or attach via the .animate-reveal helper below. */
 @layer base {
   @keyframes brand-reveal {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   @keyframes brand-slide-in {
-    from { opacity: 0; transform: translateX(16px); }
-    to   { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
   @keyframes brand-marquee {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-50%); }
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
   }
 }
 

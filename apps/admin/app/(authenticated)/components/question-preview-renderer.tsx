@@ -1,3 +1,5 @@
+"use client";
+
 /** Read-only preview renderers for every question type (spec §5.1).
  *
  * The candidate app has interactive renderers (Monaco, React Flow, n8n
@@ -26,7 +28,7 @@ const CodePreviewMonaco = dynamic(
         className="h-[260px] animate-pulse rounded-lg border border-border bg-muted/40"
       />
     ),
-  },
+  }
 );
 
 type PreviewConfig = Record<string, unknown>;
@@ -66,17 +68,19 @@ export function QuestionPreviewRenderer({
 
 function McqPreview({ config }: { config: PreviewConfig }) {
   const options = (config.options as string[] | undefined) ?? [];
-  if (options.length === 0) return <EmptyOptions />;
+  if (options.length === 0) {
+    return <EmptyOptions />;
+  }
   return (
     <fieldset
       className="space-y-2 rounded border border-border/60 bg-card/50 p-3"
       disabled
     >
       <legend className="px-1 text-muted-foreground text-xs">Choose one</legend>
-      {options.map((opt, i) => (
+      {options.map((opt) => (
         <label
           className="flex items-start gap-3 rounded px-2 py-1.5 text-sm"
-          key={`${i}-${opt}`}
+          key={opt}
         >
           <input className="mt-1" disabled name="preview" type="radio" />
           <span className="leading-6">{opt}</span>
@@ -88,7 +92,9 @@ function McqPreview({ config }: { config: PreviewConfig }) {
 
 function MultiSelectPreview({ config }: { config: PreviewConfig }) {
   const options = (config.options as string[] | undefined) ?? [];
-  if (options.length === 0) return <EmptyOptions />;
+  if (options.length === 0) {
+    return <EmptyOptions />;
+  }
   return (
     <fieldset
       className="space-y-2 rounded border border-border/60 bg-card/50 p-3"
@@ -97,10 +103,10 @@ function MultiSelectPreview({ config }: { config: PreviewConfig }) {
       <legend className="px-1 text-muted-foreground text-xs">
         Choose all that apply
       </legend>
-      {options.map((opt, i) => (
+      {options.map((opt) => (
         <label
           className="flex items-start gap-3 rounded px-2 py-1.5 text-sm"
-          key={`${i}-${opt}`}
+          key={opt}
         >
           <input className="mt-1" disabled name="preview" type="checkbox" />
           <span className="leading-6">{opt}</span>
@@ -178,7 +184,7 @@ function EditorChrome({
     <div className="overflow-hidden rounded-lg border border-border bg-card/40">
       <div className="flex items-center justify-between border-border/60 border-b bg-muted/40 px-3 py-1.5">
         <div className="flex items-center gap-2">
-          <span className="flex gap-1.5" aria-hidden="true">
+          <span aria-hidden="true" className="flex gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-destructive/60" />
             <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-primary/70" />
@@ -222,7 +228,11 @@ function CodePreview({ config }: { config: PreviewConfig }) {
           <summary className="cursor-pointer border-border/40 border-b bg-muted/30 px-3 py-1.5 text-muted-foreground text-xs">
             Visible tests (candidate can run these from a Run tests button)
           </summary>
-          <CodePreviewMonaco code={visible} language={language} height="180px" />
+          <CodePreviewMonaco
+            code={visible}
+            height="180px"
+            language={language}
+          />
         </details>
       )}
     </div>
@@ -240,9 +250,7 @@ function SqlPreview({ config }: { config: PreviewConfig }) {
       <EditorChrome
         language="sql"
         rightSlot={
-          <span className="text-muted-foreground text-xs">
-            DuckDB sandbox
-          </span>
+          <span className="text-muted-foreground text-xs">DuckDB sandbox</span>
         }
       >
         <CodePreviewMonaco code={starter} language="sql" />
@@ -254,10 +262,10 @@ function SqlPreview({ config }: { config: PreviewConfig }) {
           </summary>
           <div className="space-y-2 p-2">
             {schema && (
-              <CodePreviewMonaco code={schema} language="sql" height="160px" />
+              <CodePreviewMonaco code={schema} height="160px" language="sql" />
             )}
             {seed && (
-              <CodePreviewMonaco code={seed} language="sql" height="160px" />
+              <CodePreviewMonaco code={seed} height="160px" language="sql" />
             )}
           </div>
         </details>
@@ -266,7 +274,10 @@ function SqlPreview({ config }: { config: PreviewConfig }) {
   );
 }
 
-type StarterCell = { type: "code" | "markdown"; source?: string };
+interface StarterCell {
+  source?: string;
+  type: "code" | "markdown";
+}
 
 function NotebookPreview({ config }: { config: PreviewConfig }) {
   const cells = (config.starter_cells as StarterCell[] | undefined) ?? [];
@@ -289,7 +300,7 @@ function NotebookPreview({ config }: { config: PreviewConfig }) {
         cells.map((cell, i) => (
           <div
             className="rounded border border-border/40"
-            key={`${cell.type}-${i}`}
+            key={`${cell.type}-${cell.source ?? i}`}
           >
             <p className="border-border/30 border-b bg-muted/30 px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase">
               {cell.type}
@@ -307,19 +318,19 @@ function NotebookPreview({ config }: { config: PreviewConfig }) {
 }
 
 function DiagramPreview({ config }: { config: PreviewConfig }) {
-  const palette = (config.palette as
-    | Array<{ type: string; label: string }>
-    | undefined) ?? [];
-  const starterNodes = (config.starter_nodes as Array<unknown> | undefined) ?? [];
+  const palette =
+    (config.palette as Array<{ type: string; label: string }> | undefined) ??
+    [];
+  const starterNodes = (config.starter_nodes as unknown[] | undefined) ?? [];
   return (
     <div className="space-y-2 rounded border border-border/60 bg-card/40 p-4">
       <p className="font-mono text-muted-foreground text-xs uppercase">
         diagram
       </p>
       <p className="text-muted-foreground text-sm">
-        Candidates build a process diagram on a React Flow canvas. The
-        full editor is only available in the candidate app; preview
-        shows the palette and starter shape.
+        Candidates build a process diagram on a React Flow canvas. The full
+        editor is only available in the candidate app; preview shows the palette
+        and starter shape.
       </p>
       {palette.length > 0 && (
         <div>
@@ -348,10 +359,9 @@ function N8nPreview() {
     <div className="rounded border border-border/60 bg-card/40 p-4 text-sm">
       <p className="font-mono text-muted-foreground text-xs uppercase">n8n</p>
       <p className="mt-1">
-        Candidates build an n8n workflow in an embedded n8n workspace
-        (full editor, drag-and-drop nodes, run executions). The workspace
-        provisions only when a candidate opens the question; preview is
-        not available here.
+        Candidates build an n8n workflow in an embedded n8n workspace (full
+        editor, drag-and-drop nodes, run executions). The workspace provisions
+        only when a candidate opens the question; preview is not available here.
       </p>
     </div>
   );
@@ -360,7 +370,7 @@ function N8nPreview() {
 function UnsupportedPreview({ type }: { type: string }) {
   return (
     <p
-      className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-sm"
+      className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
       role="alert"
     >
       {`No preview for question type "${type}".`}
@@ -389,13 +399,14 @@ function CodeBlock({
   muted?: boolean;
 }) {
   return (
-    <pre
-      aria-label={ariaLabel}
-      className={`max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-6 ${
-        muted ? "bg-muted/20" : "bg-muted/40"
-      }`}
-    >
-      {body || "(empty)"}
-    </pre>
+    <figure aria-label={ariaLabel}>
+      <pre
+        className={`max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-6 ${
+          muted ? "bg-muted/20" : "bg-muted/40"
+        }`}
+      >
+        {body || "(empty)"}
+      </pre>
+    </figure>
   );
 }

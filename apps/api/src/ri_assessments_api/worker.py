@@ -47,8 +47,22 @@ def _process(payload: dict[str, Any]) -> None:
     except Exception as exc:
         log.exception("scoring job failed for %s", assignment_id)
         queue_service.push_dead_letter(payload, str(exc))
+        queue_service.publish_scoring_event(
+            {
+                "type": "scoring_failed",
+                "assignment_id": assignment_id,
+                "error": str(exc),
+            }
+        )
         return
     elapsed_ms = int((time.monotonic() - started) * 1000)
+    queue_service.publish_scoring_event(
+        {
+            "type": "scoring_completed",
+            "assignment_id": assignment_id,
+            "elapsed_ms": elapsed_ms,
+        }
+    )
     log.info(
         "scored assignment %s in %s ms (queued at %s)",
         assignment_id,

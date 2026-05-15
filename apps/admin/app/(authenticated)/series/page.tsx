@@ -1,13 +1,12 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ApiError,
   createSeries,
   issueNextForSeries,
   listSeries,
   listSubjects,
-  type SeriesSummary,
-  type SubjectSummary,
 } from "@/lib/api";
+import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
@@ -21,15 +20,10 @@ export default async function SeriesPage({
 }) {
   const { error, ok } = await searchParams;
 
-  let series: SeriesSummary[] = [];
-  let subjects: SubjectSummary[] = [];
-  let loadError: string | null = null;
-  try {
-    [series, subjects] = await Promise.all([listSeries(), listSubjects()]);
-  } catch (e) {
-    if (e instanceof ApiError) loadError = e.message;
-    else throw e;
-  }
+  const { data, error: loadError } = await loadOrApiError(() =>
+    Promise.all([listSeries(), listSubjects()])
+  );
+  const [series, subjects] = data ?? [[], []];
 
   async function action(formData: FormData): Promise<void> {
     "use server";
@@ -43,7 +37,7 @@ export default async function SeriesPage({
     const cadenceRaw = String(formData.get("cadence_days") ?? "").trim();
     const cadence_days = cadenceRaw ? Number.parseInt(cadenceRaw, 10) : null;
 
-    if (!subject_id || !name || competency_focus.length === 0) {
+    if (!(subject_id && name) || competency_focus.length === 0) {
       redirect(
         "/series?error=" +
           encodeURIComponent(
@@ -52,35 +46,25 @@ export default async function SeriesPage({
       );
     }
 
-    try {
-      await createSeries({ subject_id, name, competency_focus, cadence_days });
-      redirect("/series?ok=" + encodeURIComponent("Series created."));
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/series?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
-    }
+    return redirectOnApi(
+      () => createSeries({ subject_id, name, competency_focus, cadence_days }),
+      "/series",
+      "Series created."
+    );
   }
 
   async function issueNext(formData: FormData): Promise<void> {
     "use server";
     const seriesId = String(formData.get("series_id") ?? "");
-    if (!seriesId) return;
-    try {
-      const result = await issueNextForSeries(seriesId);
-      redirect(
-        "/series?ok=" +
-          encodeURIComponent(
-            `Issued sequence ${result.sequence_number}: ${result.magic_link_url}`
-          )
-      );
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/series?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
+    if (!seriesId) {
+      return;
     }
+    return redirectOnApi(
+      () => issueNextForSeries(seriesId),
+      "/series",
+      (result) =>
+        `Issued sequence ${result.sequence_number}: ${result.magic_link_url}`
+    );
   }
 
   return (
@@ -90,8 +74,8 @@ export default async function SeriesPage({
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
           <h1 className="font-semibold text-xl">Assessment series</h1>
           <p className="text-muted-foreground text-sm">
-            Track recurring competency check-ins per subject. Auto-scheduling
-            of the next assignment lands in a follow-up worker. For v1, link
+            Track recurring competency check-ins per subject. Auto-scheduling of
+            the next assignment lands in a follow-up worker. For v1, link
             assignments to a series via the series detail endpoint.
           </p>
         </section>
@@ -177,19 +161,40 @@ export default async function SeriesPage({
           <table className="w-full overflow-hidden rounded-xl border border-border/50 bg-muted/20 text-sm">
             <thead className="bg-muted/40 text-left text-muted-foreground text-xs uppercase">
               <tr>
-                <th className="px-4 py-2">Series</th>
-                <th className="px-4 py-2">Subject</th>
-                <th className="px-4 py-2">Focus</th>
-                <th className="px-4 py-2">Cadence</th>
-                <th className="px-4 py-2">Next due</th>
-                <th className="px-4 py-2">Assignments</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2" scope="col">
+                  Series
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Subject
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Focus
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Cadence
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Next due
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  Assignments
+                </th>
+                <th className="px-4 py-2" scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
               {series.map((s) => (
                 <tr key={s.id}>
-                  <td className="px-4 py-2 font-medium">{s.name}</td>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      className="hover:text-primary hover:underline"
+                      href={`/series/${s.id}`}
+                    >
+                      {s.name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2">
                     <p>{s.subject_full_name ?? "-"}</p>
                     <p className="text-muted-foreground text-xs">
@@ -209,15 +214,23 @@ export default async function SeriesPage({
                   </td>
                   <td className="px-4 py-2">{s.assignment_count}</td>
                   <td className="px-4 py-2 text-right">
-                    <form action={issueNext}>
-                      <input name="series_id" type="hidden" value={s.id} />
-                      <button
-                        className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                        type="submit"
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        className="rounded border border-border/50 px-2 py-1 text-xs hover:bg-muted"
+                        href={`/series/${s.id}`}
                       >
-                        Issue next
-                      </button>
-                    </form>
+                        Open
+                      </Link>
+                      <form action={issueNext}>
+                        <input name="series_id" type="hidden" value={s.id} />
+                        <button
+                          className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
+                          type="submit"
+                        >
+                          Issue next
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}

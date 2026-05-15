@@ -87,7 +87,9 @@ class SaveAnswerResponse(BaseModel):
 
 
 class HeartbeatRequest(BaseModel):
-    focused_seconds_since_last: float = Field(ge=0, le=120)
+    # Heartbeats fire every 10s; cap at 15 so a client cannot pad
+    # active-time. Audit-flagged BLOCKER for active-time inflation.
+    focused_seconds_since_last: float = Field(ge=0, le=15)
 
 
 class HeartbeatResponse(BaseModel):
@@ -105,7 +107,9 @@ class IntegrityEventIn(BaseModel):
 
 
 class EventsRequest(BaseModel):
-    events: list[IntegrityEventIn]
+    # Cap matches the client batcher (events POSTed every ~2s with a
+    # small payload window). Spec §10.2 + audit MAJOR finding.
+    events: list[IntegrityEventIn] = Field(max_length=200)
 
 
 class EventsResponse(BaseModel):

@@ -1,0 +1,131 @@
+# Production overlay for the co-located ri-master VM deployment.
+#
+# Differences from docker-compose.yml:
+#   - All services pull images from GHCR (built by .github/workflows/deploy-vm.yml)
+#     instead of building locally. IMAGE_TAG defaults to "latest" but is set to
+#     the deploying commit SHA by infra/deploy/deploy.sh for rollback safety.
+#   - Every host port binds to 127.0.0.1 only, on a non-conflicting port:
+#       api:       127.0.0.1:18000  (host :8000 is taken by airbyte-abctl)
+#       admin:     127.0.0.1:13000
+#       candidate: 127.0.0.1:13001
+#       n8n:       127.0.0.1:15678  (host :5678 is taken by the prod n8n stack)
+#     nginx on the host reverse-proxies HTTPS subdomains into these loopback ports.
+#   - The internal redis service is disabled. Prod uses Upstash Redis via
+#     UPSTASH_REDIS_URL in .env.local.
+#   - n8n's docker volume is renamed ri-n8n-data so it can never collide with
+#     the box's existing n8n-data volume.
+#
+# Usage:
+#   IMAGE_TAG=<sha> docker compose -p ri-assessments \
+#     -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The `-p ri-assessments` project name isolates this stack from any other
+# compose project running on the same host (airbyte, prod n8n, neo4j, etc.).
+
+# Anchor defining the standard logging block + container-level safety
+# limits applied to every service. Memory limits keep our stack from
+# OOM-killing the box's other workloads (airbyte, prod n8n, neo4j).
+# Log rotation prevents a runaway service from filling the disk.
+x-defaults: &defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+services:
+  redis:
+    profiles: ["disabled"]
+
+  api:
+    <<: *defaults
+    image: ghcr.io/revenue-institute/ai_assessments_platform/api:${IMAGE_TAG:-latest}
+    build: !reset null
+    ports: !override
+      - "127.0.0.1:18000:8000"
+    depends_on: !override
+      n8n:
+        condition: service_started
+    environment:
+      APP_ENV: production
+      INTERNAL_API_URL: http://api:8000
+      N8N_HOST: http://n8n:5678
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+
+  scoring-worker:
+    <<: *defaults
+    image: ghcr.io/revenue-institute/ai_assessments_platform/api:${IMAGE_TAG:-latest}
+    build: !reset null
+    depends_on: !override
+      api:
+        condition: service_started
+    environment:
+      APP_ENV: production
+      INTERNAL_API_URL: http://api:8000
+      N8N_HOST: http://n8n:5678
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+
+  admin:
+    <<: *defaults
+    image: ghcr.io/revenue-institute/ai_assessments_platform/admin:${IMAGE_TAG:-latest}
+    build: !reset null
+    ports: !override
+      - "127.0.0.1:13000:3000"
+    environment:
+      APP_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+
+  candidate:
+    <<: *defaults
+    image: ghcr.io/revenue-institute/ai_assessments_platform/candidate:${IMAGE_TAG:-latest}
+    build: !reset null
+    ports: !override
+      - "127.0.0.1:13001:3001"
+    environment:
+      APP_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+
+  n8n:
+    <<: *defaults
+    image: n8nio/n8n:latest
+    ports: !override
+      - "127.0.0.1:15678:5678"
+    volumes:
+      - ri-n8n-data:/home/node/.n8n
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:15678/
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 1500m
+        reservations:
+          memory: 512m
+
+volumes:
+  ri-n8n-data: {}

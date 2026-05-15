@@ -11,9 +11,12 @@ export default function CompetenciesPage() {
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
           <h1 className="font-semibold text-2xl">Competency taxonomy</h1>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
-            Read-only view of <code className="rounded bg-muted px-1">packages/competencies/src/taxonomy.json</code>.
-            Question templates must tag at least one competency from this list,
-            validated at publish time.
+            Read-only view of{" "}
+            <code className="rounded bg-muted px-1">
+              packages/competencies/src/taxonomy.json
+            </code>
+            . Question templates must tag at least one competency from this
+            list, validated at publish time.
           </p>
         </section>
 

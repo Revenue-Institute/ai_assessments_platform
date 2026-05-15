@@ -6,17 +6,25 @@ reference nodes greedily by best fuzzy score, then check that every edge
 in the reference graph has a corresponding candidate edge between the
 matched nodes.
 
-Spec also calls for ai_narrative + both modes; those go through the
-existing scoring orchestrator's rubric_ai path. Only structural grading
-lives here."""
+AI narrative mode (spec §7.4: 'Claude reviews the structure + candidate
+written rationale against rubric'): Claude Sonnet 4.6 scores the
+diagram JSON + the candidate's rationale text. `both` mode combines
+structural and narrative; `ai_narrative` is narrative-only."""
 
 from __future__ import annotations
 
+import json as _json
+import logging
 import re
 from difflib import SequenceMatcher
 from typing import Any
 
+from ..config import get_settings
+
+log = logging.getLogger(__name__)
+
 LABEL_MATCH_THRESHOLD = 0.6
+NARRATIVE_MODEL = "claude-sonnet-4-6"
 
 
 def _norm(text: str | None) -> str:
@@ -82,66 +90,213 @@ def grade_diagram_attempt(
     submission: dict[str, Any],
     config: dict[str, Any],
     max_points: float,
+    rubric: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Score the candidate's React Flow JSON against the question's
-    reference_structure. Returns an attempts-row update payload."""
+    reference_structure. Returns an attempts-row update payload.
+
+    `submission` shape (spec §7.4):
+        - structural-only modes: {nodes: [...], edges: [...]}
+        - ai_narrative / both: {diagram: {nodes, edges}, rationale: str}
+    Both shapes are accepted; we unwrap `diagram` when present and
+    default rationale to empty string when missing."""
+
+    grading_mode = (config.get("grading_mode") or "structural").lower()
+
+    # Accept both submission shapes. The candidate UI is expected to
+    # add a rationale field for narrative modes (lands in another
+    # agent's scope); until it does, an empty string is a valid default.
+    if isinstance(submission.get("diagram"), dict):
+        diagram = submission["diagram"]
+        rationale_text = str(submission.get("rationale") or "")
+    else:
+        diagram = submission
+        rationale_text = str(submission.get("rationale") or "")
 
     reference = config.get("reference_structure") or {}
     ref_nodes = list(reference.get("nodes") or [])
     ref_edges = list(reference.get("edges") or [])
 
-    cand_nodes = list(submission.get("nodes") or [])
-    cand_edges = list(submission.get("edges") or [])
+    cand_nodes = list(diagram.get("nodes") or [])
+    cand_edges = list(diagram.get("edges") or [])
 
-    if not ref_nodes:
-        return {
-            "score": 0.0,
-            "score_rationale": "No reference_structure on the question; cannot grade.",
-            "scorer_model": "diagram-structural",
-            "scorer_version": "1",
-        }
-
-    mapping, ref_unmatched, _cand_unmatched = match_nodes(cand_nodes, ref_nodes)
-
-    # Edge match: a reference edge counts as matched when both endpoints
-    # have a node in the mapping AND a candidate edge exists between the
-    # mapped node ids.
-    cand_edge_set = {_edge_summary(e) for e in cand_edges}
-    matched_edges = 0
+    structural_pct: float | None = None
+    structural_bits: list[str] = []
     missing_edges: list[tuple[str, str]] = []
-    for re_edge in ref_edges:
-        ref_pair = _edge_summary(re_edge)
-        if ref_pair[0] in mapping and ref_pair[1] in mapping:
-            mapped = (mapping[ref_pair[0]], mapping[ref_pair[1]])
-            if mapped in cand_edge_set:
-                matched_edges += 1
-                continue
-        missing_edges.append(ref_pair)
 
-    node_pct = (
-        (len(ref_nodes) - len(ref_unmatched)) / len(ref_nodes) if ref_nodes else 1.0
-    )
-    edge_pct = (matched_edges / len(ref_edges)) if ref_edges else 1.0
-    overall = (node_pct + edge_pct) / 2 if ref_edges else node_pct
+    if grading_mode in ("structural", "both"):
+        if not ref_nodes:
+            if grading_mode == "structural":
+                return {
+                    "score": 0.0,
+                    "score_rationale": (
+                        "No reference_structure on the question; cannot grade."
+                    ),
+                    "scorer_model": "diagram-structural",
+                    "scorer_version": "1",
+                }
+        else:
+            mapping, ref_unmatched, _cand_unmatched = match_nodes(
+                cand_nodes, ref_nodes
+            )
+            cand_edge_set = {_edge_summary(e) for e in cand_edges}
+            matched_edges = 0
+            for re_edge in ref_edges:
+                ref_pair = _edge_summary(re_edge)
+                if ref_pair[0] in mapping and ref_pair[1] in mapping:
+                    mapped = (mapping[ref_pair[0]], mapping[ref_pair[1]])
+                    if mapped in cand_edge_set:
+                        matched_edges += 1
+                        continue
+                missing_edges.append(ref_pair)
+
+            node_pct = (
+                (len(ref_nodes) - len(ref_unmatched)) / len(ref_nodes)
+                if ref_nodes
+                else 1.0
+            )
+            edge_pct = (
+                (matched_edges / len(ref_edges)) if ref_edges else 1.0
+            )
+            structural_pct = (node_pct + edge_pct) / 2 if ref_edges else node_pct
+
+            structural_bits.append(
+                f"Matched {len(ref_nodes) - len(ref_unmatched)}/{len(ref_nodes)} "
+                "reference nodes"
+            )
+            if ref_edges:
+                structural_bits.append(
+                    f"matched {matched_edges}/{len(ref_edges)} reference edges"
+                )
+            if ref_unmatched:
+                structural_bits.append(
+                    f"{len(ref_unmatched)} expected node(s) had no match"
+                )
+            if missing_edges:
+                structural_bits.append(
+                    f"{len(missing_edges)} expected edge(s) missing"
+                )
+
+    narrative: dict[str, Any] | None = None
+    if grading_mode in ("ai_narrative", "both"):
+        narrative = _narrative_grade(
+            diagram=diagram,
+            rationale_text=rationale_text,
+            rubric=rubric or {},
+        )
+
+    if grading_mode == "ai_narrative":
+        if narrative is None:
+            return {
+                "score": 0.0,
+                "score_rationale": (
+                    "Narrative grading unavailable; admin can rescore once "
+                    "Anthropic key is configured."
+                ),
+                "scorer_model": "diagram-narrative",
+                "scorer_version": "1",
+            }
+        overall = float(narrative.get("pct") or 0.0)
+        scorer_model = "diagram-narrative"
+        rationale_bits = [narrative.get("rationale") or "Narrative graded."]
+    elif grading_mode == "both":
+        narr_pct = (
+            float(narrative.get("pct"))
+            if narrative is not None and isinstance(narrative.get("pct"), (int, float))
+            else None
+        )
+        if structural_pct is None and narr_pct is None:
+            return {
+                "score": 0.0,
+                "score_rationale": "Could not compute structural or narrative score.",
+                "scorer_model": "diagram-structural+narrative",
+                "scorer_version": "1",
+            }
+        if structural_pct is not None and narr_pct is not None:
+            overall = 0.5 * structural_pct + 0.5 * narr_pct
+        else:
+            overall = structural_pct if structural_pct is not None else narr_pct or 0.0
+        scorer_model = "diagram-structural+narrative"
+        rationale_bits = list(structural_bits)
+        if narrative is not None and narrative.get("rationale"):
+            rationale_bits.append(f"narrative: {narrative['rationale']}")
+    else:
+        overall = structural_pct if structural_pct is not None else 0.0
+        scorer_model = "diagram-structural"
+        rationale_bits = list(structural_bits) or ["Structural grading complete."]
+
+    overall = max(0.0, min(1.0, overall))
     score = round(overall * max_points, 2)
-
-    rationale_bits = [
-        f"Matched {len(ref_nodes) - len(ref_unmatched)}/{len(ref_nodes)} reference nodes",
-    ]
-    if ref_edges:
-        rationale_bits.append(
-            f"matched {matched_edges}/{len(ref_edges)} reference edges"
-        )
-    if ref_unmatched:
-        rationale_bits.append(
-            f"{len(ref_unmatched)} expected node(s) had no match"
-        )
-    if missing_edges:
-        rationale_bits.append(f"{len(missing_edges)} expected edge(s) missing")
-
     return {
         "score": score,
         "score_rationale": ". ".join(rationale_bits) + ".",
-        "scorer_model": "diagram-structural",
+        "scorer_model": scorer_model,
         "scorer_version": "1",
     }
+
+
+def _narrative_grade(
+    *,
+    diagram: dict[str, Any],
+    rationale_text: str,
+    rubric: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Claude Sonnet 4.6 scores the diagram JSON + candidate's rationale
+    text against the rubric. Returns {pct: 0..1, rationale: str} or None
+    on any failure. Never raises."""
+
+    settings = get_settings()
+    api_key = settings.anthropic_api_key_scoring
+    if not api_key:
+        log.warning("diagram narrative grade skipped: ANTHROPIC_API_KEY_SCORING unset")
+        return None
+    try:
+        from anthropic import Anthropic  # type: ignore[import-not-found]
+    except ImportError:
+        log.warning("diagram narrative grade skipped: anthropic SDK not installed")
+        return None
+
+    try:
+        client = Anthropic(api_key=api_key)
+        criteria_summary = _json.dumps(rubric.get("criteria") or [], indent=2)[:4000]
+        diagram_summary = _json.dumps(diagram, default=str)[:8000]
+        rationale_excerpt = (rationale_text or "")[:4000]
+        system = (
+            "You are reviewing a process diagram (React Flow JSON) plus "
+            "the candidate's written rationale. Score against the rubric "
+            "criteria below. Respond with a single JSON object: "
+            '{"pct": <float 0..1>, "rationale": "<one or two sentences>"}. '
+            "No prose outside the JSON."
+        )
+        user = (
+            "Rubric criteria:\n"
+            f"{criteria_summary}\n\n"
+            "Diagram JSON:\n"
+            f"{diagram_summary}\n\n"
+            "Candidate rationale:\n"
+            f"{rationale_excerpt}"
+        )
+        msg = client.messages.create(
+            model=NARRATIVE_MODEL,
+            max_tokens=512,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        text = ""
+        for block in getattr(msg, "content", []) or []:
+            if getattr(block, "type", None) == "text":
+                text += getattr(block, "text", "") or ""
+        text = text.strip()
+        if not text:
+            return None
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+        parsed = _json.loads(text)
+        pct = float(parsed.get("pct") or 0.0)
+        pct = max(0.0, min(1.0, pct))
+        return {"pct": pct, "rationale": str(parsed.get("rationale") or "")[:300]}
+    except Exception as exc:
+        log.warning("diagram narrative grade failed: %s", exc)
+        return None

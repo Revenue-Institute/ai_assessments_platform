@@ -80,6 +80,16 @@ def run_sql(
     query_sql: str,
     time_limit_ms: int = 15_000,
 ) -> SqlRunResult:
+    # TODO(spec §7.5 / §18 latency budget): each call pays the E2B
+    # cold-start (~500-1500ms) plus `pip install duckdb` (~2-3s). For
+    # v1 this lands inside the candidate's interactive timer and is
+    # acceptable, but the second p95 budget on "code run < 5s" assumes
+    # warm. Options for v1.x:
+    #   - bake duckdb into a custom E2B template image (kills pip install)
+    #   - keep a long-lived "sql worker" sandbox per attempt and reuse it
+    #     across run_sql calls (kills cold start, but breaks the stateless
+    #     contract documented at the top of this module)
+    # Punted to v1.x; do not optimize speculatively here.
     sandbox_cls, api_key = _sandbox_or_503()
     timeout_s = max(2, time_limit_ms // 1000)
     started = time.monotonic()

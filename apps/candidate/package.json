@@ -10,12 +10,14 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
+    "@repo/api-client": "workspace:*",
     "@repo/design-system": "workspace:*",
     "@monaco-editor/react": "^4.7.0",
     "@repo/integrity": "workspace:*",
     "@xyflow/react": "^12.4.4",
     "@repo/observability": "workspace:*",
     "@repo/schemas": "workspace:*",
+    "@sentry/nextjs": "^10.42.0",
     "@t3-oss/env-nextjs": "^0.13.10",
     "next": "16.1.6",
     "react": "19.2.4",

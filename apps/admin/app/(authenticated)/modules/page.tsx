@@ -10,8 +10,11 @@ export default async function ModulesPage() {
   try {
     modules = await listModules();
   } catch (e) {
-    if (e instanceof ApiError) error = e.message;
-    else throw e;
+    if (e instanceof ApiError) {
+      error = e.message;
+    } else {
+      throw e;
+    }
   }
 
   return (
@@ -22,7 +25,8 @@ export default async function ModulesPage() {
           <div>
             <h1 className="font-semibold text-xl">Modules</h1>
             <p className="text-muted-foreground text-sm">
-              Question modules. Drafts can be edited; published modules can be assigned.
+              Question modules. Drafts can be edited; published modules can be
+              assigned.
             </p>
           </div>
           <Link className="btn-primary text-sm" href="/modules/new">
@@ -40,10 +44,8 @@ export default async function ModulesPage() {
         )}
 
         {modules.length === 0 && !error ? (
-          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
-            <p className="text-muted-foreground text-sm">
-              No modules yet.
-            </p>
+          <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
+            <p className="text-muted-foreground text-sm">No modules yet.</p>
             <Link className="btn-primary mt-3 text-sm" href="/modules/new">
               Create your first module
             </Link>
@@ -51,7 +53,10 @@ export default async function ModulesPage() {
         ) : (
           <ul className="divide-y divide-border/40 rounded-xl border border-border/50 bg-muted/20">
             {modules.map((m) => (
-              <li className="flex items-center justify-between gap-4 px-4 py-3" key={m.id}>
+              <li
+                className="flex items-center justify-between gap-4 px-4 py-3"
+                key={m.id}
+              >
                 <div className="min-w-0 flex-1">
                   <Link
                     className="block font-medium hover:underline"
@@ -60,8 +65,9 @@ export default async function ModulesPage() {
                     {m.title}
                   </Link>
                   <p className="truncate text-muted-foreground text-xs">
-                    {m.slug} · {m.domain} · {m.difficulty} · {m.target_duration_minutes} min ·{" "}
-                    {m.question_count} questions
+                    {m.slug} · {m.domain} · {m.difficulty} ·{" "}
+                    {m.target_duration_minutes} min · {m.question_count}{" "}
+                    questions
                   </p>
                 </div>
                 <StatusBadge status={m.status} />
@@ -75,12 +81,12 @@ export default async function ModulesPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const tone =
-    status === "published"
-      ? "bg-primary/20 text-primary"
-      : status === "archived"
-        ? "bg-muted text-muted-foreground"
-        : "bg-warning/20 text-warning";
+  let tone = "bg-warning/20 text-warning";
+  if (status === "published") {
+    tone = "bg-primary/20 text-primary";
+  } else if (status === "archived") {
+    tone = "bg-muted text-muted-foreground";
+  }
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

@@ -11,9 +11,15 @@ const SUPPORTED_MONACO_LANGS = new Set([
 ]);
 
 const monacoLanguage = (lang: string | undefined): string => {
-  if (!lang) return "python";
-  if (lang === "bash") return "shell";
-  if (SUPPORTED_MONACO_LANGS.has(lang)) return lang;
+  if (!lang) {
+    return "python";
+  }
+  if (lang === "bash") {
+    return "shell";
+  }
+  if (SUPPORTED_MONACO_LANGS.has(lang)) {
+    return lang;
+  }
   return "plaintext";
 };
 

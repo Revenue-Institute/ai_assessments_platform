@@ -2,11 +2,14 @@ import { redirect } from "next/navigation";
 import {
   ApiError,
   deleteReference,
+  fetchAdminMe,
   listReferences,
   type ReferenceDocumentSummary,
   uploadReferenceText,
   uploadReferenceUrl,
 } from "@/lib/api";
+import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+import { roleSatisfies } from "@/lib/role-policy";
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +23,21 @@ export default async function ReferencesPage({
 }) {
   const { error, ok } = await searchParams;
 
-  let documents: ReferenceDocumentSummary[] = [];
-  let loadError: string | null = null;
+  const { data, error: loadError } = await loadOrApiError(() =>
+    listReferences()
+  );
+  const documents: ReferenceDocumentSummary[] = data ?? [];
+
+  let canRemove = false;
   try {
-    documents = await listReferences();
+    const me = await fetchAdminMe();
+    canRemove = roleSatisfies(me.role, "admin");
   } catch (e) {
-    if (e instanceof ApiError) loadError = e.message;
-    else throw e;
+    // Soft-fail role check: reviewers fall through with canRemove=false, which
+    // hides the Remove button. Hard backend rules still apply at /api.
+    if (!(e instanceof ApiError)) {
+      throw e;
+    }
   }
 
   async function uploadUrlAction(formData: FormData): Promise<void> {
@@ -35,22 +46,14 @@ export default async function ReferencesPage({
     const title = String(formData.get("title") ?? "").trim() || null;
     const domain = String(formData.get("domain") ?? "").trim() || null;
     if (!url) {
-      redirect("/references?error=" + encodeURIComponent("URL is required."));
+      redirect(`/references?error=${encodeURIComponent("URL is required.")}`);
     }
-    try {
-      const result = await uploadReferenceUrl({ url, title, domain });
-      redirect(
-        "/references?ok=" +
-          encodeURIComponent(
-            `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
-          )
-      );
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/references?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
-    }
+    return redirectOnApi(
+      () => uploadReferenceUrl({ url, title, domain }),
+      "/references",
+      (result) =>
+        `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
+    );
   }
 
   async function uploadTextAction(formData: FormData): Promise<void> {
@@ -58,41 +61,31 @@ export default async function ReferencesPage({
     const title = String(formData.get("title") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
     const domain = String(formData.get("domain") ?? "").trim() || null;
-    if (!title || !content) {
+    if (!(title && content)) {
       redirect(
         "/references?error=" +
           encodeURIComponent("Title and content are required.")
       );
     }
-    try {
-      const result = await uploadReferenceText({ title, content, domain });
-      redirect(
-        "/references?ok=" +
-          encodeURIComponent(
-            `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
-          )
-      );
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/references?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
-    }
+    return redirectOnApi(
+      () => uploadReferenceText({ title, content, domain }),
+      "/references",
+      (result) =>
+        `Uploaded "${result.document.title}", ${result.chunks_inserted} chunks indexed.`
+    );
   }
 
   async function deleteAction(formData: FormData): Promise<void> {
     "use server";
     const id = String(formData.get("id") ?? "");
-    if (!id) return;
-    try {
-      await deleteReference(id);
-      redirect("/references?ok=" + encodeURIComponent("Document removed."));
-    } catch (e) {
-      if (e instanceof ApiError) {
-        redirect("/references?error=" + encodeURIComponent(e.message));
-      }
-      throw e;
+    if (!id) {
+      return;
     }
+    return redirectOnApi(
+      () => deleteReference(id),
+      "/references",
+      "Document removed."
+    );
   }
 
   return (
@@ -129,7 +122,11 @@ export default async function ReferencesPage({
             <h2 className="font-medium text-sm">Upload from URL</h2>
             <Field label="URL" name="url" placeholder="https://..." required />
             <Field label="Title (optional)" name="title" />
-            <Field label="Domain (optional)" name="domain" placeholder="hubspot, ai..." />
+            <Field
+              label="Domain (optional)"
+              name="domain"
+              placeholder="hubspot, ai..."
+            />
             <button className="btn-primary text-sm" type="submit">
               Fetch + index
             </button>
@@ -139,7 +136,9 @@ export default async function ReferencesPage({
             action={uploadTextAction}
             className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4"
           >
-            <h2 className="font-medium text-sm">Upload markdown / plain text</h2>
+            <h2 className="font-medium text-sm">
+              Upload markdown / plain text
+            </h2>
             <Field label="Title" name="title" required />
             <Field label="Domain (optional)" name="domain" />
             <Field label="Content" name="content" textarea />
@@ -151,7 +150,9 @@ export default async function ReferencesPage({
 
         <p className="text-muted-foreground text-xs">
           PDF upload is exposed at{" "}
-          <code className="rounded bg-muted px-1">POST /api/references/pdf</code>{" "}
+          <code className="rounded bg-muted px-1">
+            POST /api/references/pdf
+          </code>{" "}
           (multipart). UI lands once we add a file picker.
         </p>
 
@@ -166,7 +167,10 @@ export default async function ReferencesPage({
           ) : (
             <ul className="divide-y divide-border/40">
               {documents.map((d) => (
-                <li className="flex items-start justify-between gap-4 px-4 py-3 text-sm" key={d.id}>
+                <li
+                  className="flex items-start justify-between gap-4 px-4 py-3 text-sm"
+                  key={d.id}
+                >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{d.title}</p>
                     <p className="text-muted-foreground text-xs">
@@ -174,15 +178,17 @@ export default async function ReferencesPage({
                       {d.source_url ? ` · ${d.source_url}` : ""}
                     </p>
                   </div>
-                  <form action={deleteAction}>
-                    <input name="id" type="hidden" value={d.id} />
-                    <button
-                      className="rounded border border-destructive/40 bg-destructive/15 px-2 py-1 text-destructive text-xs hover:bg-destructive/25"
-                      type="submit"
-                    >
-                      Remove
-                    </button>
-                  </form>
+                  {canRemove && (
+                    <form action={deleteAction}>
+                      <input name="id" type="hidden" value={d.id} />
+                      <button
+                        className="rounded border border-destructive/40 bg-destructive/15 px-2 py-1 text-destructive text-xs hover:bg-destructive/25"
+                        type="submit"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  )}
                 </li>
               ))}
             </ul>
@@ -209,11 +215,12 @@ function Field({
   const className =
     "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
   return (
-    <label className="space-y-1">
+    <label className="space-y-1" htmlFor={name}>
       <span className="text-sm">{label}</span>
       {textarea ? (
         <textarea
           className={`${className} h-40`}
+          id={name}
           name={name}
           placeholder={placeholder}
           required={required}
@@ -221,6 +228,7 @@ function Field({
       ) : (
         <input
           className={className}
+          id={name}
           name={name}
           placeholder={placeholder}
           required={required}

@@ -8,13 +8,18 @@ export const env = createEnv({
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     INTERNAL_API_URL: z.string().url().default("http://localhost:8000"),
-    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
     NEXT_PUBLIC_ADMIN_URL: z.string().url().default("http://localhost:3000"),
-    NEXT_PUBLIC_CANDIDATE_URL: z.string().url().default("http://localhost:3001"),
+    NEXT_PUBLIC_CANDIDATE_URL: z
+      .string()
+      .url()
+      .default("http://localhost:3001"),
   },
   runtimeEnv: {
     SUPABASE_URL: process.env.SUPABASE_URL,

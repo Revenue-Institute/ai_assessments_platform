@@ -199,13 +199,20 @@ def require_role(*allowed: str):
     async def checker(
         principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     ) -> AdminPrincipal:
-        if principal.role not in allowed:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Role '{principal.role}' is not permitted for this action."
-                ),
-            )
+        ensure_role(principal, *allowed)
         return principal
 
     return checker
+
+
+def ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
+    """Service-layer role check. Routers wire `Depends(require_admin_jwt)`
+    for authentication; mutating service functions then call this with the
+    principal so helpers can pass different principals without duplicating
+    role logic into the route layer (see CLAUDE.md)."""
+
+    if principal.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role '{principal.role}' is not permitted for this action.",
+        )

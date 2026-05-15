@@ -2,17 +2,74 @@ import { notFound, redirect } from "next/navigation";
 import {
   ApiError,
   fetchGenerationRun,
-  type GenerationBriefIn,
   type GeneratedOutline,
+  type GenerationBriefIn,
   generateQuestions,
   type OutlineTopic,
 } from "@/lib/api";
 import { Header } from "../../../components/header";
+import { OutlineReviewForm } from "./outline-review-form";
 
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ run_id: string }>;
 type SearchParams = Promise<{ error?: string }>;
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseTopicFromForm(formData: FormData, i: number): OutlineTopic {
+  return {
+    name: String(formData.get(`topics[${i}].name`) ?? "").trim(),
+    competency_tags: splitCsv(
+      String(formData.get(`topics[${i}].competency_tags`) ?? "")
+    ),
+    weight_pct: Number.parseFloat(
+      String(formData.get(`topics[${i}].weight_pct`) ?? "0")
+    ),
+    question_count: Number.parseInt(
+      String(formData.get(`topics[${i}].question_count`) ?? "0"),
+      10
+    ),
+    recommended_types: splitCsv(
+      String(formData.get(`topics[${i}].recommended_types`) ?? "")
+    ),
+    rationale: String(formData.get(`topics[${i}].rationale`) ?? "").trim(),
+  };
+}
+
+function parseOutlineFromForm(formData: FormData): GeneratedOutline {
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const total_points = Number.parseFloat(
+    String(formData.get("total_points") ?? "100")
+  );
+  const estimated_duration_minutes = Number.parseInt(
+    String(formData.get("estimated_duration_minutes") ?? "45"),
+    10
+  );
+
+  // Topics are collected by index. Since the client reorders the topics
+  // before submit, the submitted indices reflect the user's chosen order.
+  const topics: OutlineTopic[] = [];
+  let i = 0;
+  while (formData.has(`topics[${i}].name`)) {
+    topics.push(parseTopicFromForm(formData, i));
+    i += 1;
+  }
+
+  return {
+    title,
+    description,
+    topics,
+    total_points,
+    estimated_duration_minutes,
+  };
+}
 
 export default async function OutlineReviewPage({
   params,
@@ -28,7 +85,9 @@ export default async function OutlineReviewPage({
   try {
     run = await fetchGenerationRun(run_id);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      notFound();
+    }
     throw e;
   }
 
@@ -50,54 +109,11 @@ export default async function OutlineReviewPage({
     "use server";
     const slug = String(formData.get("slug") ?? "").trim();
     const domain = String(formData.get("domain") ?? "").trim();
-    const title = String(formData.get("title") ?? "").trim();
-    const description = String(formData.get("description") ?? "").trim();
-    const total_points = Number.parseFloat(
-      String(formData.get("total_points") ?? "100")
-    );
-    const estimated_duration_minutes = Number.parseInt(
-      String(formData.get("estimated_duration_minutes") ?? "45"),
-      10
-    );
+    const editedOutline = parseOutlineFromForm(formData);
 
-    const topics: OutlineTopic[] = outline.topics.map((t, i) => ({
-      name: String(formData.get(`topics[${i}].name`) ?? t.name).trim(),
-      competency_tags: String(
-        formData.get(`topics[${i}].competency_tags`) ?? t.competency_tags.join(",")
-      )
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      weight_pct: Number.parseFloat(
-        String(formData.get(`topics[${i}].weight_pct`) ?? t.weight_pct)
-      ),
-      question_count: Number.parseInt(
-        String(formData.get(`topics[${i}].question_count`) ?? t.question_count),
-        10
-      ),
-      recommended_types: String(
-        formData.get(`topics[${i}].recommended_types`) ?? t.recommended_types.join(",")
-      )
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      rationale: String(
-        formData.get(`topics[${i}].rationale`) ?? t.rationale
-      ).trim(),
-    }));
-
-    const editedOutline: GeneratedOutline = {
-      title,
-      description,
-      topics,
-      total_points,
-      estimated_duration_minutes,
-    };
-
-    if (!slug || !domain) {
+    if (!(slug && domain)) {
       redirect(
-        `/modules/new/${run_id}?error=` +
-          encodeURIComponent("Slug and domain are required.")
+        `/modules/new/${run_id}?error=${encodeURIComponent("Slug and domain are required.")}`
       );
     }
 
@@ -112,7 +128,9 @@ export default async function OutlineReviewPage({
       redirect(`/modules/${result.module_id}`);
     } catch (e) {
       if (e instanceof ApiError) {
-        redirect(`/modules/new/${run_id}?error=` + encodeURIComponent(e.message));
+        redirect(
+          `/modules/new/${run_id}?error=${encodeURIComponent(e.message)}`
+        );
       }
       throw e;
     }
@@ -132,14 +150,14 @@ export default async function OutlineReviewPage({
       <Header page="Review outline" pages={["Modules", "New module"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <p className="eyebrow-label">Step 2 of 2 · Outline review</p>
+          <p className="eyebrow-label">Step 2 of 2 - Outline review</p>
           <h1 className="mt-1 font-semibold text-2xl">{outline.title}</h1>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             {outline.description}
           </p>
           <p className="mt-2 text-muted-foreground text-xs">
-            {outline.topics.length} topics · {totalQuestions} questions · est.{" "}
-            {outline.estimated_duration_minutes} min · weight sum{" "}
+            {outline.topics.length} topics, {totalQuestions} questions, est.{" "}
+            {outline.estimated_duration_minutes} min, weight sum{" "}
             <span
               className={
                 Math.abs(totalWeight - 100) > 1 ? "text-warning" : undefined
@@ -151,7 +169,7 @@ export default async function OutlineReviewPage({
           <details className="mt-2 text-muted-foreground text-xs">
             <summary className="cursor-pointer">Generation stats</summary>
             <p className="mt-1">
-              Model {run.model} · {run.tokens_in} → {run.tokens_out} tokens ·{" "}
+              Model {run.model}, {run.tokens_in} to {run.tokens_out} tokens,{" "}
               {run.latency_ms} ms
             </p>
           </details>
@@ -166,131 +184,12 @@ export default async function OutlineReviewPage({
           </p>
         )}
 
-        <form action={action} className="space-y-4">
-          <div className="grid gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">
-            <Field label="Slug" name="slug" required />
-            <Field label="Domain" name="domain" required />
-            <Field label="Title" name="title" defaultValue={outline.title} />
-            <Field
-              label="Estimated duration (min)"
-              name="estimated_duration_minutes"
-              type="number"
-              defaultValue={String(outline.estimated_duration_minutes)}
-            />
-            <Field
-              label="Total points"
-              name="total_points"
-              type="number"
-              defaultValue={String(outline.total_points)}
-            />
-            <Field
-              label="Description"
-              name="description"
-              defaultValue={outline.description}
-              textarea
-            />
-          </div>
-
-          <ol className="space-y-3">
-            {outline.topics.map((t, i) => (
-              <li
-                className="grid gap-2 rounded-xl border border-border/50 bg-muted/20 p-4 text-sm md:grid-cols-12"
-                key={i}
-              >
-                <Field
-                  label={`Topic ${i + 1} name`}
-                  name={`topics[${i}].name`}
-                  defaultValue={t.name}
-                  className="md:col-span-6"
-                />
-                <Field
-                  label="Weight %"
-                  name={`topics[${i}].weight_pct`}
-                  type="number"
-                  defaultValue={String(t.weight_pct)}
-                  className="md:col-span-3"
-                />
-                <Field
-                  label="Question count"
-                  name={`topics[${i}].question_count`}
-                  type="number"
-                  defaultValue={String(t.question_count)}
-                  className="md:col-span-3"
-                />
-                <Field
-                  label="Competency tags (comma-separated)"
-                  name={`topics[${i}].competency_tags`}
-                  defaultValue={t.competency_tags.join(", ")}
-                  className="md:col-span-6"
-                />
-                <Field
-                  label="Recommended types"
-                  name={`topics[${i}].recommended_types`}
-                  defaultValue={t.recommended_types.join(", ")}
-                  className="md:col-span-6"
-                />
-                <Field
-                  label="Rationale"
-                  name={`topics[${i}].rationale`}
-                  defaultValue={t.rationale}
-                  textarea
-                  className="md:col-span-12"
-                />
-              </li>
-            ))}
-          </ol>
-
-          <button className="btn-primary text-sm" type="submit">
-            Generate questions for {outline.topics.length} topics
-          </button>
-          <p className="text-muted-foreground text-xs">
-            One Claude call per topic, in series. Expect ~15-40 seconds per
-            topic. The module is created as a draft; review and publish from
-            the module detail page.
-          </p>
-        </form>
+        <OutlineReviewForm
+          formAction={action}
+          outline={outline}
+          runId={run_id}
+        />
       </div>
     </>
-  );
-}
-
-function Field({
-  label,
-  name,
-  defaultValue,
-  required,
-  type = "text",
-  textarea = false,
-  className = "",
-}: {
-  label: string;
-  name: string;
-  defaultValue?: string;
-  required?: boolean;
-  type?: string;
-  textarea?: boolean;
-  className?: string;
-}) {
-  const inputClass =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
-  return (
-    <label className={`space-y-1 ${className}`}>
-      <span className="text-muted-foreground text-xs">{label}</span>
-      {textarea ? (
-        <textarea
-          className={`${inputClass} h-20`}
-          defaultValue={defaultValue}
-          name={name}
-        />
-      ) : (
-        <input
-          className={inputClass}
-          defaultValue={defaultValue}
-          name={name}
-          required={required}
-          type={type}
-        />
-      )}
-    </label>
   );
 }

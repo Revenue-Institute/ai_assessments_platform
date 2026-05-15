@@ -1,4 +1,4 @@
-"""Spec §11.3 PII scrubbing — verify the log filter masks email, phone,
+"""Spec §11.3 PII scrubbing - verify the log filter masks email, phone,
 JWTs, and credit-card-shaped strings before records are emitted."""
 
 from __future__ import annotations

@@ -11,24 +11,18 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from supabase import Client
 
-from ..auth import AdminPrincipal
+from ..auth import AdminPrincipal, ensure_role
 from ..models.benchmarks import (
     SeriesAssignmentSummary,
     SeriesCreateRequest,
     SeriesDetail,
     SeriesSummary,
+    SeriesTrendPoint,
+    SeriesTrendResponse,
 )
-
-
-def _ensure_role(principal: AdminPrincipal, *allowed: str) -> None:
-    if principal.role not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{principal.role}' is not permitted for this action.",
-        )
 
 
 def _summary(row: dict[str, Any], *, assignment_count: int = 0) -> SeriesSummary:
@@ -67,7 +61,7 @@ def list_series(supabase: Client) -> list[SeriesSummary]:
 def create_series(
     supabase: Client, principal: AdminPrincipal, payload: SeriesCreateRequest
 ) -> SeriesSummary:
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
     next_due = payload.next_due_at
     if next_due is None and payload.cadence_days:
         next_due = datetime.now(UTC) + timedelta(days=payload.cadence_days)
@@ -142,7 +136,7 @@ def dispatch_due_series(
     assignment for each. Designed to be called from a Cloud Scheduler
     cron, idempotent and partial-failure tolerant."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
 
     now = datetime.now(UTC).isoformat()
     rows = (
@@ -192,7 +186,7 @@ def issue_next_for_series(
     next_due_at by cadence_days. Caller is responsible for whether to invoke
     this on demand (admin button) or via cron."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
 
     # Lazy import to avoid circular import (admin.py imports series?, not yet,
     # but defensive).
@@ -250,6 +244,9 @@ def issue_next_for_series(
             ),
         )
 
+    # Mint the assignment but suppress the generic invite. We need
+    # sequence_number computed first to populate the retest-specific
+    # template body, so the email is fired explicitly below.
     link = create_assignment(
         supabase,
         principal,
@@ -257,9 +254,9 @@ def issue_next_for_series(
             module_id=chosen_id,
             subject_id=row["subject_id"],
             expires_in_days=expires_in_days,
-            send_email=send_email,
+            send_email=False,
         ),
-        send_email=send_email,
+        send_email=False,
     )
 
     existing_links = (
@@ -279,6 +276,52 @@ def issue_next_for_series(
             "sequence_number": next_seq,
         }
     ).execute()
+
+    # Fire the retest-specific invite now that sequence_number is known.
+    # Best-effort; cron-style callers must not abort on email failure.
+    if send_email:
+        try:
+            subj = (
+                supabase.table("subjects")
+                .select("full_name, email")
+                .eq("id", row["subject_id"])
+                .limit(1)
+                .execute()
+            )
+            subject_row = (subj.data or [{}])[0]
+            if subject_row.get("email"):
+                from .email import send_series_due_notification
+
+                result = send_series_due_notification(
+                    to_email=subject_row["email"],
+                    subject_full_name=subject_row.get("full_name") or "there",
+                    series_name=row["name"],
+                    sequence_number=next_seq,
+                    magic_link_url=link.magic_link_url,
+                    expires_at=link.expires_at,
+                )
+                if result.ok and result.message_id:
+                    existing_meta = (
+                        supabase.table("assignments")
+                        .select("metadata")
+                        .eq("id", link.assignment_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    current = (
+                        (existing_meta.data or [{}])[0].get("metadata") or {}
+                    )
+                    current["message_id"] = result.message_id
+                    supabase.table("assignments").update(
+                        {"metadata": current}
+                    ).eq("id", link.assignment_id).execute()
+        except Exception:  # pragma: no cover, defensive
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "series retest email failed for series %s",
+                series_id,
+            )
 
     cadence = row.get("cadence_days")
     update: dict[str, Any] = {}
@@ -312,7 +355,7 @@ def link_assignment(
     """Append an existing assignment to a series. sequence_number is computed
     as max(existing) + 1."""
 
-    _ensure_role(principal, "admin", "reviewer")
+    ensure_role(principal, "admin", "reviewer")
     existing = (
         supabase.table("series_assignments")
         .select("sequence_number")
@@ -330,3 +373,98 @@ def link_assignment(
         }
     ).execute()
     return get_series_detail(supabase, series_id)
+
+
+def get_series_trend(supabase: Client, series_id: str) -> SeriesTrendResponse:
+    """Build the per-competency trend timeline for a series (spec §11.4
+    'trend of each competency across sequence_number').
+
+    For every assignment linked to the series, ordered by
+    `sequence_number`, look up its competency_scores rows. Return a map
+    keyed by competency_id whose value is the chronological list of
+    {sequence_number, score_pct, completed_at} points. The frontend uses
+    these arrays to render one trend line per competency on the series
+    detail page."""
+
+    # Pull series metadata + linked assignments in one round-trip. We
+    # need subject_id (for the response envelope) and competency_focus so
+    # the UI can colour-code focused competencies even when no scores
+    # exist yet for a particular focus tag.
+    detail = (
+        supabase.table("assessment_series")
+        .select(
+            "id, subject_id, competency_focus, "
+            "series_assignments(sequence_number, "
+            "assignments(id, completed_at))"
+        )
+        .eq("id", series_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    if not detail:
+        raise HTTPException(status_code=404, detail="Series not found.")
+    row = detail[0]
+
+    links = row.get("series_assignments") or []
+    # Order assignments by sequence_number so the resulting per-competency
+    # arrays are already chronological for the frontend.
+    ordered: list[tuple[int, dict[str, Any]]] = []
+    for link in links:
+        a = link.get("assignments") or {}
+        if not a.get("id"):
+            continue
+        ordered.append(
+            (int(link.get("sequence_number") or 0), a)
+        )
+    ordered.sort(key=lambda pair: pair[0])
+
+    assignment_ids = [a["id"] for _, a in ordered]
+    if not assignment_ids:
+        return SeriesTrendResponse(
+            series_id=series_id,
+            subject_id=row["subject_id"],
+            competency_focus=list(row.get("competency_focus") or []),
+            trends={},
+        )
+
+    score_rows = (
+        supabase.table("competency_scores")
+        .select(
+            "competency_id, assignment_id, score_pct, point_total, "
+            "point_possible"
+        )
+        .eq("subject_id", row["subject_id"])
+        .in_("assignment_id", assignment_ids)
+        .execute()
+    ).data or []
+    by_assignment: dict[str, list[dict[str, Any]]] = {}
+    for sr in score_rows:
+        by_assignment.setdefault(sr["assignment_id"], []).append(sr)
+
+    trends: dict[str, list[SeriesTrendPoint]] = {}
+    for seq, assignment in ordered:
+        comp_rows = by_assignment.get(assignment["id"], [])
+        for cr in comp_rows:
+            comp_id = cr["competency_id"]
+            trends.setdefault(comp_id, []).append(
+                SeriesTrendPoint(
+                    sequence_number=seq,
+                    assignment_id=assignment["id"],
+                    score_pct=float(cr["score_pct"]),
+                    point_total=float(cr.get("point_total") or 0),
+                    point_possible=float(cr.get("point_possible") or 0),
+                    completed_at=assignment.get("completed_at"),
+                )
+            )
+
+    # Sort each per-competency list by sequence_number defensively, in
+    # case two links shared a sequence_number after a manual edit.
+    for comp_id in list(trends.keys()):
+        trends[comp_id].sort(key=lambda p: p.sequence_number)
+
+    return SeriesTrendResponse(
+        series_id=series_id,
+        subject_id=row["subject_id"],
+        competency_focus=list(row.get("competency_focus") or []),
+        trends=trends,
+    )
