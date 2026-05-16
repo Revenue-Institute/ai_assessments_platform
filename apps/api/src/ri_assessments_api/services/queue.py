@@ -180,8 +180,20 @@ def dequeue_blocking(timeout_seconds: int = 5) -> dict[str, Any] | None:
     None when the timeout elapses with no job, so the worker can run
     its housekeeping loop."""
 
+    # Honor the invariant documented at the top of this module: BRPOP's
+    # server-side timeout must finish strictly before the socket read
+    # timeout, otherwise the socket layer tears the connection down and
+    # raises TimeoutError instead of returning None cleanly.
+    effective_timeout = max(1, min(timeout_seconds, _REDIS_SOCKET_TIMEOUT_SECONDS - 1))
+
     client = _get_client()
-    result = client.brpop([SCORING_QUEUE], timeout=timeout_seconds)
+    try:
+        result = client.brpop([SCORING_QUEUE], timeout=effective_timeout)
+    except redis.exceptions.TimeoutError:
+        # Belt-and-suspenders: a TCP retransmit can still eat the last
+        # second. Treat as "no job this round" so the worker keeps
+        # spinning instead of crash-looping under docker restart policy.
+        return None
     if result is None:
         return None
     _, raw = result

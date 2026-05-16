@@ -32,6 +32,29 @@ if [[ ! -f .env.local ]]; then
   exit 1
 fi
 
+# GitHub silently expands missing ${{ secrets.X }} / ${{ vars.X }} to "",
+# producing empty lines in .env.local that survive into containers. This
+# bit us on 2026-05-16 (admin Next.js crash-looped on an empty
+# NEXT_PUBLIC_SUPABASE_ANON_KEY for a full deploy cycle). Fail loud
+# BEFORE pulling images and recreating the stack.
+REQUIRED_KEYS=(
+  SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_JWT_SECRET
+  DATABASE_URL JWT_SIGNING_SECRET SESSION_COOKIE_SECRET
+  ANTHROPIC_API_KEY_GENERATION ANTHROPIC_API_KEY_SCORING OPENAI_API_KEY E2B_API_KEY
+  RESEND_API_KEY
+  NEXT_PUBLIC_ADMIN_URL NEXT_PUBLIC_CANDIDATE_URL NEXT_PUBLIC_API_URL
+)
+missing=()
+for key in "${REQUIRED_KEYS[@]}"; do
+  grep -qE "^${key}=.+" .env.local || missing+=("$key")
+done
+if (( ${#missing[@]} > 0 )); then
+  echo "ERROR: .env.local missing/empty values for: ${missing[*]}" >&2
+  echo "Check Settings -> Environments -> production." >&2
+  echo "  vars.* names live in the Variables tab, secrets.* in the Secrets tab." >&2
+  exit 1
+fi
+
 TAG="${IMAGE_TAG:-latest}"
 export IMAGE_TAG="$TAG"
 
