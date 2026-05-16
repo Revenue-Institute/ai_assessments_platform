@@ -26,6 +26,14 @@ RUN uv sync --no-install-project --no-dev
 COPY apps/api/src /app/src
 RUN uv sync --no-dev
 
+# scripts/apply_migrations.py walks Path(__file__).parents[3] to find
+# the repo root, then reads packages/db/migrations/*.sql. Inside the
+# image we live at /app, so parents[3] from /app/scripts/<file>.py
+# resolves to /. Mirror the repo layout under /packages/ so the script
+# finds the migrations without any path-override logic.
+COPY apps/api/scripts /app/scripts
+COPY packages/db/migrations /packages/db/migrations
+
 # Generator's _load_taxonomy_text() walks Path(__file__).parents[4],
 # which resolves to "/" inside the image; place shared data at /packages
 # to match.
