@@ -31,4 +31,10 @@ export const env = createEnv({
     NEXT_PUBLIC_ADMIN_URL: process.env.NEXT_PUBLIC_ADMIN_URL,
     NEXT_PUBLIC_CANDIDATE_URL: process.env.NEXT_PUBLIC_CANDIDATE_URL,
   },
+  // Docker builds set SKIP_ENV_VALIDATION=true because server vars
+  // (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) come from .env.local at
+  // runtime, not at build time. Validation still runs the first time the
+  // Next server boots in the container, so missing config fails loudly
+  // then instead of silently.
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 });
