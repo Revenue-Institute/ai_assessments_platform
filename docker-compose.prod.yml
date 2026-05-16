@@ -35,8 +35,24 @@ x-defaults: &defaults
       max-file: "5"
 
 services:
+  # Local Redis (internal to the ri-assessments compose project; isolated
+  # from the box's existing n8n-redis stack via the -p project name).
+  # Holds the scoring queue + SSE pubsub. The data is short-lived
+  # (in-flight scoring jobs only); a fresh container would lose at most
+  # ~30s of unprocessed scoring work, recoverable via admin rescore.
   redis:
-    profiles: ["disabled"]
+    <<: *defaults
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    ports: !override []   # internal-only; nothing on host
+    volumes:
+      - ri-redis-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 64m
 
   api:
     <<: *defaults
@@ -47,10 +63,17 @@ services:
     depends_on: !override
       n8n:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       APP_ENV: production
       INTERNAL_API_URL: http://api:8000
       N8N_HOST: http://n8n:5678
+      # Local Redis URL overrides whatever the deploy-written .env.local
+      # has for UPSTASH_REDIS_URL. Internal docker DNS hostname `redis`
+      # resolves to the in-compose service above. No TLS, no auth.
+      UPSTASH_REDIS_URL: redis://redis:6379/0
+      UPSTASH_REDIS_TOKEN: ""
     deploy:
       resources:
         limits:
@@ -65,10 +88,14 @@ services:
     depends_on: !override
       api:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       APP_ENV: production
       INTERNAL_API_URL: http://api:8000
       N8N_HOST: http://n8n:5678
+      UPSTASH_REDIS_URL: redis://redis:6379/0
+      UPSTASH_REDIS_TOKEN: ""
     deploy:
       resources:
         limits:
@@ -129,3 +156,4 @@ services:
 
 volumes:
   ri-n8n-data: {}
+  ri-redis-data: {}
