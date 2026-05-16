@@ -15,8 +15,32 @@ from pathlib import Path
 
 import psycopg
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-MIGRATIONS_DIR = REPO_ROOT / "packages" / "db" / "migrations"
+def _resolve_migrations_dir() -> Path:
+    """Find the migrations directory.
+
+    Honors `MIGRATIONS_DIR` env override when set (used by the docker
+    image where the repo-relative layout doesn't exist). Otherwise walks
+    up from this script's location looking for `packages/db/migrations`,
+    which is resilient to different working-directory + nesting depths.
+    """
+
+    override = os.environ.get("MIGRATIONS_DIR")
+    if override:
+        return Path(override)
+
+    here = Path(__file__).resolve().parent
+    for ancestor in (here, *here.parents):
+        candidate = ancestor / "packages" / "db" / "migrations"
+        if candidate.is_dir():
+            return candidate
+
+    # Last-ditch: try the conventional repo-relative path. Raises a clear
+    # error at first use if neither the env override nor the ancestor
+    # walk found anything.
+    return here.parent.parent.parent / "packages" / "db" / "migrations"
+
+
+MIGRATIONS_DIR = _resolve_migrations_dir()
 
 CREATE_LEDGER = """
 create table if not exists public._migrations (
