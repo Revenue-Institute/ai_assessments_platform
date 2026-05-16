@@ -85,6 +85,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify build args are non-empty
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_ADMIN_URL: ${{ vars.NEXT_PUBLIC_ADMIN_URL }}
+          NEXT_PUBLIC_CANDIDATE_URL: ${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          declare -A required=(
+            [admin]="SUPABASE_URL SUPABASE_ANON_KEY NEXT_PUBLIC_ADMIN_URL NEXT_PUBLIC_CANDIDATE_URL"
+            [candidate]="NEXT_PUBLIC_API_URL NEXT_PUBLIC_CANDIDATE_URL"
+            [api]=""
+          )
+          fail=0
+          for v in ${required[${{ matrix.service }}]}; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Required build arg '$v' is empty for service '${{ matrix.service }}'. Check Settings -> Environments -> production."
+              fail=1
+            fi
+          done
+          [ $fail -eq 0 ]
+
       - name: Build and push (api)
         if: matrix.service == 'api'
         uses: docker/build-push-action@v6
