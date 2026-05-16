@@ -21,9 +21,10 @@ if [[ ! -f .env.local ]]; then
   exit 2
 fi
 
-link() {
-  local target_dir="$1"
-  local link_path="${target_dir}/.env.local"
+link_file() {
+  local link_path="$1"
+  local target_dir
+  target_dir="$(dirname "$link_path")"
 
   if [[ ! -d "$target_dir" ]]; then
     echo "skip: $target_dir (not present)"
@@ -42,19 +43,16 @@ link() {
   echo "linked: $link_path -> ../../.env.local"
 }
 
-link apps/admin
-link apps/candidate
+link_file apps/admin/.env.local
+link_file apps/candidate/.env.local
 
-# FastAPI (pydantic-settings) reads .env, not .env.local.
-api_link="apps/api/.env"
-if [[ -L "$api_link" ]]; then
-  rm "$api_link"
-elif [[ -e "$api_link" ]]; then
-  echo "warn: $api_link is a real file, not a symlink, leaving it alone." >&2
-else
-  ln -s "../../.env.local" "$api_link"
-  echo "linked: $api_link -> ../../.env.local"
-fi
+# FastAPI in docker reads the env_file declared in docker-compose.yml,
+# which points at apps/api/.env.local. FastAPI run directly via
+# uvicorn (local dev outside docker) uses pydantic-settings which
+# reads .env by default. Symlink both names at the same target so
+# both code paths work without copy-pasting values.
+link_file apps/api/.env.local
+link_file apps/api/.env
 
 echo
 echo "Done. Edit /.env.local; all three apps will see your changes."
