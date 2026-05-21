@@ -65,6 +65,16 @@ apps just listen on their own ports. The candidate FastAPI route
 (`/a/{token}` on apps/api) is unaffected; magic-link emails point at
 `NEXT_PUBLIC_CANDIDATE_URL` for the link they serve to the recipient.
 
+The candidate also needs `NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN` set to
+its own absolute origin (the Vercel candidate URL, e.g.
+`https://candidate-prod.vercel.app`) whenever it sits behind the
+admin's `/a/*` rewrite. That value becomes `assetPrefix` on the
+candidate's next.config, so the chunk URLs in the served HTML are
+absolute and load directly from the candidate host. Without it, the
+browser requests `/_next/static/...` from the admin origin (which
+doesn't have those chunks), 404s, and renders a not-found page with
+a ChunkLoadError in the console. Leave unset in dev (same-origin).
+
 To launch the candidate experience yourself for QA:
 
 1. From an admin session, run a seed (`bun --filter api seed`) or use
