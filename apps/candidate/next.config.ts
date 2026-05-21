@@ -1,14 +1,15 @@
 import { withSentry } from "@repo/observability/next-config";
 import type { NextConfig } from "next";
 
-// In single-host prod, admin (assessments.revenueinstitute.com) rewrites
-// /a/* to the candidate origin. The rewrite returns candidate HTML, but
-// chunk URLs default to relative paths (/_next/static/...) which the
-// browser then requests from admin's host and admin 404s. Pinning
-// assetPrefix to the candidate's own origin makes those URLs absolute
-// so chunks load directly from the candidate deployment. Leave the env
-// var unset in dev (same-origin, no prefix needed).
-const assetOrigin = process.env.NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN?.replace(
+// Single-host prod (single VM behind nginx): admin owns `/`, candidate
+// owns `/a/*`. Without an asset prefix the served HTML refers to
+// `/_next/static/...` which nginx routes to admin (the default `/`
+// location), and admin 404s those chunks. Setting assetPrefix to "/a"
+// makes the URLs `/a/_next/static/...`; the matching nginx regex
+// location strips `/a` and forwards to the candidate container, which
+// serves chunks at `/_next/...` as usual. Leave the env var unset in
+// dev (same-origin localhost, no prefix needed).
+const assetPrefix = process.env.NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX?.replace(
   /\/+$/,
   ""
 );
@@ -18,7 +19,7 @@ let nextConfig: NextConfig = {
   poweredByHeader: false,
   output: "standalone",
   typedRoutes: true,
-  ...(assetOrigin ? { assetPrefix: assetOrigin } : {}),
+  ...(assetPrefix ? { assetPrefix } : {}),
 };
 
 // Source-map upload gate keyed on SENTRY_AUTH_TOKEN, not VERCEL: any

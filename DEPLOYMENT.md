@@ -192,12 +192,14 @@ Spec §16 has the canonical variable list. Highlights below.
 - `INTERNAL_API_URL` (server-side fetches for resolve / consent / submit)
 - `NEXT_PUBLIC_API_URL` (browser fetches for heartbeat / events / code
   run / sql query / notebook run)
-- `NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN` (REQUIRED in single-host prod;
-  set to this candidate deployment's own absolute origin, e.g.
-  `https://candidate-prod.vercel.app`. The admin host rewrites `/a/*`
-  here, and without this var the candidate's HTML refers to
-  `/_next/static/...` paths that 404 against the admin origin and
-  break the page with a ChunkLoadError. Leave unset in dev.)
+- `NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX` (REQUIRED in single-host prod;
+  hardcoded to `/a` by `.github/workflows/deploy-vm.yml` build-args).
+  Single-VM prod runs admin and candidate behind one nginx on the same
+  host; without this prefix the candidate HTML refers to
+  `/_next/static/...` which nginx routes to admin (the `/` location)
+  and admin 404s, breaking the page with a ChunkLoadError. The
+  matching nginx regex location strips the prefix before proxying to
+  candidate. Leave unset in dev.
 
 ## 3. Database setup
 

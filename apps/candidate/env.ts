@@ -14,15 +14,15 @@ export const env = createEnv({
       .string()
       .url()
       .default("http://localhost:3001"),
-    NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN: z.string().url().optional(),
+    NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX: z.string().min(1).optional(),
   },
   runtimeEnv: {
     INTERNAL_API_URL: process.env.INTERNAL_API_URL,
     JWT_SIGNING_SECRET: process.env.JWT_SIGNING_SECRET,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_CANDIDATE_URL: process.env.NEXT_PUBLIC_CANDIDATE_URL,
-    NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN:
-      process.env.NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN,
+    NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX:
+      process.env.NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 });

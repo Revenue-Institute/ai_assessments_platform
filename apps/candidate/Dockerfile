@@ -22,8 +22,13 @@ COPY apps/candidate apps/candidate
 # Defaults match env.ts so local docker builds work without --build-arg.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_CANDIDATE_URL=http://localhost:3001
+# Empty default: single-host nginx-fronted prod sets this to "/a" so
+# Next bakes /a/_next/... into the HTML and nginx routes those chunks
+# back to candidate. Dev keeps it empty for vanilla localhost serving.
+ARG NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_CANDIDATE_URL=$NEXT_PUBLIC_CANDIDATE_URL
+ENV NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=$NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX
 
 ENV SKIP_ENV_VALIDATION=true
 ENV NEXT_TELEMETRY_DISABLED=1

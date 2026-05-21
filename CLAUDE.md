@@ -65,15 +65,17 @@ apps just listen on their own ports. The candidate FastAPI route
 (`/a/{token}` on apps/api) is unaffected; magic-link emails point at
 `NEXT_PUBLIC_CANDIDATE_URL` for the link they serve to the recipient.
 
-The candidate also needs `NEXT_PUBLIC_CANDIDATE_ASSET_ORIGIN` set to
-its own absolute origin (the Vercel candidate URL, e.g.
-`https://candidate-prod.vercel.app`) whenever it sits behind the
-admin's `/a/*` rewrite. That value becomes `assetPrefix` on the
-candidate's next.config, so the chunk URLs in the served HTML are
-absolute and load directly from the candidate host. Without it, the
-browser requests `/_next/static/...` from the admin origin (which
-doesn't have those chunks), 404s, and renders a not-found page with
-a ChunkLoadError in the console. Leave unset in dev (same-origin).
+The candidate's production build also needs
+`NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=/a`. The single-VM prod runs both
+apps behind one nginx on the same host (`/` -> admin :13000, `/a/*`
+-> candidate :13001), so without an asset prefix the candidate HTML
+references `/_next/static/...` which nginx routes to admin and admin
+404s, surfacing as a not-found page with a ChunkLoadError. The
+matching nginx regex location `^/a(/_next/.*)$` strips the `/a`
+before proxying to candidate, so the candidate Next server can keep
+serving chunks at `/_next/...`. Wired via the candidate Dockerfile
+ARG and the deploy-vm workflow build-args. Leave unset in dev
+(same-origin localhost).
 
 To launch the candidate experience yourself for QA:
 

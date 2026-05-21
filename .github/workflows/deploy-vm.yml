@@ -153,6 +153,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
+            NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=/a
 
   deploy:
     name: SSH deploy
