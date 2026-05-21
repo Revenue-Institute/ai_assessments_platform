@@ -1,6 +1,6 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   ApiError,
   createModulePreviewMagicLink,
@@ -8,6 +8,7 @@ import {
   previewModule,
 } from "@/lib/api";
 import { Header } from "../../../components/header";
+import { OpenAsCandidateButton } from "../../../components/open-as-candidate-button";
 import { QuestionPreviewRenderer } from "../../../components/question-preview-renderer";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +33,10 @@ export default async function ModulePreviewPage({
     throw e;
   }
 
-  async function openAsCandidate(): Promise<void> {
+  async function getCandidateUrl(): Promise<string> {
     "use server";
     const link = await createModulePreviewMagicLink(id);
-    redirect(link.magic_link_url);
+    return link.magic_link_url;
   }
 
   return (
@@ -54,11 +55,7 @@ export default async function ModulePreviewPage({
               test, server timer, integrity monitor), open as a candidate.
             </p>
           </div>
-          <form action={openAsCandidate}>
-            <button className="btn-primary text-sm" type="submit">
-              Open as candidate
-            </button>
-          </form>
+          <OpenAsCandidateButton getUrl={getCandidateUrl} />
         </section>
 
         <div>
