@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DifficultyEnum } from "./question.js";
+import { DifficultyEnum } from "./question";
 
 export const QuestionMix = z.object({
   mcq_pct: z.number().min(0).max(100).nullish(),

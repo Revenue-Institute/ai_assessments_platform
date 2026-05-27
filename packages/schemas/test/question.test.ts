@@ -5,7 +5,7 @@ import {
   QuestionTemplate,
   Rubric,
   VariableSpec,
-} from "../src/index.js";
+} from "../src/index";
 
 function baseRubric() {
   return {

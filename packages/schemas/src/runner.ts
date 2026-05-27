@@ -1,4 +1,4 @@
-import type { Rubric } from "./question.js";
+import type { Rubric } from "./question";
 
 export interface ProvisionResult {
   embed_url?: string;

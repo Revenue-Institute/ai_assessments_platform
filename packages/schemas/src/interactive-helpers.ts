@@ -29,7 +29,7 @@ import {
   N8nConfig,
   NotebookConfig,
   SqlConfig,
-} from "./interactive.js";
+} from "./interactive";
 
 function laxParse<T extends z.ZodObject<z.ZodRawShape>>(
   schema: T,

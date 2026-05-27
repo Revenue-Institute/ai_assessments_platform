@@ -32,7 +32,7 @@ import {
   SqlConfig,
   VariableSchema,
   VariableSpec,
-} from "../src/index.js";
+} from "../src/index";
 
 const schemas = {
   CodeConfig,

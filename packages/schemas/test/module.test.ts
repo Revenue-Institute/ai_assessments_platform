@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Assessment, AssessmentStatus, Module } from "../src/index.js";
+import { Assessment, AssessmentStatus, Module } from "../src/index";
 
 function validQuestion() {
   return {

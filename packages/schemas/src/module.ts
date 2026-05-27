@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DifficultyEnum, QuestionTemplate } from "./question.js";
+import { DifficultyEnum, QuestionTemplate } from "./question";
 
 export const ModuleStatus = z.enum(["draft", "published", "archived"]);
 export type ModuleStatus = z.infer<typeof ModuleStatus>;

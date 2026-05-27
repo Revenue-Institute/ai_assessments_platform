@@ -7,7 +7,7 @@ import {
   parseN8nConfig,
   parseNotebookConfig,
   parseSqlConfig,
-} from "../src/index.js";
+} from "../src/index";
 
 describe("interactive-helpers lax parsers", () => {
   it("returns an empty object for non-object input", () => {
