@@ -19,6 +19,12 @@ const candidateOrigin = process.env.NEXT_PUBLIC_CANDIDATE_URL?.replace(
 let nextConfig: NextConfig = {
   ...config,
   output: "standalone",
+  // Workspace packages that export TypeScript source (`main: src/index.ts`
+  // with `.js`-suffixed relative re-exports). Mirrors the candidate
+  // app's next.config.ts; required so the admin preview renderer can
+  // pull parseXxxConfig at runtime via @repo/schemas. The shared
+  // question-renderer also lives under @repo/design-system.
+  transpilePackages: ["@repo/schemas", "@repo/design-system"],
   async rewrites() {
     const baseRewrites = (await config.rewrites?.()) ?? [];
     const baseList = Array.isArray(baseRewrites)

@@ -19,6 +19,14 @@ let nextConfig: NextConfig = {
   poweredByHeader: false,
   output: "standalone",
   typedRoutes: true,
+  // Workspace packages that export TypeScript source (`main: src/index.ts`
+  // with `.js`-suffixed relative re-exports). Without this, turbopack's
+  // RSC bundler fails to resolve `./module.js` -> `./module.ts` and the
+  // entire barrel re-exports as "module has no exports at all". Type-only
+  // imports tree-shake the chain away, which is why earlier admin builds
+  // worked; the new runtime imports of `parseMcqConfig` etc. force the
+  // full module load.
+  transpilePackages: ["@repo/schemas", "@repo/design-system"],
   ...(assetPrefix ? { assetPrefix } : {}),
 };
 

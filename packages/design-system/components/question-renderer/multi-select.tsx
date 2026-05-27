@@ -19,8 +19,11 @@ export function MultiSelectRenderer({
   const options = config.options ?? [];
   const previousIndices =
     mode === "interactive"
-      ? ((question.raw_answer?.value as { selected_indices?: number[] } | undefined)
-          ?.selected_indices ?? [])
+      ? ((
+          question.raw_answer?.value as
+            | { selected_indices?: number[] }
+            | undefined
+        )?.selected_indices ?? [])
       : [];
 
   if (options.length === 0) {

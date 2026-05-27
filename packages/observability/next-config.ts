@@ -65,9 +65,18 @@ export const withSentry = (
   sourceConfig: object,
   app?: ObservabilityApp
 ): object => {
+  // Merge with any caller-provided transpilePackages instead of
+  // overwriting. The Next apps add their workspace packages here
+  // (@repo/schemas, @repo/design-system); blowing those away breaks
+  // turbopack's RSC resolution of TypeScript barrel re-exports.
+  const existing = (sourceConfig as { transpilePackages?: string[] })
+    .transpilePackages;
+  const transpilePackages = Array.from(
+    new Set([...(existing ?? []), "@sentry/nextjs"])
+  );
   const configWithTranspile = {
     ...sourceConfig,
-    transpilePackages: ["@sentry/nextjs"],
+    transpilePackages,
   };
 
   return withSentryConfig(configWithTranspile, buildSentryConfig(app));
