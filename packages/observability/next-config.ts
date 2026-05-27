@@ -72,4 +72,3 @@ export const withSentry = (
 
   return withSentryConfig(configWithTranspile, buildSentryConfig(app));
 };
-

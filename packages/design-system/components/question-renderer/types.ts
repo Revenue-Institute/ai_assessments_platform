@@ -19,7 +19,7 @@
 export type QuestionRendererMode = "interactive" | "preview";
 
 export interface QuestionForRenderer {
-  type: string;
   interactive_config?: Record<string, unknown> | null;
   raw_answer?: { value?: unknown } | null;
+  type: string;
 }

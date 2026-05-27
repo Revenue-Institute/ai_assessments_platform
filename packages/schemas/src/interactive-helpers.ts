@@ -20,7 +20,7 @@
 // Tests in `test/interactive-helpers.test.ts` lock the lax-parse
 // behavior so renderers can rely on it.
 
-import { z } from "zod";
+import type { z } from "zod";
 import {
   CodeConfig,
   DiagramConfig,
@@ -55,7 +55,9 @@ function laxParse<T extends z.ZodObject<z.ZodRawShape>>(
   return out as Partial<z.infer<T>>;
 }
 
-export function parseMcqConfig(raw: unknown): Partial<z.infer<typeof McqConfig>> {
+export function parseMcqConfig(
+  raw: unknown
+): Partial<z.infer<typeof McqConfig>> {
   return laxParse(McqConfig, raw);
 }
 
