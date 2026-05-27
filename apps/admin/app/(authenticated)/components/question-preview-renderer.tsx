@@ -2,16 +2,22 @@
 
 /** Read-only preview renderers for every question type (spec §5.1).
  *
- * The candidate app has interactive renderers (Monaco, React Flow, n8n
- * iframe). The admin preview uses these inert mirrors so reviewers see
- * what a candidate would see without spinning up sandboxes or hitting
- * external services. Inputs are deliberately disabled so a stray click
- * cannot mutate state.
+ * The static types (mcq, multi_select, short_answer, long_answer,
+ * scenario) come from the shared @repo/design-system question-renderer
+ * package in `mode="preview"`; this keeps admin previews and the
+ * candidate runtime in lockstep on form shape + accessibility labeling.
  *
- * Spec §6.6 (preview-variants) renders 5 sampled variants side-by-side;
- * this component handles a single sampled instance. The parent decides
- * how many to render. */
+ * The interactive-sandbox previews (code, sql, notebook, diagram, n8n)
+ * stay local because they render disabled chrome around starter
+ * artifacts and never spin up sandboxes or hit external services. */
 
+import {
+  LongAnswerRenderer,
+  McqRenderer,
+  MultiSelectRenderer,
+  ScenarioRenderer,
+  ShortAnswerRenderer,
+} from "@repo/design-system/components/question-renderer";
 import dynamic from "next/dynamic";
 import type { ModulePreviewQuestion } from "@/lib/api";
 
@@ -42,15 +48,15 @@ export function QuestionPreviewRenderer({
 
   switch (question.type) {
     case "mcq":
-      return <McqPreview config={config} />;
+      return <McqRenderer mode="preview" question={question} />;
     case "multi_select":
-      return <MultiSelectPreview config={config} />;
+      return <MultiSelectRenderer mode="preview" question={question} />;
     case "short_answer":
-      return <ShortAnswerPreview />;
+      return <ShortAnswerRenderer mode="preview" question={question} />;
     case "long_answer":
-      return <LongAnswerPreview />;
+      return <LongAnswerRenderer mode="preview" question={question} />;
     case "scenario":
-      return <ScenarioPreview config={config} />;
+      return <ScenarioRenderer mode="preview" question={question} />;
     case "code":
       return <CodePreview config={config} />;
     case "sql":
@@ -64,111 +70,6 @@ export function QuestionPreviewRenderer({
     default:
       return <UnsupportedPreview type={question.type} />;
   }
-}
-
-function McqPreview({ config }: { config: PreviewConfig }) {
-  const options = (config.options as string[] | undefined) ?? [];
-  if (options.length === 0) {
-    return <EmptyOptions />;
-  }
-  return (
-    <fieldset
-      className="space-y-2 rounded border border-border/60 bg-card/50 p-3"
-      disabled
-    >
-      <legend className="px-1 text-muted-foreground text-xs">Choose one</legend>
-      {options.map((opt) => (
-        <label
-          className="flex items-start gap-3 rounded px-2 py-1.5 text-sm"
-          key={opt}
-        >
-          <input className="mt-1" disabled name="preview" type="radio" />
-          <span className="leading-6">{opt}</span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function MultiSelectPreview({ config }: { config: PreviewConfig }) {
-  const options = (config.options as string[] | undefined) ?? [];
-  if (options.length === 0) {
-    return <EmptyOptions />;
-  }
-  return (
-    <fieldset
-      className="space-y-2 rounded border border-border/60 bg-card/50 p-3"
-      disabled
-    >
-      <legend className="px-1 text-muted-foreground text-xs">
-        Choose all that apply
-      </legend>
-      {options.map((opt) => (
-        <label
-          className="flex items-start gap-3 rounded px-2 py-1.5 text-sm"
-          key={opt}
-        >
-          <input className="mt-1" disabled name="preview" type="checkbox" />
-          <span className="leading-6">{opt}</span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function ShortAnswerPreview() {
-  return (
-    <input
-      aria-label="Candidate would type a short answer here"
-      className="w-full rounded border border-border/60 bg-card/40 px-3 py-2 text-sm"
-      disabled
-      placeholder="Candidate types a short answer"
-      type="text"
-    />
-  );
-}
-
-function LongAnswerPreview() {
-  return (
-    <textarea
-      aria-label="Candidate would type a long answer here"
-      className="h-32 w-full rounded border border-border/60 bg-card/40 px-3 py-2 text-sm leading-6"
-      disabled
-      placeholder="Candidate types a paragraph response"
-    />
-  );
-}
-
-function ScenarioPreview({ config }: { config: PreviewConfig }) {
-  const parts = config.parts as
-    | Array<{ id?: string; label?: string; placeholder?: string }>
-    | undefined;
-  if (Array.isArray(parts) && parts.length > 0) {
-    return (
-      <div className="space-y-3">
-        {parts.map((part, i) => (
-          <label className="block space-y-1" key={part.id ?? i}>
-            <span className="block font-medium text-foreground text-sm">
-              {part.label ?? `Part ${i + 1}`}
-            </span>
-            <textarea
-              className="h-24 w-full rounded border border-border/60 bg-card/40 px-3 py-2 text-sm leading-6"
-              disabled
-              placeholder={part.placeholder ?? "Candidate response"}
-            />
-          </label>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <textarea
-      aria-label="Candidate would write a scenario response here"
-      className="h-40 w-full rounded border border-border/60 bg-card/40 px-3 py-2 text-sm leading-6"
-      disabled
-      placeholder="Candidate walks through each part of the scenario"
-    />
-  );
 }
 
 function EditorChrome({
@@ -374,17 +275,6 @@ function UnsupportedPreview({ type }: { type: string }) {
       role="alert"
     >
       {`No preview for question type "${type}".`}
-    </p>
-  );
-}
-
-function EmptyOptions() {
-  return (
-    <p
-      className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-xs"
-      role="alert"
-    >
-      No options configured for this choice question.
     </p>
   );
 }

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from fastapi import HTTPException
-from jose import jwt
 
 from ri_assessments_api.auth import (
     ALGORITHM,

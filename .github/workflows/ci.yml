@@ -41,8 +41,12 @@ jobs:
       - run: bun run --filter admin --filter candidate typecheck
       - name: Admin vitest
         run: bun --filter admin test
+      - name: Candidate vitest
+        run: bun --filter candidate test
       - name: Integrity vitest
         run: bun --filter @repo/integrity test
+      - name: Schemas vitest
+        run: bun --filter @repo/schemas test
 
   lint:
     name: copy + boundaries lint
@@ -77,14 +81,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - working-directory: apps/api
         run: uv sync --frozen
-      - name: Regenerate Pydantic models
+      - name: Regenerate Pydantic models from Zod
         run: bash apps/api/scripts/gen_schemas.sh
-      - name: Verify generated tree is gitignored (no drift to commit)
+      - name: Fail on drift between Zod and committed Pydantic mirror
+        # The generated tree is committed under
+        # apps/api/src/ri_assessments_api/generated/. Any change to
+        # packages/schemas/src/*.ts must be paired with a regen + commit,
+        # or this diff fails the build. Previous CI only diffed against a
+        # gitignored output dir and was a silent no-op.
         run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "::error::gen_schemas produced changes outside the gitignored output dir."
-            git status --porcelain
-            git --no-pager diff
+          if ! git diff --exit-code -- apps/api/src/ri_assessments_api/generated; then
+            echo "::error::Zod -> Pydantic codegen drift detected."
+            echo "Run \`bash apps/api/scripts/gen_schemas.sh\` locally and commit the diff."
             exit 1
           fi
 

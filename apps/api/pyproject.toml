@@ -9,7 +9,7 @@ dependencies = [
   "pydantic[email]>=2.9.0",
   "pydantic-settings>=2.5.0",
   "supabase>=2.9.0",
-  "python-jose[cryptography]>=3.3.0",
+  "pyjwt[crypto]>=2.10.0",
   "anthropic>=0.40.0",
   "httpx>=0.27.0",
   "python-multipart>=0.0.12",
@@ -45,6 +45,10 @@ packages = ["src/ri_assessments_api"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# datamodel-codegen produces PascalCase module names (CodeConfig.py
+# etc.) keyed off each JSON Schema title. Skipping the generated tree
+# avoids fighting N999 (Invalid module name) on machine-emitted code.
+extend-exclude = ["src/ri_assessments_api/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]

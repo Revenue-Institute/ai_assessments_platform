@@ -10,5 +10,6 @@ dist/
 build/
 .coverage
 htmlcov/
-src/ri_assessments_api/generated/
-!src/ri_assessments_api/generated/.gitkeep
+# Generated Pydantic models (Zod -> JSON Schema -> Pydantic) are
+# COMMITTED so the `schemas-codegen` CI job can `git diff --exit-code`
+# to catch drift. See apps/api/scripts/gen_schemas.py.

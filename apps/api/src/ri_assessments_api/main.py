@@ -182,9 +182,14 @@ def _maybe_decode_assignment_id(token: str) -> str | None:
     None on any failure."""
 
     try:
-        from jose import jwt
+        import jwt
 
-        claims = jwt.get_unverified_claims(token)
+        # Sentry breadcrumb only; never used for auth. PyJWT does not
+        # expose a `get_unverified_claims` helper, so we decode with
+        # signature verification disabled instead.
+        claims = jwt.decode(
+            token, options={"verify_signature": False, "verify_aud": False}
+        )
         value = claims.get("assignment_id") or claims.get("sub")
         return str(value) if value else None
     except Exception:

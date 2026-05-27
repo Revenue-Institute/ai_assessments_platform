@@ -200,12 +200,18 @@ class SubjectSummary(BaseModel):
 class AssignmentCreateRequest(BaseModel):
     """Bind a subject to an assessment. `module_id` is accepted only as a
     legacy alias when the admin still has just-a-module data; new flows
-    pass `assessment_id`."""
+    pass `assessment_id`.
+
+    `expires_in_days` is capped at 14. Magic-link tokens are bearer
+    credentials in the URL path: a leaked link is replayable for the
+    entire window. Two weeks is the longest window a candidate should
+    ever need; HR can resend an expired link via the assignment detail
+    page without re-binding the subject."""
 
     assessment_id: str | None = None
     module_id: str | None = None
     subject_id: str
-    expires_in_days: int = Field(default=7, ge=1, le=90)
+    expires_in_days: int = Field(default=7, ge=1, le=14)
     send_email: bool = True
 
 
@@ -213,7 +219,7 @@ class AssignmentBulkCreateRequest(BaseModel):
     assessment_id: str | None = None
     module_id: str | None = None
     subject_ids: list[str] = Field(min_length=1, max_length=200)
-    expires_in_days: int = Field(default=7, ge=1, le=90)
+    expires_in_days: int = Field(default=7, ge=1, le=14)
     send_email: bool = True
 
 

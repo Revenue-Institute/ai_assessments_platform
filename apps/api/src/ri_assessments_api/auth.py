@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
+import jwt
 from fastapi import Depends, Header, HTTPException, status
-from jose import JWTError, jwt
+from jwt import InvalidTokenError as JWTError
 
 from .config import get_settings
 from .db import get_supabase

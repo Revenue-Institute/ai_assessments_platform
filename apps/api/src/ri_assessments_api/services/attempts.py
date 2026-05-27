@@ -18,20 +18,40 @@ def _parse_ts(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def resolve_snapshot(assignment: dict[str, Any]) -> dict[str, Any]:
+    """Return the active snapshot for an assignment row.
+
+    Assignments bound to an assessment write `assessment_snapshot`;
+    assignments bound to a single module (legacy v1 flow) write
+    `module_snapshot`. Readers must always prefer the assessment
+    snapshot. This helper is the one place that knows the precedence,
+    so the cutover from `module_snapshot` is reversible from a single
+    file when the legacy column is finally dropped.
+
+    Returns {} when neither column is populated so callers can keep
+    using `.get("questions", [])` without exploding."""
+
+    return (
+        assignment.get("assessment_snapshot")
+        or assignment.get("module_snapshot")
+        or {}
+    )
+
+
 def session_deadline(assignment: dict[str, Any]) -> datetime | None:
     """The deadline the candidate timer should count down to.
 
     Once the candidate has consented (started_at is set), the session
-    deadline is started_at + module_snapshot.target_duration_minutes,
-    capped by the magic-link expiry. Before consent we just return the
-    link expiry so the consent screen can show "Link expires" without
+    deadline is started_at + snapshot.target_duration_minutes, capped
+    by the magic-link expiry. Before consent we just return the link
+    expiry so the consent screen can show "Link expires" without
     pretending the assessment has started."""
 
     expires_at = _parse_ts(assignment.get("expires_at"))
     started_at = _parse_ts(assignment.get("started_at"))
     if not started_at:
         return expires_at
-    snapshot = assignment.get("module_snapshot") or {}
+    snapshot = resolve_snapshot(assignment)
     minutes = int(snapshot.get("target_duration_minutes") or 0)
     if minutes <= 0:
         return expires_at
@@ -60,7 +80,7 @@ def _ensure_in_progress(assignment: dict[str, Any]) -> None:
 
 
 def _question_at(assignment: dict[str, Any], index: int) -> dict[str, Any]:
-    snapshot = assignment.get("module_snapshot") or {}
+    snapshot = resolve_snapshot(assignment)
     questions: list[dict[str, Any]] = snapshot.get("questions") or []
     if index < 0 or index >= len(questions):
         raise HTTPException(
@@ -126,7 +146,7 @@ def get_assignment_for_token(supabase: Client, raw_token: str) -> dict[str, Any]
         supabase.table("assignments")
         .select(
             "id, status, expires_at, started_at, completed_at, "
-            "random_seed, module_snapshot, metadata"
+            "random_seed, module_snapshot, assessment_snapshot, metadata"
         )
         .eq("token_hash", hash_token(raw_token))
         .limit(1)
@@ -236,7 +256,7 @@ def get_or_create_attempt_view(
             question=question,
         )
 
-    questions = assignment["module_snapshot"]["questions"]
+    questions = resolve_snapshot(assignment).get("questions") or []
     deadline = session_deadline(assignment)
     return {
         "assignment_id": assignment["id"],
@@ -348,7 +368,7 @@ def submit_answer(
 
     supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()
 
-    questions = assignment["module_snapshot"]["questions"]
+    questions = resolve_snapshot(assignment).get("questions") or []
     next_index = index + 1 if index + 1 < len(questions) else None
     return {
         "ok": True,
@@ -426,9 +446,12 @@ def complete_assignment(
     supabase: Client,
     raw_token: str,
 ) -> dict[str, Any]:
-    """Marks the assignment completed. Computes total_time_seconds from the
-    started_at + now diff (a coarse fallback; the proper number is the sum
-    of attempt.active_time_seconds, computed once heartbeats land in v1)."""
+    """Marks the assignment completed. Computes total_time_seconds from
+    the started_at + now diff (wall-clock elapsed). The per-attempt
+    `active_time_seconds` series (heartbeat-clamped via migration 0018)
+    is summed inside `_recompute_assignment_aggregates`, which is what
+    the integrity score consumes; the wall-clock total here is just a
+    coarse audit field for "how long did the candidate sit on this"."""
 
     assignment = get_assignment_for_token(supabase, raw_token)
     if assignment["status"] == "completed":
@@ -465,8 +488,7 @@ def complete_assignment(
 
         questions_by_id = {
             q.get("id"): q
-            for q in (assignment.get("module_snapshot") or {}).get("questions")
-            or []
+            for q in resolve_snapshot(assignment).get("questions") or []
         }
         attempts_rows = (
             supabase.table("attempts")

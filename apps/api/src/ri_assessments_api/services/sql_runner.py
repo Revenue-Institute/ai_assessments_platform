@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ..config import get_settings
+from .e2b_sandbox import get_sandbox as _sandbox_or_503
 
 
 @dataclass(slots=True, frozen=True)
@@ -29,23 +29,6 @@ class SqlRunResult:
     runtime_ms: int
     error: str | None
     timed_out: bool
-
-
-def _sandbox_or_503():
-    settings = get_settings()
-    if not settings.e2b_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SQL runner is not configured (E2B_API_KEY missing).",
-        )
-    try:
-        from e2b_code_interpreter import Sandbox  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="e2b-code-interpreter is not installed on the server.",
-        ) from exc
-    return Sandbox, settings.e2b_api_key
 
 
 # DuckDB returns native Python via a small driver script we ship into the

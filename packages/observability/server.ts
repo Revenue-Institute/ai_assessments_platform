@@ -6,11 +6,13 @@
 
 // biome-ignore lint/performance/noNamespaceImport: Sentry SDK convention
 import * as Sentry from "@sentry/nextjs";
-import { resolveSentryDsn } from "./keys";
+import { type ObservabilityApp, resolveSentryDsn } from "./keys";
 
-export const initializeSentry = (): ReturnType<typeof Sentry.init> =>
+export const initializeSentry = (
+  app?: ObservabilityApp
+): ReturnType<typeof Sentry.init> =>
   Sentry.init({
-    dsn: resolveSentryDsn(),
+    dsn: resolveSentryDsn(app),
 
     environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? "production",
 

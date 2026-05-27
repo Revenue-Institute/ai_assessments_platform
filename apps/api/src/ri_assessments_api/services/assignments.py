@@ -1,5 +1,6 @@
 """Assignment lookup and consent transitions backed by Supabase (spec §4.4)."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ from ..models.candidate import (
     ConsentResponse,
 )
 from .tokens import hash_token, is_expired
+
+log = logging.getLogger(__name__)
 
 
 def _question_count(module_snapshot: dict[str, Any]) -> int:
@@ -42,7 +45,8 @@ def resolve_token(supabase: Client, raw_token: str) -> CandidateAssignmentView:
         supabase.table("assignments")
         .select(
             "id, status, expires_at, started_at, consent_at, "
-            "module_snapshot, subject_id"
+            "module_snapshot, assessment_snapshot, subject_id, "
+            "consumed_at, consumed_user_agent, consumed_ip_hash"
         )
         .eq("token_hash", token_hash)
         .limit(1)
@@ -90,7 +94,10 @@ def resolve_token(supabase: Client, raw_token: str) -> CandidateAssignmentView:
             detail="Assignment subject is missing.",
         )
 
-    snapshot = row["module_snapshot"] or {}
+    # Prefer assessment_snapshot when present; falls back to
+    # module_snapshot for legacy assignments. See migration 0007 +
+    # CLAUDE.md note on the dual-write cutover.
+    snapshot = row.get("assessment_snapshot") or row.get("module_snapshot") or {}
     module = CandidateModuleView(
         title=snapshot.get("title", "Assessment"),
         description=snapshot.get("description", ""),
@@ -112,15 +119,45 @@ def resolve_token(supabase: Client, raw_token: str) -> CandidateAssignmentView:
     )
 
 
+def _client_binding_matches(
+    row: dict[str, Any],
+    *,
+    ip_hash: str | None,
+    user_agent: str | None,
+) -> bool:
+    """Match the current request against the consumer fingerprint stored
+    at first consent. Tolerant: if either the UA or the IP hash matches
+    the stored value, we admit the call. Only a hard divergence on both
+    axes (different device AND different network fingerprint) is treated
+    as a session hijack.
+
+    A null stored value never matches, so the check is conservative when
+    the original consent did not capture a fingerprint."""
+
+    stored_ua = row.get("consumed_user_agent")
+    stored_ip = row.get("consumed_ip_hash")
+    if stored_ua and user_agent and stored_ua == user_agent:
+        return True
+    return bool(stored_ip and ip_hash and stored_ip == ip_hash)
+
+
 def record_consent(
     supabase: Client,
     raw_token: str,
     ip_hash: str | None,
+    *,
+    user_agent: str | None = None,
 ) -> ConsentResponse:
     """Records consent and flips the assignment to in_progress (spec §10.5).
 
-    Idempotent: re-submitting consent for an in-progress assignment returns
-    the existing started_at without re-recording."""
+    On first consent we capture the consumer fingerprint (consumed_at,
+    consumed_user_agent, consumed_ip_hash). On subsequent calls the
+    fingerprint must match (see _client_binding_matches) or we 409.
+    This is the defense against a leaked magic-link token being replayed
+    from a second device.
+
+    Idempotent on the original device: re-submitting consent from the
+    bound client returns the existing started_at without re-recording."""
 
     view = resolve_token(supabase, raw_token)
 
@@ -133,6 +170,40 @@ def record_consent(
     now = datetime.now(UTC)
 
     from .attempts import session_deadline as _session_deadline
+
+    # Re-read the raw row to access binding columns (resolve_token returns
+    # the projected CandidateAssignmentView which deliberately omits them).
+    raw_q = (
+        supabase.table("assignments")
+        .select(
+            "id, consumed_at, consumed_user_agent, consumed_ip_hash"
+        )
+        .eq("id", view.assignment_id)
+        .limit(1)
+        .execute()
+    )
+    raw_rows = raw_q.data or []
+    raw_row = raw_rows[0] if raw_rows else {}
+    already_consumed = bool(raw_row.get("consumed_at"))
+
+    if already_consumed and not _client_binding_matches(
+        raw_row, ip_hash=ip_hash, user_agent=user_agent
+    ):
+        log.warning(
+            "magic-link consent rejected: client binding mismatch "
+            "(assignment=%s stored_ua_present=%s stored_ip_present=%s)",
+            view.assignment_id,
+            bool(raw_row.get("consumed_user_agent")),
+            bool(raw_row.get("consumed_ip_hash")),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This assessment link has already been opened on a "
+                "different device. Contact your administrator if you "
+                "need a fresh link."
+            ),
+        )
 
     if view.status == "in_progress" and view.started_at:
         deadline = _session_deadline(
@@ -159,6 +230,12 @@ def record_consent(
     }
     if ip_hash:
         update["consent_ip_hash"] = ip_hash
+    if not already_consumed:
+        update["consumed_at"] = now.isoformat()
+        if user_agent:
+            update["consumed_user_agent"] = user_agent
+        if ip_hash:
+            update["consumed_ip_hash"] = ip_hash
 
     supabase.table("assignments").update(update).eq(
         "id", view.assignment_id

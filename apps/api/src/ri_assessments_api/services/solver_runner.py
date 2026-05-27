@@ -24,7 +24,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ..config import get_settings
+from .e2b_sandbox import maybe_get_sandbox as _sandbox_or_none
 
 log = logging.getLogger(__name__)
 
@@ -61,17 +61,6 @@ for variables in VARIABLE_SETS:
         results.append({{"ok": False, "error": f"{{type(exc).__name__}}: {{exc}}"}})
 print("__RI_SOLVER_BULK__" + json.dumps(results, default=str))
 '''
-
-
-def _sandbox_or_none():
-    settings = get_settings()
-    if not settings.e2b_api_key:
-        return None
-    try:
-        from e2b_code_interpreter import Sandbox  # type: ignore[import-not-found]
-    except ImportError:
-        return None
-    return Sandbox, settings.e2b_api_key
 
 
 def execute_solver(

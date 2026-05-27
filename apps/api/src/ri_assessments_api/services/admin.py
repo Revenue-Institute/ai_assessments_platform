@@ -976,6 +976,68 @@ def archive_assessment(
 
 # Assignments ----------------------------------------------------------------
 
+# Column list used by every snapshot read of question_templates. Hoisted
+# so future schema changes update one site instead of three.
+_QUESTION_TEMPLATE_COLUMNS = (
+    "id, position, type, prompt_template, variable_schema, "
+    "solver_code, solver_language, interactive_config, rubric, "
+    "competency_tags, time_limit_seconds, max_points, metadata"
+)
+_MODULE_COLUMNS = (
+    "id, slug, title, description, domain, target_duration_minutes, "
+    "difficulty, status"
+)
+
+
+def _module_payload(
+    supabase: Client,
+    module_id: str,
+    *,
+    allow_unpublished: bool = False,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Fetch the module row and its question_templates in publish order.
+
+    Raises 404 when the module is missing, 409 when it is unpublished
+    (unless `allow_unpublished` is true, for the admin preview path) or
+    has no questions. Single owner of the question-template SELECT and
+    the published-state gate; the assessment snapshot loops over this
+    and the legacy module snapshot calls it once."""
+
+    module_q = (
+        supabase.table("modules")
+        .select(_MODULE_COLUMNS)
+        .eq("id", module_id)
+        .limit(1)
+        .execute()
+    )
+    module_rows = module_q.data or []
+    if not module_rows:
+        raise HTTPException(status_code=404, detail="Module not found.")
+    module = module_rows[0]
+    if not allow_unpublished and module["status"] != "published":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Module '{module['title']}' must be published before the "
+                "assessment can be assigned."
+            ),
+        )
+
+    qres = (
+        supabase.table("question_templates")
+        .select(_QUESTION_TEMPLATE_COLUMNS)
+        .eq("module_id", module_id)
+        .order("position")
+        .execute()
+    )
+    questions = qres.data or []
+    if not questions:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Module '{module['title']}' has no questions.",
+        )
+    return module, questions
+
 
 def _assessment_snapshot(
     supabase: Client,
@@ -1026,46 +1088,10 @@ def _assessment_snapshot(
     total_duration = 0
     for am in am_rows:
         module_id = am["module_id"]
-        m_q = (
-            supabase.table("modules")
-            .select(
-                "id, slug, title, description, domain, "
-                "target_duration_minutes, difficulty, status"
-            )
-            .eq("id", module_id)
-            .limit(1)
-            .execute()
+        module, questions = _module_payload(
+            supabase, module_id, allow_unpublished=allow_unpublished
         )
-        if not m_q.data:
-            continue
-        module = m_q.data[0]
-        if module["status"] != "published":
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Module '{module['title']}' must be published before the "
-                    "assessment can be assigned."
-                ),
-            )
         total_duration += int(module.get("target_duration_minutes") or 0)
-
-        qres = (
-            supabase.table("question_templates")
-            .select(
-                "id, position, type, prompt_template, variable_schema, "
-                "solver_code, solver_language, interactive_config, rubric, "
-                "competency_tags, time_limit_seconds, max_points, metadata"
-            )
-            .eq("module_id", module_id)
-            .order("position")
-            .execute()
-        )
-        questions = qres.data or []
-        if not questions:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Module '{module['title']}' has no questions.",
-            )
         modules.append(
             {
                 "module_id": module_id,
@@ -1081,8 +1107,7 @@ def _assessment_snapshot(
         # Tag each question with its source module so admin/UI can rollup
         # scores per-module without re-joining.
         for q in questions:
-            q_with_module = {**q, "module_id": module_id}
-            flat_questions.append(q_with_module)
+            flat_questions.append({**q, "module_id": module_id})
 
     return {
         "slug": assessment["slug"],
@@ -1100,46 +1125,15 @@ def _module_snapshot(
     *,
     allow_unpublished: bool = False,
 ) -> dict[str, Any]:
-    """Build the frozen module+questions snapshot for an assignment."""
+    """Build the frozen module+questions snapshot for an assignment.
 
-    module_q = (
-        supabase.table("modules")
-        .select(
-            "id, slug, title, description, domain, target_duration_minutes, "
-            "difficulty, status"
-        )
-        .eq("id", module_id)
-        .limit(1)
-        .execute()
+    Used only by the legacy single-module assignment path. New flows
+    pass through `_assessment_snapshot` instead (assignment binds to an
+    assessment, which contains one or more modules)."""
+
+    module, questions = _module_payload(
+        supabase, module_id, allow_unpublished=allow_unpublished
     )
-    module_rows = module_q.data or []
-    if not module_rows:
-        raise HTTPException(status_code=404, detail="Module not found.")
-    module = module_rows[0]
-    if not allow_unpublished and module["status"] != "published":
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot assign a module that is not published.",
-        )
-
-    qres = (
-        supabase.table("question_templates")
-        .select(
-            "id, position, type, prompt_template, variable_schema, "
-            "solver_code, solver_language, interactive_config, rubric, "
-            "competency_tags, time_limit_seconds, max_points, metadata"
-        )
-        .eq("module_id", module_id)
-        .order("position")
-        .execute()
-    )
-    questions = qres.data or []
-    if not questions:
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot assign a module with no questions.",
-        )
-
     return {
         "slug": module["slug"],
         "title": module["title"],
@@ -1339,13 +1333,17 @@ def create_assignment(
         "random_seed": secrets.randbits(63),
     }
     if assessment_id:
+        # Assessment-bound assignments write only assessment_snapshot.
+        # Readers funnel through services.attempts.resolve_snapshot,
+        # which prefers this column and falls back to module_snapshot
+        # for legacy rows. See migration 0007 + CLAUDE.md "Operational
+        # follow-ups" for the cutover history.
         insert_row["assessment_id"] = assessment_id
         insert_row["assessment_snapshot"] = snapshot
-        # Keep module_snapshot populated for legacy code paths that read
-        # questions from there. The snapshot's questions list is the same
-        # flat array either way.
-        insert_row["module_snapshot"] = snapshot
     else:
+        # Module-bound assignments (legacy v1 flow) still use the
+        # module_snapshot column. resolve_snapshot picks this up as the
+        # fallback when assessment_snapshot is null.
         insert_row["module_id"] = module_id
         insert_row["module_snapshot"] = snapshot
 
@@ -1550,10 +1548,17 @@ def resend_assignment_email(
         subject_id=row["subject_id"],
         expires_at=new_expiry,
     )
+    # Resending a magic link invalidates the previous one (token_hash
+    # rotates) and clears the consumer fingerprint so a fresh device can
+    # claim the assessment. The previous binding would otherwise reject
+    # the legitimate recipient when they open the new link.
     supabase.table("assignments").update(
         {
             "token_hash": hash_token(token),
             "expires_at": new_expiry.isoformat(),
+            "consumed_at": None,
+            "consumed_user_agent": None,
+            "consumed_ip_hash": None,
         }
     ).eq("id", assignment_id).execute()
 

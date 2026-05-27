@@ -1,5 +1,5 @@
 import { config, withAnalyzer } from "@repo/next-config";
-import { withLogging, withSentry } from "@repo/observability/next-config";
+import { withSentry } from "@repo/observability/next-config";
 import type { NextConfig } from "next";
 
 // In production we serve the admin and the candidate apps from a single
@@ -16,7 +16,7 @@ const candidateOrigin = process.env.NEXT_PUBLIC_CANDIDATE_URL?.replace(
   ""
 );
 
-let nextConfig: NextConfig = withLogging({
+let nextConfig: NextConfig = {
   ...config,
   output: "standalone",
   async rewrites() {
@@ -39,7 +39,7 @@ let nextConfig: NextConfig = withLogging({
       },
     ];
   },
-});
+};
 
 // Source-map upload gate: previously keyed on process.env.VERCEL,
 // which silently skipped uploads on Cloud Run and any non-Vercel CI.

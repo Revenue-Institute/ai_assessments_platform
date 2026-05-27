@@ -9,9 +9,7 @@
       "outputs": [
         ".next/**",
         "!.next/cache/**",
-        "**/generated/**",
-        "storybook-static/**",
-        ".react-email/**"
+        "**/generated/**"
       ]
     },
     "test": {
@@ -26,10 +24,6 @@
     "dev": {
       "cache": false,
       "persistent": true
-    },
-    "translate": {
-      "dependsOn": ["^translate"],
-      "cache": false
     },
     "clean": {
       "cache": false

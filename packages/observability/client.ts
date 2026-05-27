@@ -7,15 +7,16 @@
 
 // biome-ignore lint/performance/noNamespaceImport: Sentry SDK convention
 import * as Sentry from "@sentry/nextjs";
-import { resolveSentryDsn } from "./keys";
+import { type ObservabilityApp, resolveSentryDsn } from "./keys";
 
-export const initializeSentry = (): ReturnType<typeof Sentry.init> =>
+export const initializeSentry = (
+  app?: ObservabilityApp
+): ReturnType<typeof Sentry.init> =>
   Sentry.init({
-    // Per-app DSN with legacy NEXT_PUBLIC_SENTRY_DSN fallback. Each
-    // Next app sets NEXT_PUBLIC_SENTRY_DSN_ADMIN or
-    // NEXT_PUBLIC_SENTRY_DSN_CANDIDATE; resolveSentryDsn() picks the
-    // first one present.
-    dsn: resolveSentryDsn(),
+    // Per-app DSN with legacy NEXT_PUBLIC_SENTRY_DSN fallback. Callers
+    // pass their app slug ("admin" / "candidate") so a misconfigured
+    // env that defines both DSNs still routes to the correct project.
+    dsn: resolveSentryDsn(app),
 
     environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? "production",
 

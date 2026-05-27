@@ -34,8 +34,16 @@ import httpx
 from fastapi import HTTPException, status
 
 from ..config import get_settings
+from .narrative_grader import (
+    grade as _narrative_grade_call,
+)
+from .narrative_grader import (
+    rubric_wants_narrative as _rubric_wants_narrative,
+)
+from .narrative_grader import (
+    serialize_criteria as _criteria_summary,
+)
 
-NARRATIVE_MODEL = "claude-sonnet-4-6"
 NARRATIVE_VERSION = "1"
 
 log = logging.getLogger(__name__)
@@ -518,82 +526,27 @@ def grade_n8n_attempt(
     }
 
 
-def _rubric_wants_narrative(rubric: dict[str, Any] | None) -> bool:
-    if not rubric:
-        return False
-    if (rubric.get("scoring_mode") or "").lower() == "rubric_ai":
-        return True
-    for c in rubric.get("criteria") or []:
-        try:
-            if float(c.get("weight") or 0) > 0:
-                return True
-        except (TypeError, ValueError):
-            continue
-    return False
-
-
 def _narrative_grade(
     workflow_json: dict[str, Any], rubric: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """Call Claude Sonnet 4.6 to score the candidate's workflow JSON
-    against the rubric's narrative criteria. Returns
-    {pct: float in [0,1], rationale: str} on success, None on any failure
-    (missing API key, network error, malformed model response). Never
-    raises: the structural score is authoritative when this is absent."""
+    """Score the candidate's workflow JSON against the rubric's
+    narrative criteria. Returns {pct, rationale} or None on any failure.
+    Shared call shape lives in services.narrative_grader."""
 
-    settings = get_settings()
-    api_key = settings.anthropic_api_key_scoring
-    if not api_key:
-        log.warning("n8n narrative grade skipped: ANTHROPIC_API_KEY_SCORING unset")
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore[import-not-found]
-    except ImportError:
-        log.warning("n8n narrative grade skipped: anthropic SDK not installed")
-        return None
-
-    try:
-        client = Anthropic(api_key=api_key)
-        criteria_summary = _json.dumps(rubric.get("criteria") or [], indent=2)[:4000]
-        workflow_summary = _json.dumps(workflow_json, default=str)[:12000]
-        system = (
-            "You are reviewing an n8n workflow JSON for style criteria "
-            "(error handling, node naming, expression quality). Respond "
-            "with a single JSON object: "
-            '{"pct": <float 0..1>, "rationale": "<one or two sentences>"}. '
-            "No prose outside the JSON."
-        )
-        user = (
-            "Rubric criteria:\n"
-            f"{criteria_summary}\n\n"
-            "Candidate workflow JSON:\n"
-            f"{workflow_summary}"
-        )
-        msg = client.messages.create(
-            model=NARRATIVE_MODEL,
-            max_tokens=512,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        text = ""
-        for block in getattr(msg, "content", []) or []:
-            if getattr(block, "type", None) == "text":
-                text += getattr(block, "text", "") or ""
-        text = text.strip()
-        if not text:
-            return None
-        # Tolerate fenced code blocks.
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.lower().startswith("json"):
-                text = text[4:].strip()
-        parsed = _json.loads(text)
-        pct = float(parsed.get("pct") or 0.0)
-        pct = max(0.0, min(1.0, pct))
-        return {"pct": pct, "rationale": str(parsed.get("rationale") or "")[:300]}
-    except Exception as exc:
-        log.warning("n8n narrative grade failed: %s", exc)
-        return None
+    system = (
+        "You are reviewing an n8n workflow JSON for style criteria "
+        "(error handling, node naming, expression quality). Respond "
+        "with a single JSON object: "
+        '{"pct": <float 0..1>, "rationale": "<one or two sentences>"}. '
+        "No prose outside the JSON."
+    )
+    user = (
+        "Rubric criteria:\n"
+        f"{_criteria_summary(rubric)}\n\n"
+        "Candidate workflow JSON:\n"
+        f"{_json.dumps(workflow_json, default=str)[:12000]}"
+    )
+    return _narrative_grade_call(subject_label="n8n", system=system, user=user)
 
 
 def _last_node_output(execution_result: dict[str, Any]) -> Any:

@@ -454,7 +454,7 @@ def resend_assignment_email(
     assignment_id: str,
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
-    expires_in_days: int | None = None,
+    expires_in_days: int | None = Query(default=None, ge=1, le=14),
 ) -> AssignmentMagicLink:
     return admin_service.resend_assignment_email(
         supabase, principal, assignment_id, expires_in_days=expires_in_days

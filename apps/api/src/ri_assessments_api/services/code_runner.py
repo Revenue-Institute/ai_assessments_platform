@@ -24,11 +24,12 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ..config import get_settings
+from .e2b_sandbox import get_sandbox as _sandbox_or_503
+from .narrative_grader import grade as _narrative_grade_call
+from .narrative_grader import rubric_wants_narrative as _rubric_wants_narrative
+from .narrative_grader import serialize_criteria as _criteria_summary
 
 log = logging.getLogger(__name__)
-
-NARRATIVE_MODEL = "claude-sonnet-4-6"
 
 
 @dataclass(slots=True, frozen=True)
@@ -49,23 +50,6 @@ class TestRunResult:
     output: str
     runtime_ms: int
     timed_out: bool
-
-
-def _sandbox_or_503():
-    settings = get_settings()
-    if not settings.e2b_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Code runner is not configured (E2B_API_KEY missing).",
-        )
-    try:
-        from e2b_code_interpreter import Sandbox  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="e2b-code-interpreter is not installed on the server.",
-        ) from exc
-    return Sandbox, settings.e2b_api_key
 
 
 def _file_for_language(language: str) -> tuple[str, str]:
@@ -491,79 +475,29 @@ def grade_code_attempt(
     }
 
 
-def _rubric_wants_narrative(rubric: dict[str, Any] | None) -> bool:
-    if not rubric:
-        return False
-    if (rubric.get("scoring_mode") or "").lower() == "rubric_ai":
-        return True
-    for c in rubric.get("criteria") or []:
-        try:
-            if float(c.get("weight") or 0) > 0:
-                return True
-        except (TypeError, ValueError):
-            continue
-    return False
-
-
 def _narrative_code_grade(
     code: str, language: str, rubric: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """Claude Sonnet 4.6 reviews the candidate's final code against the
-    rubric's narrative criteria. Returns {pct: 0..1, rationale: str} or
-    None on any failure. Never raises."""
+    """Claude reviews the candidate's final code against the rubric's
+    narrative criteria. Returns {pct: 0..1, rationale: str} or None on
+    any failure. Never raises. Shared call shape lives in
+    services.narrative_grader; this function owns only the code-specific
+    prompt framing."""
 
-    settings = get_settings()
-    api_key = settings.anthropic_api_key_scoring
-    if not api_key:
-        log.warning("code narrative grade skipped: ANTHROPIC_API_KEY_SCORING unset")
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore[import-not-found]
-    except ImportError:
-        log.warning("code narrative grade skipped: anthropic SDK not installed")
-        return None
-
-    try:
-        client = Anthropic(api_key=api_key)
-        criteria_summary = _json.dumps(rubric.get("criteria") or [], indent=2)[:4000]
-        code_snippet = code[:12000]
-        system = (
-            "You are reviewing candidate code for style and design "
-            "criteria (readability, correctness signals, idiomatic use "
-            f"of {language}, defensive coding). Respond with a single "
-            'JSON object: {"pct": <float 0..1>, '
-            '"rationale": "<one or two sentences>"}. '
-            "No prose outside the JSON."
-        )
-        user = (
-            "Rubric criteria:\n"
-            f"{criteria_summary}\n\n"
-            f"Candidate {language} code:\n```\n{code_snippet}\n```"
-        )
-        msg = client.messages.create(
-            model=NARRATIVE_MODEL,
-            max_tokens=512,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        text = ""
-        for block in getattr(msg, "content", []) or []:
-            if getattr(block, "type", None) == "text":
-                text += getattr(block, "text", "") or ""
-        text = text.strip()
-        if not text:
-            return None
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.lower().startswith("json"):
-                text = text[4:].strip()
-        parsed = _json.loads(text)
-        pct = float(parsed.get("pct") or 0.0)
-        pct = max(0.0, min(1.0, pct))
-        return {"pct": pct, "rationale": str(parsed.get("rationale") or "")[:300]}
-    except Exception as exc:
-        log.warning("code narrative grade failed: %s", exc)
-        return None
+    system = (
+        "You are reviewing candidate code for style and design "
+        "criteria (readability, correctness signals, idiomatic use "
+        f"of {language}, defensive coding). Respond with a single "
+        'JSON object: {"pct": <float 0..1>, '
+        '"rationale": "<one or two sentences>"}. '
+        "No prose outside the JSON."
+    )
+    user = (
+        "Rubric criteria:\n"
+        f"{_criteria_summary(rubric)}\n\n"
+        f"Candidate {language} code:\n```\n{code[:12000]}\n```"
+    )
+    return _narrative_grade_call(subject_label="code", system=system, user=user)
 
 
 # Re-exported for callers that want to substitute placeholders the same

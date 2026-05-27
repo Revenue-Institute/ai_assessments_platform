@@ -1,5 +1,5 @@
 import { initializeSentry } from "@repo/observability/client";
 
-initializeSentry();
+initializeSentry("candidate");
 
 export { onRouterTransitionStart } from "@repo/observability/client";

@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from supabase import Client
 
-from ..auth import AdminPrincipal, require_admin_jwt
+from ..auth import AdminPrincipal, require_admin_jwt, require_role
 from ..db import get_supabase
 from ..models.benchmarks import (
     CandidateAssignmentDistributionResponse,
@@ -25,7 +25,14 @@ from ..models.benchmarks import (
 from ..services import benchmarks as benchmarks_service
 from ..services import series as series_service
 
-router = APIRouter(tags=["benchmarks"], dependencies=[Depends(require_admin_jwt)])
+# Authentication via require_admin_jwt; per-route role gates are wired below.
+# Cohort analytics, heatmaps, weak-spots and series are admin/reviewer surfaces;
+# viewers do not get to read cross-subject benchmarks because the data exposes
+# every candidate's competency scores in one response (spec §11).
+router = APIRouter(tags=["benchmarks"])
+
+_AnalyticsRole = Depends(require_role("admin", "reviewer"))
+_AdminOnly = Depends(require_role("admin"))
 
 
 # Subject competency view ---------------------------------------------------
@@ -34,6 +41,7 @@ router = APIRouter(tags=["benchmarks"], dependencies=[Depends(require_admin_jwt)
 @router.get(
     "/api/subjects/{subject_id}/competency-scores",
     response_model=SubjectCompetencyResponse,
+    dependencies=[_AnalyticsRole],
 )
 def subject_competency_scores(
     subject_id: str,
@@ -45,7 +53,11 @@ def subject_competency_scores(
 # Cohorts -------------------------------------------------------------------
 
 
-@router.get("/api/cohorts/heatmap", response_model=CohortHeatmapResponse)
+@router.get(
+    "/api/cohorts/heatmap",
+    response_model=CohortHeatmapResponse,
+    dependencies=[_AnalyticsRole],
+)
 def cohorts_heatmap(
     supabase: Annotated[Client, Depends(get_supabase)],
     type: str | None = Query(default=None, alias="type"),
@@ -72,7 +84,11 @@ def cohorts_heatmap(
     )
 
 
-@router.get("/api/cohorts/weak-spots", response_model=WeakSpotsResponse)
+@router.get(
+    "/api/cohorts/weak-spots",
+    response_model=WeakSpotsResponse,
+    dependencies=[_AnalyticsRole],
+)
 def cohorts_weak_spots(
     supabase: Annotated[Client, Depends(get_supabase)],
     type: str | None = Query(default=None, alias="type"),
@@ -84,7 +100,9 @@ def cohorts_weak_spots(
 
 
 @router.get(
-    "/api/cohorts/distribution", response_model=CompetencyDistributionResponse
+    "/api/cohorts/distribution",
+    response_model=CompetencyDistributionResponse,
+    dependencies=[_AnalyticsRole],
 )
 def cohorts_distribution(
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -115,6 +133,7 @@ def cohorts_distribution(
 @router.get(
     "/api/candidates/{subject_id}/competency-distribution",
     response_model=CandidateAssignmentDistributionResponse,
+    dependencies=[_AnalyticsRole],
 )
 def candidate_assignment_distribution(
     subject_id: str,
@@ -138,14 +157,23 @@ def candidate_assignment_distribution(
 # Series --------------------------------------------------------------------
 
 
-@router.get("/api/series", response_model=list[SeriesSummary])
+@router.get(
+    "/api/series",
+    response_model=list[SeriesSummary],
+    dependencies=[_AnalyticsRole],
+)
 def list_series(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> list[SeriesSummary]:
     return series_service.list_series(supabase)
 
 
-@router.post("/api/series", response_model=SeriesSummary, status_code=201)
+@router.post(
+    "/api/series",
+    response_model=SeriesSummary,
+    status_code=201,
+    dependencies=[_AdminOnly],
+)
 def create_series(
     payload: SeriesCreateRequest,
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
@@ -154,7 +182,11 @@ def create_series(
     return series_service.create_series(supabase, principal, payload)
 
 
-@router.get("/api/series/{series_id}", response_model=SeriesDetail)
+@router.get(
+    "/api/series/{series_id}",
+    response_model=SeriesDetail,
+    dependencies=[_AnalyticsRole],
+)
 def get_series(
     series_id: str,
     supabase: Annotated[Client, Depends(get_supabase)],
@@ -163,7 +195,9 @@ def get_series(
 
 
 @router.get(
-    "/api/series/{series_id}/trend", response_model=SeriesTrendResponse
+    "/api/series/{series_id}/trend",
+    response_model=SeriesTrendResponse,
+    dependencies=[_AnalyticsRole],
 )
 def get_series_trend(
     series_id: str,
@@ -179,6 +213,7 @@ def get_series_trend(
 @router.post(
     "/api/series/{series_id}/assignments/{assignment_id}",
     response_model=SeriesDetail,
+    dependencies=[_AdminOnly],
 )
 def attach_assignment(
     series_id: str,
@@ -194,12 +229,13 @@ def attach_assignment(
 @router.post(
     "/api/series/{series_id}/issue-next",
     response_model=SeriesIssueNextResponse,
+    dependencies=[_AdminOnly],
 )
 def issue_next(
     series_id: str,
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
-    expires_in_days: int = Query(default=7, ge=1, le=90),
+    expires_in_days: int = Query(default=7, ge=1, le=14),
     send_email: bool = Query(default=True),
 ) -> SeriesIssueNextResponse:
     result = series_service.issue_next_for_series(
@@ -212,11 +248,11 @@ def issue_next(
     return SeriesIssueNextResponse(**result)
 
 
-@router.post("/api/series/dispatch-due")
+@router.post("/api/series/dispatch-due", dependencies=[_AdminOnly])
 def dispatch_due(
     principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
     supabase: Annotated[Client, Depends(get_supabase)],
-    expires_in_days: int = Query(default=7, ge=1, le=90),
+    expires_in_days: int = Query(default=7, ge=1, le=14),
     send_email: bool = Query(default=True),
 ) -> dict:
     """Walks every series with next_due_at <= now and issues the next

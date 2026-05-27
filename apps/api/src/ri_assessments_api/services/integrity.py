@@ -13,6 +13,13 @@ from .attempts import get_assignment_for_token
 
 log = logging.getLogger(__name__)
 
+# Server-side cap on the client-claimed `focused_seconds_since_last`
+# delta. Heartbeats fire every 10s; 30s leaves headroom for jitter and
+# brief network outages while preventing a malicious client from
+# inflating active_time_seconds in one shot. Defense-in-depth on top of
+# the RPC-level wall-clock clamp installed in migration 0018.
+_HEARTBEAT_MAX_DELTA_SECONDS = 30
+
 # Allowed event_type values, mirrored from packages/schemas/src/integrity.ts.
 # Server enforces the closed set so a misbehaving client cannot poison the log
 # with arbitrary strings.
@@ -160,14 +167,30 @@ def record_heartbeat(
     if not attempt_id:
         return {"ok": True, "applied": 0}
 
-    delta = max(0, int(focused_seconds_since_last))
+    # Defense-in-depth: cap the client-claimed delta BEFORE the RPC
+    # sees it. The RPC (migration 0018) re-clamps server-side against
+    # the wall-clock elapsed since the prior heartbeat. The double
+    # clamp means a single malformed payload never gets credited for
+    # more than a few seconds even on a fresh attempt that has no
+    # last_heartbeat_at to compare against.
+    requested = max(0, int(focused_seconds_since_last))
+    delta = min(requested, _HEARTBEAT_MAX_DELTA_SECONDS)
+    if requested > _HEARTBEAT_MAX_DELTA_SECONDS:
+        log.warning(
+            "integrity heartbeat over cadence (assignment=%s attempt=%s "
+            "requested=%ds clamped=%ds)",
+            assignment["id"],
+            attempt_id,
+            requested,
+            delta,
+        )
     if delta == 0:
         return {"ok": True, "applied": 0, "attempt_id": attempt_id}
 
-    # Atomic server-side increment (migration 0009). A read-modify-write
-    # from the API would lose increments under concurrent heartbeats from
-    # the candidate (the candidate fires every 10s and there can be
-    # multiple in flight on a slow network).
+    # Atomic server-side increment (migration 0009, hardened in 0018).
+    # The RPC clamps p_delta against wall-clock elapsed and stamps
+    # attempts.last_heartbeat_at so subsequent calls share the same
+    # reference timestamp.
     rpc = supabase.rpc(
         "increment_attempt_active_seconds",
         {"p_attempt_id": attempt_id, "p_delta": delta},

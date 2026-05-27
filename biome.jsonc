@@ -15,7 +15,7 @@
       "!packages/design-system/lib",
       "!packages/design-system/hooks",
       "!apps/api",
-      "!apps/email/.react-email"
+      "!apps/api/src/ri_assessments_api/generated"
     ]
   }
 }

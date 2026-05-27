@@ -1,23 +1,26 @@
 """Zod -> JSON Schema -> Pydantic codegen pipeline (spec §5).
 
-DEPRECATED / RESERVED. Per CLAUDE.md ("Pydantic models hand-authored,
-Zod canonical"), the Pydantic mirrors under
-`apps/api/src/ri_assessments_api/models/` are maintained by hand and the
-`generated/` tree is empty by design. Do not regenerate as part of the
-normal build; doing so would drop hand-written validation that is not
-expressible in plain Zod (e.g. EmailStr, alias-based fields, service-
-layer cross-field constraints).
+The single point that closes the three-source-of-truth drift problem
+documented in the architecture audit (2026-05-26). One canonical
+authoring layer (Zod in `packages/schemas/`) emits JSON Schema, which
+generates Pydantic v2 models committed to the tree under
+`apps/api/src/ri_assessments_api/generated/`. CI runs this script and
+diffs the resulting tree against HEAD; any drift between hand-edited
+Zod and the committed Pydantic mirror fails the build.
 
-This script is kept for future automation, in case the runner-package
-decision flips and the generated tree becomes the source of truth again.
-Until that happens it is intentionally not wired into CI or pre-commit.
+Pipeline:
+  1. `bun run` packages/schemas/scripts/emit-json-schema.ts. Dumps one
+     draft-07 JSON Schema per Zod export into a temp directory.
+  2. `datamodel-codegen` over those JSON Schemas. Emits Pydantic v2
+     models under `apps/api/src/ri_assessments_api/generated/`.
+  3. Writes a deterministic `__init__.py` so the generated package
+     imports cleanly without import-order surprises.
 
-Original steps (kept for reference):
-  1. Run packages/schemas/scripts/emit-json-schema.ts via Bun. It walks
-     every Zod export in @repo/schemas and dumps draft-07 JSON Schemas
-     into a temp directory.
-  2. Run datamodel-code-generator over those JSON Schemas, emitting
-     Pydantic v2 models into apps/api/src/ri_assessments_api/generated/.
+The hand-authored Pydantic models in `models/` continue to own
+service-layer concerns (EmailStr fields, cross-field validators, alias
+generators). They should `from ..generated import ...` whenever the
+authoritative shape lives in Zod, instead of redefining it. See
+`models/interactive.py` for the canonical example.
 """
 
 from __future__ import annotations
@@ -39,6 +42,25 @@ OUT_DIR_DEFAULT = (
 def _run(cmd: list[str], cwd: Path | None = None) -> None:
     print(f"$ {' '.join(cmd)}", file=sys.stderr)
     subprocess.run(cmd, check=True, cwd=cwd)
+
+
+def _write_init(out: Path) -> None:
+    """Idempotent __init__.py. datamodel-codegen creates per-schema
+    modules but doesn't emit a package __init__, so we write one with
+    a stable header that doubles as a "do not edit" sentinel."""
+
+    init_path = out / "__init__.py"
+    header = (
+        '"""Generated Pydantic v2 models from packages/schemas (Zod).\n'
+        '\n'
+        'Do NOT edit by hand. Regenerate with:\n'
+        '    bash apps/api/scripts/gen_schemas.sh\n'
+        '\n'
+        'The CI `schemas-codegen` job diffs this tree against HEAD; any\n'
+        'drift between Zod and these models fails the build.\n'
+        '"""\n'
+    )
+    init_path.write_text(header)
 
 
 def main() -> int:
@@ -66,6 +88,14 @@ def main() -> int:
         )
         return 2
 
+    out: Path = args.out
+    if out.exists():
+        # Wipe the previous generation so removed Zod exports do not
+        # leave orphan modules behind. The committed tree is the only
+        # source of truth for what's "in" the generated package.
+        shutil.rmtree(out)
+    out.mkdir(parents=True, exist_ok=True)
+
     with tempfile.TemporaryDirectory(prefix="ri-schemas-") as tmp:
         tmp_path = Path(tmp)
         _run(
@@ -77,10 +107,8 @@ def main() -> int:
             cwd=SCHEMAS_PKG,
         )
 
-        out: Path = args.out
-        out.mkdir(parents=True, exist_ok=True)
-        # datamodel-code-generator writes one Python module per input file
-        # when --input is a directory.
+        # datamodel-code-generator writes one Python module per input
+        # file when --input is a directory.
         _run(
             [
                 "datamodel-codegen",
@@ -99,16 +127,12 @@ def main() -> int:
                 "--field-constraints",
                 "--snake-case-field",
                 "--use-double-quotes",
+                "--use-default",
+                "--disable-timestamp",
             ]
         )
 
-        init_path = out / "__init__.py"
-        if not init_path.exists():
-            init_path.write_text(
-                '"""Generated Pydantic v2 models. Do not edit by hand;'
-                ' run `bash apps/api/scripts/gen_schemas.sh` to regenerate."""\n'
-            )
-
+    _write_init(out)
     print(f"gen_schemas.py: wrote Pydantic models to {args.out}", file=sys.stderr)
     return 0
 

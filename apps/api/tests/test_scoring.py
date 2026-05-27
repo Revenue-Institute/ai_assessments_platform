@@ -243,7 +243,7 @@ def test_rollup_attributes_to_each_tag_independently():
         _attempt("q2", 6, 10),
     ]
     out = sorted(
-        _compute_competency_rollups(attempts=attempts, module_snapshot=snapshot),
+        _compute_competency_rollups(attempts=attempts, snapshot=snapshot),
         key=lambda r: r["competency_id"],
     )
     assert out == [
@@ -265,7 +265,7 @@ def test_rollup_attributes_to_each_tag_independently():
 def test_rollup_skips_attempts_with_no_matching_question():
     snapshot = _snapshot([{"id": "q1", "competency_tags": ["a"]}])
     attempts = [_attempt("q1", 5, 10), _attempt("orphan", 100, 100)]
-    out = _compute_competency_rollups(attempts=attempts, module_snapshot=snapshot)
+    out = _compute_competency_rollups(attempts=attempts, snapshot=snapshot)
     assert out == [
         {
             "competency_id": "a",
@@ -280,14 +280,14 @@ def test_rollup_drops_zero_possible_buckets():
     snapshot = _snapshot([{"id": "q1", "competency_tags": ["a"]}])
     attempts = [_attempt("q1", 0, 0)]
     assert (
-        _compute_competency_rollups(attempts=attempts, module_snapshot=snapshot) == []
+        _compute_competency_rollups(attempts=attempts, snapshot=snapshot) == []
     )
 
 
 def test_rollup_handles_null_score():
     snapshot = _snapshot([{"id": "q1", "competency_tags": ["a"]}])
     attempts = [{"question_template_id": "q1", "score": None, "max_score": 10}]
-    out = _compute_competency_rollups(attempts=attempts, module_snapshot=snapshot)
+    out = _compute_competency_rollups(attempts=attempts, snapshot=snapshot)
     assert out == [
         {
             "competency_id": "a",

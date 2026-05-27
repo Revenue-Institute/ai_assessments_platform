@@ -1,14 +1,21 @@
-"""Scoring orchestrator (spec §9). Routes by rubric.scoring_mode and writes
-back to attempts. Synchronous for v1 (BullMQ async lands later).
+"""Scoring orchestrator (spec §9). Routes by rubric.scoring_mode and
+writes back to attempts.
+
+Submission no longer scores synchronously: the candidate's submit_answer
+just persists raw_answer and returns. Scoring is queued (services.queue,
+worker.py) when the assignment flips to completed, with an inline
+fallback when Redis is unavailable.
 
 Modes:
-- exact_match: mcq correct_index, multi_select correct_indices, or text/number
-  equality against attempts.expected_answer.
-- numeric_tolerance: abs diff against attempts.expected_answer with rubric.tolerance.
-- rubric_ai: Claude tool-use with submit_score (breakdown + rationale + confidence).
-- test_cases: handled at submit time by code_runner.grade_code_attempt.
-- structural_match: delegated to per-runner grade (n8n / diagram); landing in
-  the next slice. For now we leave the score null and flag for review."""
+- exact_match: mcq correct_index, multi_select correct_indices, or
+  text/number equality against attempts.expected_answer.
+- numeric_tolerance: abs diff against attempts.expected_answer with
+  rubric.tolerance.
+- rubric_ai: Claude tool-use with submit_score (breakdown + rationale +
+  confidence).
+- test_cases: code grading runs through code_runner.grade_code_attempt
+  inside this orchestrator (no synchronous path at submit time).
+- structural_match: delegated to per-runner grade (n8n / diagram)."""
 
 from __future__ import annotations
 
@@ -51,9 +58,9 @@ def _client() -> Anthropic:
 
 
 def _question_from_snapshot(
-    module_snapshot: dict[str, Any], question_template_id: str
+    snapshot: dict[str, Any], question_template_id: str
 ) -> dict[str, Any] | None:
-    for q in (module_snapshot or {}).get("questions") or []:
+    for q in (snapshot or {}).get("questions") or []:
         if q.get("id") == question_template_id:
             return q
     return None
@@ -260,14 +267,18 @@ def score_attempt(
     supabase: Client,
     *,
     attempt: dict[str, Any],
-    module_snapshot: dict[str, Any],
+    snapshot: dict[str, Any],
 ) -> dict[str, Any] | None:
     """Score a single attempt, write the result back, return the update payload.
     Returns None if the attempt was skipped (e.g. structural_match awaiting a
-    runner)."""
+    runner).
+
+    `snapshot` is the assignment's resolved snapshot (either
+    assessment_snapshot or module_snapshot; see services.attempts.
+    resolve_snapshot). Callers do not need to know which one."""
 
     question = _question_from_snapshot(
-        module_snapshot, attempt["question_template_id"]
+        snapshot, attempt["question_template_id"]
     )
     if question is None:
         log.warning(
@@ -285,11 +296,13 @@ def score_attempt(
     }
 
     if mode == "test_cases":
-        # Already scored at submit time by code_runner.grade_code_attempt.
-        # If for some reason the score is missing (e.g. E2B was offline at
-        # submit), leave it for an admin rescore.
-        if attempt.get("score") is None:
-            return None
+        # Code grading runs through code_runner.grade_code_attempt at
+        # candidate-runtime (POST /a/{token}/code/test). The orchestrator
+        # does not re-grade here because re-execution requires E2B and
+        # the candidate's submitted code+packages, which the assignment
+        # snapshot does not carry. If a code attempt arrives at scoring
+        # with no `score`, leave it null so an admin can rescore via the
+        # explicit rescore endpoint.
         return None
 
     if mode == "exact_match":
@@ -345,11 +358,8 @@ def score_attempt(
             }
         )
         # Spec §9.2: persist the per-criterion breakdown so reviewers can
-        # audit which criteria drove the score. Column lands via migration
-        # 0017_attempt_score_breakdown.sql (owned by the migrations agent);
-        # Supabase will accept the write once the column exists. TODO:
-        # request 0017_attempt_score_breakdown.sql migration with column
-        # `score_breakdown jsonb`.
+        # audit which criteria drove the score. Column lives at
+        # `attempts.score_breakdown` (migration 0017).
         breakdown = ai.get("_breakdown")
         if breakdown is not None:
             update["score_breakdown"] = breakdown
@@ -422,8 +432,9 @@ def _assignment_row(supabase: Client, assignment_id: str) -> dict[str, Any]:
     res = (
         supabase.table("assignments")
         .select(
-            "id, subject_id, module_snapshot, started_at, completed_at, "
-            "expires_at, status, total_time_seconds"
+            "id, subject_id, module_snapshot, assessment_snapshot, "
+            "started_at, completed_at, expires_at, status, "
+            "total_time_seconds"
         )
         .eq("id", assignment_id)
         .limit(1)
@@ -441,7 +452,7 @@ def _assignment_row(supabase: Client, assignment_id: str) -> dict[str, Any]:
 def _compute_competency_rollups(
     *,
     attempts: list[dict[str, Any]],
-    module_snapshot: dict[str, Any],
+    snapshot: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """For each competency tag referenced by any question, sum the points
     earned and possible across attempts that map to that tag (questions can
@@ -449,7 +460,7 @@ def _compute_competency_rollups(
     spec §11.2 read pattern)."""
 
     questions_by_id = {
-        q["id"]: q for q in (module_snapshot or {}).get("questions") or []
+        q["id"]: q for q in (snapshot or {}).get("questions") or []
     }
     rollups: dict[str, dict[str, float]] = {}
     for a in attempts:
@@ -480,6 +491,23 @@ def _compute_competency_rollups(
     return out
 
 
+# Integrity-score deductions per spec §10.4. Tuning lives here; the
+# function below is just arithmetic. Keep this block in lockstep with
+# packages/integrity/src/score.ts on the candidate side.
+INTEGRITY_BASE_SCORE = 100.0
+VISIBILITY_HIDDEN_GRACE = 3
+VISIBILITY_HIDDEN_PENALTY = 3
+FOCUS_LOST_GRACE = 5
+FOCUS_LOST_PENALTY = 2
+FULLSCREEN_EXIT_PENALTY = 8
+PASTE_DISALLOWED_PENALTY = 5
+COPY_PENALTY = 2
+DEVTOOLS_PENALTY = 15
+WINDOW_RESIZED_PENALTY = 3
+ACTIVE_TIME_FLOOR = 0.3
+INACTIVE_TIME_PENALTY = 20
+
+
 def _compute_integrity_score(
     *,
     events: list[dict[str, Any]],
@@ -505,26 +533,26 @@ def _compute_integrity_score(
             if payload.get("allowed") is False:
                 paste_disallowed += 1
 
-    score = 100.0
+    score = INTEGRITY_BASE_SCORE
     visibility_hidden = counts.get("visibility_hidden", 0)
-    if visibility_hidden > 3:
-        score -= (visibility_hidden - 3) * 3
+    if visibility_hidden > VISIBILITY_HIDDEN_GRACE:
+        score -= (visibility_hidden - VISIBILITY_HIDDEN_GRACE) * VISIBILITY_HIDDEN_PENALTY
     focus_lost = counts.get("focus_lost", 0)
-    if focus_lost > 5:
-        score -= (focus_lost - 5) * 2
-    score -= counts.get("fullscreen_exited", 0) * 8
-    score -= paste_disallowed * 5
-    score -= counts.get("copy_attempted", 0) * 2
+    if focus_lost > FOCUS_LOST_GRACE:
+        score -= (focus_lost - FOCUS_LOST_GRACE) * FOCUS_LOST_PENALTY
+    score -= counts.get("fullscreen_exited", 0) * FULLSCREEN_EXIT_PENALTY
+    score -= paste_disallowed * PASTE_DISALLOWED_PENALTY
+    score -= counts.get("copy_attempted", 0) * COPY_PENALTY
     if counts.get("devtools_opened", 0) > 0:
-        score -= 15
-    score -= counts.get("window_resized", 0) * 3
+        score -= DEVTOOLS_PENALTY
+    score -= counts.get("window_resized", 0) * WINDOW_RESIZED_PENALTY
     if (
         total_time_seconds
         and total_time_seconds > 0
         and active_time_seconds is not None
-        and active_time_seconds / total_time_seconds < 0.3
+        and active_time_seconds / total_time_seconds < ACTIVE_TIME_FLOOR
     ):
-        score -= 20
+        score -= INACTIVE_TIME_PENALTY
     return max(0.0, round(score, 2))
 
 
@@ -628,7 +656,9 @@ def _recompute_assignment_aggregates(
     without re-running Claude across every sibling attempt."""
 
     assignment = _assignment_row(supabase, assignment_id)
-    snapshot = assignment.get("module_snapshot") or {}
+    from .attempts import resolve_snapshot
+
+    snapshot = resolve_snapshot(assignment)
 
     attempts = _attempts_for_assignment(supabase, assignment_id)
 
@@ -662,7 +692,7 @@ def _recompute_assignment_aggregates(
     ).eq("id", assignment_id).execute()
 
     rollups = _compute_competency_rollups(
-        attempts=attempts, module_snapshot=snapshot
+        attempts=attempts, snapshot=snapshot
     )
     _replace_competency_scores(
         supabase,
@@ -695,12 +725,14 @@ def score_assignment(
     competency_scores. Returns the aggregate payload."""
 
     assignment = _assignment_row(supabase, assignment_id)
-    snapshot = assignment.get("module_snapshot") or {}
+    from .attempts import resolve_snapshot
+
+    snapshot = resolve_snapshot(assignment)
 
     attempts = _attempts_for_assignment(supabase, assignment_id)
     for a in attempts:
         # Re-fetch isn't needed; we score from the in-memory attempt.
-        score_attempt(supabase, attempt=a, module_snapshot=snapshot)
+        score_attempt(supabase, attempt=a, snapshot=snapshot)
 
     return _recompute_assignment_aggregates(supabase, assignment_id)
 
@@ -741,14 +773,16 @@ def rescore_attempt(
     attempt = rows[0]
 
     assignment = _assignment_row(supabase, attempt["assignment_id"])
-    snapshot = assignment.get("module_snapshot") or {}
+    from .attempts import resolve_snapshot
+
+    snapshot = resolve_snapshot(assignment)
 
     # Only the target attempt gets re-scored. Iterating score_assignment
     # would re-bill Claude across every sibling attempt for what is
     # supposed to be a single-attempt rescore (spec §9.3 explicitly
     # frames rescore_attempt as a one-shot audit retry). Aggregates land
     # via _recompute_assignment_aggregates below.
-    score_attempt(supabase, attempt=attempt, module_snapshot=snapshot)
+    score_attempt(supabase, attempt=attempt, snapshot=snapshot)
 
     if recorded_by:
         _stamp_history_recorded_by(supabase, attempt_id, recorded_by)

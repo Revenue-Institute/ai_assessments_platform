@@ -264,15 +264,26 @@ $RECYCLE.BIN/
 .cursorrules
 .github/copilot-instructions.md
 
-# Database
-packages/database/generated
-
-# Zod -> Pydantic codegen output (apps/api/scripts/gen_schemas.py)
-apps/api/src/ri_assessments_api/generated/
+# Zod -> Pydantic codegen output is COMMITTED to the tree so the
+# `schemas-codegen` CI job can `git diff --exit-code` to catch drift.
+# Re-generate with `bash apps/api/scripts/gen_schemas.sh`.
+# (Old policy was to gitignore these, which made the drift check a no-op.)
 packages/schemas/schemas-out/
 
-# react.email
-.react-email
+# Codegraph index
+.codegraph/
+
+# macOS Finder Keep-Both duplicates: never let them sneak in
+* 2.*
+* 2
+* 3.*
+* 3
+* 4.*
+* 4
+* 5.*
+* 5
+* 6.*
+* 6
 
 # Sentry
 .sentryclirc

@@ -19,12 +19,16 @@ import re
 from difflib import SequenceMatcher
 from typing import Any
 
-from ..config import get_settings
+from .narrative_grader import (
+    grade as _narrative_grade_call,
+)
+from .narrative_grader import (
+    serialize_criteria as _criteria_summary,
+)
 
 log = logging.getLogger(__name__)
 
 LABEL_MATCH_THRESHOLD = 0.6
-NARRATIVE_MODEL = "claude-sonnet-4-6"
 
 
 def _norm(text: str | None) -> str:
@@ -241,62 +245,25 @@ def _narrative_grade(
     rationale_text: str,
     rubric: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Claude Sonnet 4.6 scores the diagram JSON + candidate's rationale
-    text against the rubric. Returns {pct: 0..1, rationale: str} or None
-    on any failure. Never raises."""
+    """Score the diagram JSON + candidate's rationale text against the
+    rubric. Returns {pct, rationale} or None on any failure. Shared call
+    shape lives in services.narrative_grader."""
 
-    settings = get_settings()
-    api_key = settings.anthropic_api_key_scoring
-    if not api_key:
-        log.warning("diagram narrative grade skipped: ANTHROPIC_API_KEY_SCORING unset")
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore[import-not-found]
-    except ImportError:
-        log.warning("diagram narrative grade skipped: anthropic SDK not installed")
-        return None
-
-    try:
-        client = Anthropic(api_key=api_key)
-        criteria_summary = _json.dumps(rubric.get("criteria") or [], indent=2)[:4000]
-        diagram_summary = _json.dumps(diagram, default=str)[:8000]
-        rationale_excerpt = (rationale_text or "")[:4000]
-        system = (
-            "You are reviewing a process diagram (React Flow JSON) plus "
-            "the candidate's written rationale. Score against the rubric "
-            "criteria below. Respond with a single JSON object: "
-            '{"pct": <float 0..1>, "rationale": "<one or two sentences>"}. '
-            "No prose outside the JSON."
-        )
-        user = (
-            "Rubric criteria:\n"
-            f"{criteria_summary}\n\n"
-            "Diagram JSON:\n"
-            f"{diagram_summary}\n\n"
-            "Candidate rationale:\n"
-            f"{rationale_excerpt}"
-        )
-        msg = client.messages.create(
-            model=NARRATIVE_MODEL,
-            max_tokens=512,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        text = ""
-        for block in getattr(msg, "content", []) or []:
-            if getattr(block, "type", None) == "text":
-                text += getattr(block, "text", "") or ""
-        text = text.strip()
-        if not text:
-            return None
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.lower().startswith("json"):
-                text = text[4:].strip()
-        parsed = _json.loads(text)
-        pct = float(parsed.get("pct") or 0.0)
-        pct = max(0.0, min(1.0, pct))
-        return {"pct": pct, "rationale": str(parsed.get("rationale") or "")[:300]}
-    except Exception as exc:
-        log.warning("diagram narrative grade failed: %s", exc)
-        return None
+    system = (
+        "You are reviewing a process diagram (React Flow JSON) plus "
+        "the candidate's written rationale. Score against the rubric "
+        "criteria below. Respond with a single JSON object: "
+        '{"pct": <float 0..1>, "rationale": "<one or two sentences>"}. '
+        "No prose outside the JSON."
+    )
+    user = (
+        "Rubric criteria:\n"
+        f"{_criteria_summary(rubric)}\n\n"
+        "Diagram JSON:\n"
+        f"{_json.dumps(diagram, default=str)[:8000]}\n\n"
+        "Candidate rationale:\n"
+        f"{(rationale_text or '')[:4000]}"
+    )
+    return _narrative_grade_call(
+        subject_label="diagram", system=system, user=user
+    )

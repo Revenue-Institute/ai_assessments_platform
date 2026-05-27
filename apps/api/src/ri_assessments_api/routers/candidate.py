@@ -46,6 +46,7 @@ from ..services.attempts import (
     get_assignment_for_token,
     get_or_create_attempt_view,
     record_n8n_workflow_id,
+    resolve_snapshot,
     save_draft_answer,
     submit_answer,
     verify_n8n_workflow_owner,
@@ -64,12 +65,9 @@ from ..services.notebook_runner import run_notebook
 from ..services.sql_runner import run_sql
 
 # Rate limiting (spec §14.3, §18: bound abuse on the runner endpoints).
-# slowapi is the canonical FastAPI integration. It is NOT yet declared in
-# apps/api/pyproject.toml, and that file is owned by the platform agent,
-# so we import it conditionally: when present, we wire real per-token
-# limits; when absent, `_rate_limit` is a no-op decorator so existing
-# tests and dev environments keep working unchanged.
-# TODO: add `slowapi>=0.1.9` to apps/api/pyproject.toml dependencies.
+# slowapi is declared in apps/api/pyproject.toml; the try/except guard
+# below stays so a stripped-down dev image (no slowapi) still serves
+# routes, just without per-token throttling.
 try:  # pragma: no cover - environment-dependent import
     from slowapi import Limiter
     from slowapi.errors import RateLimitExceeded
@@ -175,6 +173,7 @@ def consent(
         supabase,
         token,
         ip_hash=_ip_hash_from_request(request),
+        user_agent=_user_agent(request),
     )
 
 
@@ -264,7 +263,10 @@ def start(
     UI a hook for the consent -> start transition."""
 
     consent = record_consent(
-        supabase, token, ip_hash=_ip_hash_from_request(request)
+        supabase,
+        token,
+        ip_hash=_ip_hash_from_request(request),
+        user_agent=_user_agent(request),
     )
     return {
         "ok": True,
@@ -295,7 +297,7 @@ def _config_for_code_question(
     be used to introspect non-code questions."""
 
     assignment = get_assignment_for_token(supabase, token)
-    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    questions = resolve_snapshot(assignment).get("questions") or []
     if index < 0 or index >= len(questions):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -416,7 +418,7 @@ def code_test(
 
 def _config_for_sql_question(supabase: Client, token: str, index: int) -> dict:
     assignment = get_assignment_for_token(supabase, token)
-    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    questions = resolve_snapshot(assignment).get("questions") or []
     if index < 0 or index >= len(questions):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -461,7 +463,7 @@ def _config_for_notebook_question(
     supabase: Client, token: str, index: int
 ) -> dict:
     assignment = get_assignment_for_token(supabase, token)
-    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    questions = resolve_snapshot(assignment).get("questions") or []
     if index < 0 or index >= len(questions):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -597,7 +599,7 @@ def diagram_save(
 
 def _config_for_n8n_question(supabase: Client, token: str, index: int) -> dict:
     assignment = get_assignment_for_token(supabase, token)
-    questions = (assignment.get("module_snapshot") or {}).get("questions") or []
+    questions = resolve_snapshot(assignment).get("questions") or []
     if index < 0 or index >= len(questions):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -618,9 +620,7 @@ def _provision_n8n(
     config = _config_for_n8n_question(supabase, token, question_index)
     starter = config.get("starter_workflow") or {}
     assignment = get_assignment_for_token(supabase, token)
-    title = (
-        (assignment.get("module_snapshot") or {}).get("title") or "RI Workflow"
-    )
+    title = resolve_snapshot(assignment).get("title") or "RI Workflow"
     result = provision_workspace(starter_workflow=starter, title=str(title))
     # Spec §7.2 + §14.3: bind the freshly provisioned workflow to the
     # attempt's metadata so /n8n/export can refuse any other workflow id.

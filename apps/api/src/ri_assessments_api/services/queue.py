@@ -1,13 +1,31 @@
 """Lightweight Redis-backed job queue for async scoring (spec §15).
 
-We use a single LIST (`SCORING_QUEUE`) with LPUSH for enqueue and BRPOP
-for blocking dequeue from the worker. Each job is a JSON envelope:
+Two lists:
+    SCORING_QUEUE       = "ri:scoring:jobs"        (pending jobs)
+    PROCESSING_QUEUE    = "ri:scoring:processing"  (in-flight jobs)
+    DEAD_LETTER         = "ri:scoring:dead"        (gave up after MAX_ATTEMPTS)
 
-    {"type": "score_assignment", "assignment_id": "<uuid>", "enqueued_at": "<iso>"}
+Each job is a JSON envelope:
+    {
+      "type": "score_assignment",
+      "assignment_id": "<uuid>",
+      "enqueued_at": "<iso>",
+      "attempts":  0
+    }
 
-This keeps the contract intentionally narrow. If we add more job types
-later they discriminate on the `type` field. We could swap to RQ /
-Celery / BullMQ later; for v1 a 30-line shim is enough."""
+Workers use BLMOVE to atomically take the rightmost SCORING_QUEUE entry
+and put it onto PROCESSING_QUEUE. On success the worker LREMs the exact
+envelope from PROCESSING_QUEUE. On failure the envelope is incremented
+and either re-queued or pushed to DLQ.
+
+A reaper (`reap_stuck_jobs`) re-queues envelopes whose `enqueued_at` is
+older than VISIBILITY_TIMEOUT_SECONDS. This is what prevents work loss
+when a worker dies mid-job; before this module had no visibility timeout
+and a SIGKILL between BRPOP and DB write silently dropped the job.
+
+We could swap to RQ / Celery / BullMQ later; for v1 this shim is enough
+and matches the existing operational model (one Redis, no extra
+processes)."""
 
 from __future__ import annotations
 
@@ -23,8 +41,23 @@ import redis
 from ..config import get_settings
 
 SCORING_QUEUE = "ri:scoring:jobs"
+PROCESSING_QUEUE = "ri:scoring:processing"
 DEAD_LETTER = "ri:scoring:dead"
 SCORING_EVENTS_CHANNEL = "ri:scoring:events"
+
+# At-least-once delivery (spec §15). Re-enqueued jobs increment
+# `attempts`; once attempts >= MAX_ATTEMPTS the job goes to DLQ instead
+# of looping forever on a poison input. 3 is enough to ride out the
+# common transient: a single Anthropic 529 or Supabase 502.
+MAX_ATTEMPTS = 3
+
+# How long an in-flight job is allowed to stay in PROCESSING_QUEUE
+# before the reaper treats it as orphaned and re-queues. Must be
+# meaningfully longer than the longest legitimate scoring run. Rubric-AI
+# scoring of a 10-question module typically finishes in well under a
+# minute; 10 minutes gives generous headroom for slow networks while
+# still recovering reasonably fast from a hard worker crash.
+VISIBILITY_TIMEOUT_SECONDS = 600
 # Per-run channel pattern for generator progress (spec §12.2 step 4).
 # Each generator run gets its own channel so SSE subscribers can scope
 # to one run_id without filtering noise from concurrent generations.
@@ -138,6 +171,14 @@ def ping_with_timeout(timeout_seconds: float = _REDIS_HEALTHCHECK_TIMEOUT_SECOND
                 probe.close()
 
 
+def _serialize(payload: dict[str, Any]) -> str:
+    # Stable serialization so LREM can match by string equality. Without
+    # sort_keys two semantically-equal envelopes could disagree on dict
+    # order and the LREM would silently miss its target, double-credit-
+    # ing the job to PROCESSING_QUEUE.
+    return json.dumps(payload, sort_keys=True)
+
+
 def enqueue_score_assignment(assignment_id: str) -> bool:
     """Push a job onto the scoring queue. Returns True when enqueued,
     False when Redis is unavailable so the caller can fall back to
@@ -147,10 +188,11 @@ def enqueue_score_assignment(assignment_id: str) -> bool:
         "type": "score_assignment",
         "assignment_id": assignment_id,
         "enqueued_at": datetime.now(UTC).isoformat(),
+        "attempts": 0,
     }
     try:
         client = _get_client()
-        client.lpush(SCORING_QUEUE, json.dumps(payload))
+        client.lpush(SCORING_QUEUE, _serialize(payload))
         # Best-effort SSE notification so the admin UI can flip to a
         # "scoring..." state immediately, before the worker picks up.
         with contextlib.suppress(Exception):
@@ -175,12 +217,21 @@ def enqueue_score_assignment(assignment_id: str) -> bool:
         return False
 
 
-def dequeue_blocking(timeout_seconds: int = 5) -> dict[str, Any] | None:
-    """Worker side: BRPOP one job with a server-side timeout. Returns
-    None when the timeout elapses with no job, so the worker can run
-    its housekeeping loop."""
+def dequeue_blocking(timeout_seconds: int = 5) -> tuple[dict[str, Any], str] | None:
+    """Worker side: atomically move one job from SCORING_QUEUE onto
+    PROCESSING_QUEUE and return (payload, raw_envelope). The raw string
+    is the exact value sitting in PROCESSING_QUEUE so callers can pass
+    it back to ack_job / nack_job for LREM matching.
 
-    # Honor the invariant documented at the top of this module: BRPOP's
+    Returns None when no job arrived within timeout_seconds, so the
+    worker can run its housekeeping loop (e.g. reap_stuck_jobs).
+
+    BLMOVE replaces the previous BRPOP. With BRPOP a worker crash
+    between dequeue and DB write silently dropped the job; with BLMOVE
+    the entry sits on PROCESSING_QUEUE until the worker ACKs, and the
+    reaper re-queues anything older than VISIBILITY_TIMEOUT_SECONDS."""
+
+    # Honor the invariant documented at the top of this module: Redis's
     # server-side timeout must finish strictly before the socket read
     # timeout, otherwise the socket layer tears the connection down and
     # raises TimeoutError instead of returning None cleanly.
@@ -188,20 +239,89 @@ def dequeue_blocking(timeout_seconds: int = 5) -> dict[str, Any] | None:
 
     client = _get_client()
     try:
-        result = client.brpop([SCORING_QUEUE], timeout=effective_timeout)
+        # BLMOVE src dst RIGHT LEFT timeout. Workers consume from the
+        # right of SCORING_QUEUE (FIFO with LPUSH on enqueue) and place
+        # in-flight jobs on the left of PROCESSING_QUEUE (so the reaper
+        # sees the oldest in-flight job on the right).
+        raw = client.execute_command(
+            "BLMOVE",
+            SCORING_QUEUE,
+            PROCESSING_QUEUE,
+            "RIGHT",
+            "LEFT",
+            effective_timeout,
+        )
     except redis.exceptions.TimeoutError:
         # Belt-and-suspenders: a TCP retransmit can still eat the last
         # second. Treat as "no job this round" so the worker keeps
         # spinning instead of crash-looping under docker restart policy.
         return None
-    if result is None:
+    if raw is None:
         return None
-    _, raw = result
+    if isinstance(raw, bytes):  # pragma: no cover - decode_responses=True
+        raw = raw.decode("utf-8")
     try:
-        return json.loads(raw)
+        return json.loads(raw), raw
     except json.JSONDecodeError:
         log.exception("dropping malformed scoring job: %r", raw)
+        # Get the malformed envelope off PROCESSING_QUEUE so the reaper
+        # doesn't churn on it forever. LREM matches by exact string.
+        with contextlib.suppress(Exception):
+            client.lrem(PROCESSING_QUEUE, 1, raw)
         return None
+
+
+def ack_job(raw_envelope: str) -> None:
+    """Remove a successfully-processed envelope from PROCESSING_QUEUE.
+
+    LREM matches by exact string, so callers MUST pass the value that
+    dequeue_blocking returned, not a re-serialized dict (Python dict
+    iteration order would corrupt the match)."""
+
+    try:
+        _get_client().lrem(PROCESSING_QUEUE, 1, raw_envelope)
+    except Exception:
+        log.exception("ack_job failed; entry may be re-queued by reaper")
+
+
+def nack_job(
+    raw_envelope: str, payload: dict[str, Any], error: str
+) -> str:
+    """Mark a failed job. If attempts < MAX_ATTEMPTS, increment and
+    re-queue with a fresh enqueued_at. Otherwise push to DLQ. Returns
+    one of 'retried' | 'dead_letter' for logging."""
+
+    attempts = int(payload.get("attempts") or 0) + 1
+    client = _get_client()
+    try:
+        client.lrem(PROCESSING_QUEUE, 1, raw_envelope)
+    except Exception:
+        log.exception(
+            "nack_job: failed to remove envelope from processing list"
+        )
+
+    if attempts < MAX_ATTEMPTS:
+        retry_payload = {
+            **payload,
+            "attempts": attempts,
+            "enqueued_at": datetime.now(UTC).isoformat(),
+            "last_error": error,
+        }
+        try:
+            client.lpush(SCORING_QUEUE, _serialize(retry_payload))
+            log.warning(
+                "scoring job re-queued (assignment=%s attempt=%d/%d error=%s)",
+                payload.get("assignment_id"),
+                attempts,
+                MAX_ATTEMPTS,
+                error,
+            )
+            return "retried"
+        except Exception:
+            log.exception("nack_job: re-enqueue failed; falling through to DLQ")
+
+    push_dead_letter(payload, error)
+    return "dead_letter"
 
 
 def push_dead_letter(payload: dict[str, Any], error: str) -> None:
@@ -209,9 +329,62 @@ def push_dead_letter(payload: dict[str, Any], error: str) -> None:
 
     record = {**payload, "error": error, "failed_at": datetime.now(UTC).isoformat()}
     try:
-        _get_client().lpush(DEAD_LETTER, json.dumps(record))
+        _get_client().lpush(DEAD_LETTER, _serialize(record))
     except Exception:
         log.exception("could not write dead-letter record")
+
+
+def reap_stuck_jobs(now: datetime | None = None) -> int:
+    """Re-queue any in-flight envelope whose enqueued_at is older than
+    VISIBILITY_TIMEOUT_SECONDS. Called periodically by the worker loop
+    so a crashed worker's jobs do not stay stuck forever. Returns the
+    number of jobs reaped (zero on the steady-state happy path)."""
+
+    client = _get_client()
+    cutoff = (now or datetime.now(UTC)).timestamp() - VISIBILITY_TIMEOUT_SECONDS
+    try:
+        entries = client.lrange(PROCESSING_QUEUE, 0, -1)
+    except Exception:
+        log.exception("reap_stuck_jobs: could not read processing list")
+        return 0
+
+    reaped = 0
+    for raw in entries or []:
+        if isinstance(raw, bytes):  # pragma: no cover - decode_responses=True
+            raw = raw.decode("utf-8")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            # Malformed entries: drop so they don't keep poisoning the
+            # reaper loop. They are unrecoverable by definition.
+            with contextlib.suppress(Exception):
+                client.lrem(PROCESSING_QUEUE, 1, raw)
+            log.error("reap_stuck_jobs: dropping malformed entry %r", raw)
+            continue
+
+        enqueued_iso = payload.get("enqueued_at") or ""
+        try:
+            enqueued_ts = datetime.fromisoformat(
+                enqueued_iso.replace("Z", "+00:00")
+            ).timestamp()
+        except ValueError:
+            log.warning(
+                "reap_stuck_jobs: bad enqueued_at on entry, dropping: %r",
+                payload,
+            )
+            with contextlib.suppress(Exception):
+                client.lrem(PROCESSING_QUEUE, 1, raw)
+            continue
+
+        if enqueued_ts >= cutoff:
+            continue
+
+        nack_job(raw, payload, "visibility_timeout")
+        reaped += 1
+
+    if reaped:
+        log.warning("reap_stuck_jobs: reclaimed %d in-flight job(s)", reaped)
+    return reaped
 
 
 # -- Pub/sub for SSE fanout (spec §9.1, §14.4) ----------------------------
