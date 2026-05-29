@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Props {
   current: number;
@@ -8,10 +8,31 @@ interface Props {
   total: number;
 }
 
+function storageKey(token: string) {
+  return `ri-hw-${token}`;
+}
+
+function syncHighwater(token: string, current: number): number {
+  try {
+    const stored = sessionStorage.getItem(storageKey(token));
+    const prev = stored !== null ? Number(stored) : -1;
+    const next = Math.max(prev, current);
+    if (next > prev) {
+      sessionStorage.setItem(storageKey(token), String(next));
+    }
+    return next;
+  } catch {
+    return current;
+  }
+}
+
 /** Collapsible side panel that lets the candidate jump back to any
  * already-viewed question. Default forward-only: only renders links for
- * indices <= current, per spec §13.3 ("only forward navigation allowed
+ * indices <= highwater, per spec §13.3 ("only forward navigation allowed
  * unless module config says otherwise").
+ *
+ * Tracks the highest question index ever visited in sessionStorage so that
+ * navigating back to an earlier question does not disable forward links.
  *
  * Renders two surfaces driven off the same data:
  *   - mobile: a horizontal scroll strip pinned above the question.
@@ -20,6 +41,12 @@ interface Props {
  * on every viewport. */
 export function QuestionNavigator({ token, current, total }: Props) {
   const [open, setOpen] = useState(true);
+  const [highwater, setHighwater] = useState(current);
+
+  useEffect(() => {
+    setHighwater(syncHighwater(token, current));
+  }, [token, current]);
+
   const numbers = questionNumbers(total);
 
   return (
@@ -31,7 +58,7 @@ export function QuestionNavigator({ token, current, total }: Props) {
         <ol className="flex gap-1.5">
           {numbers.map((number) => {
             const index = number - 1;
-            const visited = index <= current;
+            const visited = index <= highwater;
             const active = index === current;
             return (
               <li className="shrink-0" key={`q-mobile-${number}`}>
@@ -82,7 +109,7 @@ export function QuestionNavigator({ token, current, total }: Props) {
             <ol className="grid grid-cols-5 gap-1.5">
               {numbers.map((number) => {
                 const index = number - 1;
-                const visited = index <= current;
+                const visited = index <= highwater;
                 const active = index === current;
                 return (
                   <li key={`q-rail-${number}`}>

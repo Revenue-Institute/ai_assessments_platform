@@ -7,6 +7,7 @@ import {
   fetchQuestion,
   submitQuestion,
 } from "@/lib/api";
+import { AutoRedirect } from "./auto-redirect";
 import { CandidateMonitor } from "./candidate-monitor";
 import { QuestionNavigator } from "./question-navigator";
 import { QuestionRenderer } from "./renderer";
@@ -18,7 +19,7 @@ interface Params {
   token: string;
 }
 
-type SearchParams = Promise<{ error?: string }>;
+type SearchParams = Promise<{ error?: string; redirectTo?: string }>;
 
 export async function generateMetadata({
   params,
@@ -42,7 +43,7 @@ export default async function QuestionPage({
   searchParams: SearchParams;
 }) {
   const { token, index } = await params;
-  const { error: submitError } = await searchParams;
+  const { error: submitError, redirectTo } = await searchParams;
 
   const idx = Number.parseInt(index, 10);
   if (!token || token.length < 16 || Number.isNaN(idx) || idx < 0) {
@@ -85,6 +86,15 @@ export default async function QuestionPage({
       if (error instanceof ApiError) {
         if (error.status === 410) {
           redirect(`/a/${token}`);
+        }
+        if (error.status === 409) {
+          const next =
+            idx >= question.total - 1
+              ? `/a/${token}/done`
+              : `/a/${token}/q/${idx + 1}`;
+          redirect(
+            `/a/${token}/q/${idx}?error=${encodeURIComponent(error.message)}&redirectTo=${encodeURIComponent(next)}`
+          );
         }
         redirect(
           `/a/${token}/q/${idx}?error=${encodeURIComponent(error.message)}`
@@ -141,7 +151,10 @@ export default async function QuestionPage({
         )}
       </article>
 
-      {submitError && (
+      {submitError && redirectTo && (
+        <AutoRedirect href={redirectTo} message={submitError} />
+      )}
+      {submitError && !redirectTo && (
         <p
           aria-live="assertive"
           className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
