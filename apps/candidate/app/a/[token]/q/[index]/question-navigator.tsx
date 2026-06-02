@@ -4,49 +4,31 @@ import { useEffect, useState } from "react";
 
 interface Props {
   current: number;
-  token: string;
   total: number;
 }
 
-function storageKey(token: string) {
-  return `ri-hw-${token}`;
-}
-
-function syncHighwater(token: string, current: number): number {
-  try {
-    const stored = sessionStorage.getItem(storageKey(token));
-    const prev = stored !== null ? Number(stored) : -1;
-    const next = Math.max(prev, current);
-    if (next > prev) {
-      sessionStorage.setItem(storageKey(token), String(next));
-    }
-    return next;
-  } catch {
-    return current;
-  }
-}
-
-/** Collapsible side panel that lets the candidate jump back to any
- * already-viewed question. Default forward-only: only renders links for
- * indices <= highwater, per spec §13.3 ("only forward navigation allowed
- * unless module config says otherwise").
- *
- * Tracks the highest question index ever visited in sessionStorage so that
- * navigating back to an earlier question does not disable forward links.
- *
- * Renders two surfaces driven off the same data:
- *   - mobile: a horizontal scroll strip pinned above the question.
- *   - md+   : a collapsible right-side rail.
- * Both use the visited/active gating so the forward-only contract holds
- * on every viewport. */
-export function QuestionNavigator({ token, current, total }: Props) {
-  const [open, setOpen] = useState(true);
-  const [highwater, setHighwater] = useState(current);
-
+function useBlockBackNavigation() {
   useEffect(() => {
-    setHighwater(syncHighwater(token, current));
-  }, [token, current]);
+    const url = window.location.href;
 
+    history.pushState(null, "", url);
+
+    function onPopState() {
+      history.pushState(null, "", url);
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+}
+
+/** Collapsible side panel showing question progress. Previously answered
+ * questions are shown as non-clickable indicators; only the current question
+ * is active. Forward-only navigation per spec §13.3. */
+export function QuestionNavigator({ current, total }: Props) {
+  useBlockBackNavigation();
+
+  const [open, setOpen] = useState(true);
   const numbers = questionNumbers(total);
 
   return (
@@ -58,22 +40,16 @@ export function QuestionNavigator({ token, current, total }: Props) {
         <ol className="flex gap-1.5">
           {numbers.map((number) => {
             const index = number - 1;
-            const visited = index <= highwater;
             const active = index === current;
             return (
               <li className="shrink-0" key={`q-mobile-${number}`}>
-                {visited ? (
-                  <a
-                    aria-current={active ? "step" : undefined}
-                    className={`block min-w-9 rounded px-2 py-1 text-center font-mono text-xs ${
-                      active
-                        ? "bg-primary font-medium text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground hover:bg-primary/30"
-                    }`}
-                    href={`/a/${token}/q/${index}`}
+                {active ? (
+                  <span
+                    aria-current="step"
+                    className="block min-w-9 rounded bg-primary px-2 py-1 text-center font-medium font-mono text-primary-foreground text-xs"
                   >
                     {number}
-                  </a>
+                  </span>
                 ) : (
                   <span
                     aria-disabled
@@ -109,22 +85,24 @@ export function QuestionNavigator({ token, current, total }: Props) {
             <ol className="grid grid-cols-5 gap-1.5">
               {numbers.map((number) => {
                 const index = number - 1;
-                const visited = index <= highwater;
+                const answered = index < current;
                 const active = index === current;
                 return (
                   <li key={`q-rail-${number}`}>
-                    {visited ? (
-                      <a
-                        aria-current={active ? "step" : undefined}
-                        className={`block w-8 rounded px-2 py-1 text-center font-mono text-xs ${
-                          active
-                            ? "bg-primary font-medium text-primary-foreground"
-                            : "bg-secondary text-secondary-foreground hover:bg-primary/30"
-                        }`}
-                        href={`/a/${token}/q/${index}`}
+                    {active ? (
+                      <span
+                        aria-current="step"
+                        className="block w-8 rounded bg-primary px-2 py-1 text-center font-medium font-mono text-primary-foreground text-xs"
                       >
                         {number}
-                      </a>
+                      </span>
+                    ) : answered ? (
+                      <span
+                        aria-label={`Question ${number}, answered`}
+                        className="block w-8 rounded bg-secondary/60 px-2 py-1 text-center font-mono text-secondary-foreground/50 text-xs"
+                      >
+                        {number}
+                      </span>
                     ) : (
                       <span
                         aria-disabled

@@ -12,12 +12,28 @@ import { useEffect, useState } from "react";
  * an `aria-live="assertive"` announcement when the deadline elapses. */
 export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
   const deadline = new Date(deadlineIso).getTime();
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // Before hydration, defer rendering to avoid server/client mismatch.
+  if (now === null) {
+    return (
+      <span className="inline-flex">
+        <span
+          aria-hidden="true"
+          className="whitespace-nowrap rounded border border-primary/40 bg-primary/10 px-2 py-1 font-mono text-primary text-xs tabular-nums"
+        >
+          --:--
+        </span>
+        <span aria-live="polite" className="sr-only" />
+      </span>
+    );
+  }
 
   const remainingMs = Math.max(0, deadline - now);
   const totalSeconds = Math.floor(remainingMs / 1000);

@@ -120,7 +120,7 @@ export default async function QuestionPage({
         questionIndex={idx}
         token={token}
       />
-      <QuestionNavigator current={idx} token={token} total={question.total} />
+      <QuestionNavigator current={idx} total={question.total} />
 
       <header className="flex flex-wrap items-center justify-between gap-3">
         <p className="eyebrow-label">

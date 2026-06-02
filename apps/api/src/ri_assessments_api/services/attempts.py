@@ -226,7 +226,16 @@ def _create_attempt(
         "started_at": datetime.now(UTC).isoformat(),
         "max_score": float(question.get("max_points") or 10),
     }
-    inserted = supabase.table("attempts").insert(payload).execute()
+    try:
+        inserted = supabase.table("attempts").insert(payload).execute()
+    except Exception as exc:
+        # Race condition: concurrent request inserted the row between our
+        # SELECT and this INSERT. Fall back to the existing row.
+        if "23505" in str(exc):
+            existing = _existing_attempt(supabase, assignment_id, qid)
+            if existing is not None:
+                return existing
+        raise
     if not inserted.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

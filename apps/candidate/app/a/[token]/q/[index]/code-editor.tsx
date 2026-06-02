@@ -5,7 +5,7 @@ import { emitIntegrityEvent } from "@repo/integrity/browser";
 import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { env } from "@/env";
-import { type CodeRunFrame, runCodeStream } from "@/lib/api";
+import { type CodeRunFrame, runCodeStream } from "@/lib/code-stream-api";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 interface CodeConfig {
