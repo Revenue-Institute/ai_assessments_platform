@@ -16,8 +16,8 @@ export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
 
   useEffect(() => {
     setNow(Date.now());
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
   }, []);
 
   // Before hydration, defer rendering to avoid server/client mismatch.

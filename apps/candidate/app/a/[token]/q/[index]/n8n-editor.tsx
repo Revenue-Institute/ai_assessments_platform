@@ -2,7 +2,9 @@
 
 import { emitIntegrityEvent } from "@repo/integrity/browser";
 import { useCallback, useEffect, useState } from "react";
+
 import { env } from "@/env";
+import { safeJson } from "@/lib/fetch-utils";
 
 interface Props {
   initialWorkflowId: string | null;
@@ -21,15 +23,14 @@ interface ExportResponse {
 }
 
 const TRAILING_SLASH_RE = /\/$/;
+const API_BASE = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
 export function N8nRenderer({
   token,
   questionIndex,
   initialWorkflowId,
 }: Props) {
-  const [workflowId, setWorkflowId] = useState<string | null>(
-    initialWorkflowId
-  );
+  const [workflowId, setWorkflowId] = useState(initialWorkflowId);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [exportedWorkflow, setExportedWorkflow] = useState<Record<
     string,
@@ -38,14 +39,12 @@ export function N8nRenderer({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"none" | "embed" | "export">("none");
 
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
-
   const provision = useCallback(async () => {
     setBusy("embed");
     setError(null);
     try {
       const res = await fetch(
-        `${apiBase}/a/${encodeURIComponent(token)}/n8n/embed`,
+        `${API_BASE}/a/${encodeURIComponent(token)}/n8n/embed`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -75,7 +74,7 @@ export function N8nRenderer({
     } finally {
       setBusy("none");
     }
-  }, [apiBase, questionIndex, token]);
+  }, [questionIndex, token]);
 
   useEffect(() => {
     if (workflowId || busy !== "none") {
@@ -96,7 +95,7 @@ export function N8nRenderer({
     });
     try {
       const res = await fetch(
-        `${apiBase}/a/${encodeURIComponent(token)}/n8n/export`,
+        `${API_BASE}/a/${encodeURIComponent(token)}/n8n/export`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -254,10 +253,3 @@ function exportButtonLabel(
   return "Save workflow to answer";
 }
 
-async function safeJson(res: Response): Promise<{ detail?: string } | null> {
-  try {
-    return (await res.json()) as { detail?: string };
-  } catch {
-    return null;
-  }
-}

@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { ApiError, fetchAssignment } from "@/lib/api";
+import { ErrorView } from "@/app/components/error-view";
 
 interface Params {
   token: string;
@@ -26,14 +27,7 @@ export default async function InProgressGate({
     redirect(`/a/${token}`);
   } catch (error) {
     if (error instanceof ApiError) {
-      return (
-        <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
-          <h1 className="font-semibold text-2xl">
-            {error.status === 410 ? "Link expired" : "Something went wrong"}
-          </h1>
-          <p className="text-muted-foreground text-sm">{error.message}</p>
-        </main>
-      );
+      return <ErrorView message={error.message} status={error.status} />;
     }
     throw error;
   }

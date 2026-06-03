@@ -1,7 +1,9 @@
 import { ApiError } from "@repo/api-client";
+
 import { env } from "@/env";
 
 const TRAILING_SLASH_RE = /\/$/;
+const API_BASE = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
 /** SSE frame shapes emitted by the FastAPI `/a/{token}/code/run?stream=true`
  * endpoint. Source of truth lives in
@@ -106,8 +108,7 @@ export async function runCodeStream(
   onEvent: (frame: CodeRunFrame) => void,
   options?: RunCodeStreamOptions
 ): Promise<void> {
-  const base = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
-  const url = `${base}/a/${encodeURIComponent(token)}/code/run?stream=true`;
+  const url = `${API_BASE}/a/${encodeURIComponent(token)}/code/run?stream=true`;
   const res = await fetch(url, {
     method: "POST",
     headers: {

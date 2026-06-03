@@ -3,7 +3,9 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { emitIntegrityEvent } from "@repo/integrity/browser";
 import { useMemo, useState } from "react";
+
 import { env } from "@/env";
+import { safeJson } from "@/lib/fetch-utils";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 interface Cell {
@@ -51,6 +53,7 @@ interface RunResponse {
 }
 
 const TRAILING_SLASH_RE = /\/$/;
+const API_BASE = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
 function makeStarterCell(): Cell {
   return {
@@ -95,7 +98,7 @@ export function NotebookRenderer({
     () => bootstrapCells(initialCells, config.starter_cells),
     [initialCells, config.starter_cells]
   );
-  const [cells, setCells] = useState<Cell[]>(initialBootstrapped);
+  const [cells, setCells] = useState(initialBootstrapped);
   const [outputs, setOutputs] = useState<Record<number, CellOutput>>({});
   const [running, setRunning] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -103,8 +106,6 @@ export function NotebookRenderer({
   useUnsavedChangesWarning(
     JSON.stringify(cells) !== JSON.stringify(initialBootstrapped)
   );
-
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
   function makeCellOnMount(i: number): OnMount {
     return (editor) => {
@@ -160,7 +161,7 @@ export function NotebookRenderer({
     }
     try {
       const res = await fetch(
-        `${apiBase}/a/${encodeURIComponent(token)}/notebook/run`,
+        `${API_BASE}/a/${encodeURIComponent(token)}/notebook/run`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -346,10 +347,3 @@ function CellOutputView({ output }: { output: CellOutput }) {
   );
 }
 
-async function safeJson(res: Response): Promise<{ detail?: string } | null> {
-  try {
-    return (await res.json()) as { detail?: string };
-  } catch {
-    return null;
-  }
-}

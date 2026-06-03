@@ -2,7 +2,9 @@
 
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { useState } from "react";
+
 import { env } from "@/env";
+import { safeJson } from "@/lib/fetch-utils";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 interface SqlConfig {
@@ -19,6 +21,7 @@ interface SqlRunResult {
 }
 
 const TRAILING_SLASH_RE = /\/$/;
+const API_BASE = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
 export function SqlRenderer({
   token,
@@ -38,8 +41,6 @@ export function SqlRenderer({
 
   useUnsavedChangesWarning(sql !== initialSql);
 
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
-
   const onMount: OnMount = (editor) => {
     editor.updateOptions({ ariaLabel: "SQL query editor" });
   };
@@ -49,7 +50,7 @@ export function SqlRenderer({
     setNetworkError(null);
     try {
       const res = await fetch(
-        `${apiBase}/a/${encodeURIComponent(token)}/sql/query`,
+        `${API_BASE}/a/${encodeURIComponent(token)}/sql/query`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -204,10 +205,3 @@ function formatCell(value: unknown): string {
   return String(value);
 }
 
-async function safeJson(res: Response): Promise<{ detail?: string } | null> {
-  try {
-    return (await res.json()) as { detail?: string };
-  } catch {
-    return null;
-  }
-}

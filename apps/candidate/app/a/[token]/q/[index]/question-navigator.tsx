@@ -17,8 +17,8 @@ function useBlockBackNavigation() {
       history.pushState(null, "", url);
     }
 
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    addEventListener("popstate", onPopState);
+    return () => removeEventListener("popstate", onPopState);
   }, []);
 }
 
@@ -85,7 +85,6 @@ export function QuestionNavigator({ current, total }: Props) {
             <ol className="grid grid-cols-5 gap-1.5">
               {numbers.map((number) => {
                 const index = number - 1;
-                const answered = index < current;
                 const active = index === current;
                 return (
                   <li key={`q-rail-${number}`}>
@@ -93,13 +92,6 @@ export function QuestionNavigator({ current, total }: Props) {
                       <span
                         aria-current="step"
                         className="block w-8 rounded bg-primary px-2 py-1 text-center font-medium font-mono text-primary-foreground text-xs"
-                      >
-                        {number}
-                      </span>
-                    ) : answered ? (
-                      <span
-                        aria-label={`Question ${number}, answered`}
-                        className="block w-8 rounded bg-secondary/60 px-2 py-1 text-center font-mono text-secondary-foreground/50 text-xs"
                       >
                         {number}
                       </span>

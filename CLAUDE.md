@@ -7,6 +7,7 @@
 - **No em dashes** (U+2014) anywhere in source: UI copy, emails, generated content, AND code comments. Use a comma, hyphen, or parentheses. Spec §2 limits the rule to user-facing surfaces; we extend it to comments because the same rule then applies uniformly during reviews. CI grep blocks regressions.
 - **No en dashes** (U+2013) either, same reason.
 - ASCII hyphen for empty-cell placeholders.
+- **React components use `function` declarations, not arrow functions.** Applies to page components (`page.tsx`), layouts, and any reusable component in `components/`. Hooks (`const useX = () => {}`), utility helpers, and inline callbacks follow the standard arrow function convention.
 
 ## Architecture decisions that diverge from spec
 

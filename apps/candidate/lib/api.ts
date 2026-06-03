@@ -1,9 +1,8 @@
 import { ApiError, createCallApi } from "@repo/api-client";
+
 import { env } from "@/env";
 
 export { ApiError } from "@repo/api-client";
-
-const TRAILING_SLASH_RE = /\/$/;
 
 export interface CandidateAssignmentView {
   assignment_id: string;

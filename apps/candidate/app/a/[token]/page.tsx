@@ -1,6 +1,11 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { ApiError, fetchAssignment, postConsent } from "@/lib/api";
+import { ErrorView } from "@/app/components/error-view";
+import { NoticeView } from "@/app/components/notice-view";
+import { AssignmentCard } from "./components/assignment-card";
+import { ConsentForm } from "./components/consent-form";
+import { MonitoringDisclosure } from "./components/monitoring-disclosure";
 
 interface Params {
   token: string;
@@ -25,13 +30,7 @@ export default async function CandidateLandingPage({
     assignment = await fetchAssignment(token);
   } catch (error) {
     if (error instanceof ApiError) {
-      return (
-        <ErrorView
-          message={error.message}
-          status={error.status}
-          token={token}
-        />
-      );
+      return <ErrorView message={error.message} status={error.status} token={token} />;
     }
     throw error;
   }
@@ -77,105 +76,9 @@ export default async function CandidateLandingPage({
         </p>
       </header>
 
-      <dl className="grid grid-cols-2 gap-3 rounded border border-border bg-card p-5 text-sm">
-        <div>
-          <dt className="eyebrow-label">Candidate</dt>
-          <dd className="mt-1 font-medium">{assignment.subject.full_name}</dd>
-        </div>
-        <div>
-          <dt className="eyebrow-label">Time limit</dt>
-          <dd className="mt-1 font-medium">
-            {assignment.module.target_duration_minutes} minutes
-          </dd>
-        </div>
-        <div>
-          <dt className="eyebrow-label">Questions</dt>
-          <dd className="mt-1 font-medium">
-            {assignment.module.question_count}
-          </dd>
-        </div>
-        <div>
-          <dt className="eyebrow-label">Link expires</dt>
-          <dd className="mt-1 font-medium">
-            {new Date(assignment.expires_at).toLocaleString()}
-          </dd>
-        </div>
-      </dl>
-
-      <section
-        aria-labelledby="monitor-heading"
-        className="space-y-3 rounded border border-border bg-card p-5 text-sm leading-6"
-      >
-        <h2 className="font-medium text-base" id="monitor-heading">
-          During this session we monitor:
-        </h2>
-        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-          <li>Tab focus, fullscreen state, and window size changes</li>
-          <li>Copy, cut, and paste attempts outside the code editor</li>
-          <li>Time spent active on each question</li>
-        </ul>
-        <p className="text-muted-foreground">
-          The assessment runs in fullscreen. You will be asked to enter
-          fullscreen on the next screen and we log any exits. Your answers are
-          saved to your record; we review every submission before sending final
-          results.
-        </p>
-      </section>
-
-      {consentError && (
-        <p
-          aria-live="assertive"
-          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {consentError}
-        </p>
-      )}
-
-      <form action={handleConsent}>
-        <button
-          aria-describedby="monitor-heading"
-          className="btn-primary w-full"
-          type="submit"
-        >
-          I understand and consent to begin
-        </button>
-      </form>
-    </main>
-  );
-}
-
-function NoticeView({ title, body }: { title: string; body: string }) {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
-      <h1 className="font-semibold text-2xl">{title}</h1>
-      <p className="text-muted-foreground text-sm">{body}</p>
-    </main>
-  );
-}
-
-function ErrorView({
-  status,
-  message,
-  token,
-}: {
-  status: number;
-  message: string;
-  token: string;
-}) {
-  let headline = "Something went wrong";
-  if (status === 410) {
-    headline = "Link expired";
-  } else if (status === 404) {
-    headline = "Link not recognized";
-  }
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
-      <h1 className="font-semibold text-2xl">{headline}</h1>
-      <p className="text-muted-foreground text-sm">{message}</p>
-      <p className="text-muted-foreground/60 text-xs">
-        Reference: <code>{token.slice(0, 8)}…</code>
-      </p>
+      <AssignmentCard assignment={assignment} />
+      <MonitoringDisclosure />
+      <ConsentForm action={handleConsent} error={consentError} />
     </main>
   );
 }

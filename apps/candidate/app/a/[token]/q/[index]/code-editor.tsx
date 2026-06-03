@@ -6,6 +6,7 @@ import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { env } from "@/env";
 import { type CodeRunFrame, runCodeStream } from "@/lib/code-stream-api";
+import { safeJson } from "@/lib/fetch-utils";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 interface CodeConfig {
@@ -41,6 +42,7 @@ const SUPPORTED_MONACO_LANGS = new Set([
   "shell",
 ]);
 const TRAILING_SLASH_RE = /\/$/;
+const API_BASE = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
 const monacoLanguage = (lang: string | undefined): string => {
   if (!lang) {
@@ -73,15 +75,13 @@ export function CodeRenderer({
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [streamingStdout, setStreamingStdout] = useState<string>("");
   const [streamingStderr, setStreamingStderr] = useState<string>("");
-  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const outputPaneRef = useRef<HTMLElement | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
 
   useUnsavedChangesWarning(code !== initialCode);
-
-  const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
 
   // Auto-scroll the output pane to the bottom as new chunks arrive so the
   // candidate watches output flow without manually scrolling. We scroll on
@@ -121,7 +121,7 @@ export function CodeRenderer({
     // (older API, proxy strips SSE, network blip mid-stream). Keeps the
     // candidate experience resilient to backend regressions.
     const res = await fetch(
-      `${apiBase}/a/${encodeURIComponent(token)}/code/run`,
+      `${API_BASE}/a/${encodeURIComponent(token)}/code/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -238,7 +238,7 @@ export function CodeRenderer({
     emitIntegrityEvent("test_run", { question_index: questionIndex });
     try {
       const res = await fetch(
-        `${apiBase}/a/${encodeURIComponent(token)}/code/test`,
+        `${API_BASE}/a/${encodeURIComponent(token)}/code/test`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -419,10 +419,3 @@ function TestResultPane({ result }: { result: TestResult }) {
   );
 }
 
-async function safeJson(res: Response): Promise<{ detail?: string } | null> {
-  try {
-    return (await res.json()) as { detail?: string };
-  } catch {
-    return null;
-  }
-}

@@ -15,6 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { emitIntegrityEvent } from "@repo/integrity/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 
 interface DiagramConfig {
@@ -128,7 +129,7 @@ function DiagramCanvas({
   // Debounce diagram saves into a single `interactive_state_saved` event
   // every 2 seconds. The graph mutates on every drag tick, so emitting
   // unthrottled would flood the integrity log.
-  const lastSerializedRef = useRef<string>("");
+  const lastSerializedRef = useRef("");
   useEffect(() => {
     const serialized = JSON.stringify({
       nodes: nodes.map((n) => ({
@@ -146,14 +147,14 @@ function DiagramCanvas({
     if (serialized === lastSerializedRef.current) {
       return;
     }
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       lastSerializedRef.current = serialized;
       emitIntegrityEvent("interactive_state_saved", {
         node_count: nodes.length,
         edge_count: edges.length,
       });
     }, 2000);
-    return () => window.clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [nodes, edges]);
 
   const palette = config.palette?.length ? config.palette : FALLBACK_PALETTE;
