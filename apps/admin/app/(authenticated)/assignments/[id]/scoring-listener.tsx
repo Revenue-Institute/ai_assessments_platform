@@ -20,11 +20,7 @@ function toneFor(phase: ScoringPhase): string {
   return "bg-muted text-muted-foreground";
 }
 
-/** Listens to the SSE stream for the current assignment and triggers a
- * server-component refresh when the score lands. The page already does
- * the heavy data fetching, so a router.refresh() picks up the new score
- * without extra wiring. A live "Scoring..." badge surfaces the queued
- * state. */
+// Listens to the SSE scoring stream and calls router.refresh() when the score lands; shows a live badge during queued/failed states.
 export function ScoringListener({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
   const [phase, setPhase] = useState<ScoringPhase>("idle");

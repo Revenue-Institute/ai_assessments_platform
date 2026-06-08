@@ -1,4 +1,5 @@
 import { taxonomy } from "@repo/competencies";
+
 import { Header } from "../components/header";
 
 const ROOTS = taxonomy.filter((c) => c.parent_id === null);
@@ -9,7 +10,7 @@ export default function CompetenciesPage() {
       <Header page="Competencies" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <h1 className="font-semibold text-2xl">Competency taxonomy</h1>
+          <h2 className="font-semibold text-2xl">Competency taxonomy</h2>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             Read-only view of{" "}
             <code className="rounded bg-muted px-1">

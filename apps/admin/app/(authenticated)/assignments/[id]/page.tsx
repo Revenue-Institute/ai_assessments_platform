@@ -1,6 +1,7 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+
 import {
   ApiError,
   type AttemptEvent,
@@ -14,6 +15,8 @@ import {
   resendAssignmentEmail,
   subjectCompetencyScores,
 } from "@/lib/api";
+import { SubmitButton } from "@/components/submit-button";
+
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
 import { IntegrityScore } from "../../components/integrity-score";
@@ -48,11 +51,7 @@ export default async function AssignmentDetailPage({
     // Soft fail: timeline is auxiliary; the rest of the page still loads.
   }
 
-  // Spec §11.3 candidate-vs-team overlay: pull competency scores for this
-  // subject, restrict to the ones tied to this assignment, then fetch the
-  // matching team distribution for each one. Soft-fails so the existing
-  // attempts + integrity timeline still render if the benchmark endpoints
-  // are unavailable.
+  // §11.3: pull subject competency scores, match to this assignment, fetch team distribution per competency. Soft-fails.
   const distributionRows: Array<{
     candidate_score_pct: number;
     competency_id: string;
@@ -284,12 +283,12 @@ export default async function AssignmentDetailPage({
                     {a.submitted_at && (
                       <form action={rescoreOne} className="ml-auto">
                         <input name="attempt_id" type="hidden" value={a.id} />
-                        <button
+                        <SubmitButton
                           className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                          type="submit"
+                          pendingLabel="Rescoring..."
                         >
                           Rescore
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>
@@ -362,7 +361,7 @@ function RelatedEntities({
           className="hover:text-primary hover:underline"
           href={`/candidates/${detail.subject_id}`}
         >
-          {"↗ Candidate: "}
+          ↗ Candidate:{" "}
           {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
         </Link>
       )}
@@ -405,31 +404,31 @@ function AssignmentActions({
     <div className="flex flex-wrap gap-2">
       {status === "completed" && (
         <form action={rescoreAll}>
-          <button
+          <SubmitButton
             className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-            type="submit"
+            pendingLabel="Rescoring..."
           >
             Rescore all attempts
-          </button>
+          </SubmitButton>
         </form>
       )}
       {canManageLink && (
         <>
           <form action={resendEmail}>
-            <button
+            <SubmitButton
               className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-              type="submit"
+              pendingLabel="Sending..."
             >
               Resend magic link
-            </button>
+            </SubmitButton>
           </form>
           <form action={cancel}>
-            <button
+            <SubmitButton
               className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm hover:bg-destructive/25"
-              type="submit"
+              pendingLabel="Cancelling..."
             >
               Cancel assignment
-            </button>
+            </SubmitButton>
           </form>
         </>
       )}

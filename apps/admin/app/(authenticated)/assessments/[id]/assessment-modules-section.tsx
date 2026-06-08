@@ -1,12 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type {
-  AssessmentDetail,
-  AssessmentStatus,
-  ModuleSummary,
-} from "@/lib/api";
+import { useRouter } from "next/navigation";
+
+import type { AssessmentDetail, AssessmentStatus, ModuleSummary } from "@/lib/api";
+
+import type { ActionResult } from "../actions";
 import {
   addAssessmentModuleAction,
   removeAssessmentModuleAction,
@@ -29,9 +28,7 @@ export function AssessmentModulesSection({
 
   const editable = status === "draft";
 
-  function handle(
-    promise: Promise<{ ok: true } | { ok: false; error: string }>
-  ) {
+  function handle(promise: Promise<ActionResult>) {
     setError(null);
     startTransition(async () => {
       const r = await promise;
@@ -132,7 +129,7 @@ export function AssessmentModulesSection({
                     onClick={() => moveUp(i)}
                     type="button"
                   >
-                    {"↑"}
+                    ↑
                   </button>
                   <button
                     aria-label="Move down"
@@ -141,9 +138,10 @@ export function AssessmentModulesSection({
                     onClick={() => moveDown(i)}
                     type="button"
                   >
-                    {"↓"}
+                    ↓
                   </button>
                   <button
+                    aria-label={`Remove ${m.title}`}
                     className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15 disabled:opacity-40"
                     disabled={pending}
                     onClick={() => remove(m.module_id)}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+
 import { patchAssessmentAction } from "../actions";
 
 export function AssessmentMetaForm({
@@ -20,7 +21,7 @@ export function AssessmentMetaForm({
   const [description, setDescription] = useState(initialDescription);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const dirty =
     title.trim() !== initialTitle.trim() ||
@@ -28,13 +29,14 @@ export function AssessmentMetaForm({
 
   function onSave() {
     setError(null);
+    setSaved(false);
     startTransition(async () => {
       const result = await patchAssessmentAction(id, {
         title,
         description: description || null,
       });
       if (result.ok) {
-        setSavedAt(Date.now());
+        setSaved(true);
         router.refresh();
       } else {
         setError(result.error);
@@ -66,7 +68,7 @@ export function AssessmentMetaForm({
           <span className="text-sm">Title</span>
           <input
             className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { setTitle(e.target.value); setSaved(false); }}
             value={title}
           />
         </label>
@@ -74,7 +76,7 @@ export function AssessmentMetaForm({
           <span className="text-sm">Description</span>
           <textarea
             className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => { setDescription(e.target.value); setSaved(false); }}
             placeholder="Optional"
             value={description}
           />
@@ -88,7 +90,7 @@ export function AssessmentMetaForm({
           >
             {pending ? "Saving..." : "Save"}
           </button>
-          {savedAt && !dirty && !pending && (
+          {saved && !dirty && !pending && (
             <span className="text-muted-foreground text-xs">Saved.</span>
           )}
           {dirty && !pending && (

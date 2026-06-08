@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation";
+
 import {
+  type ReferenceDocumentSummary,
   ApiError,
   deleteReference,
   fetchAdminMe,
   listReferences,
-  type ReferenceDocumentSummary,
   uploadReferenceText,
   uploadReferenceUrl,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +26,7 @@ export default async function ReferencesPage({
 }) {
   const { error, ok } = await searchParams;
 
-  const { data, error: loadError } = await loadOrApiError(() =>
-    listReferences()
-  );
+  const { data, error: loadError } = await loadOrApiError(listReferences);
   const documents: ReferenceDocumentSummary[] = data ?? [];
 
   let canRemove = false;
@@ -33,8 +34,7 @@ export default async function ReferencesPage({
     const me = await fetchAdminMe();
     canRemove = roleSatisfies(me.role, "admin");
   } catch (e) {
-    // Soft-fail role check: reviewers fall through with canRemove=false, which
-    // hides the Remove button. Hard backend rules still apply at /api.
+    // Soft-fail: reviewers fall through with canRemove=false; hard backend rules still apply at /api.
     if (!(e instanceof ApiError)) {
       throw e;
     }
@@ -93,7 +93,7 @@ export default async function ReferencesPage({
       <Header page="References" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Reference library</h1>
+          <h2 className="font-semibold text-xl">Reference library</h2>
           <p className="text-muted-foreground text-sm">
             Documents are chunked and embedded with Voyage-3. The generator
             retrieves the top 10 chunks per topic when references are attached
@@ -127,9 +127,9 @@ export default async function ReferencesPage({
               name="domain"
               placeholder="hubspot, ai..."
             />
-            <button className="btn-primary text-sm" type="submit">
+            <SubmitButton className="btn-primary text-sm" pendingLabel="Fetching...">
               Fetch + index
-            </button>
+            </SubmitButton>
           </form>
 
           <form
@@ -142,9 +142,9 @@ export default async function ReferencesPage({
             <Field label="Title" name="title" required />
             <Field label="Domain (optional)" name="domain" />
             <Field label="Content" name="content" textarea />
-            <button className="btn-primary text-sm" type="submit">
+            <SubmitButton className="btn-primary text-sm" pendingLabel="Indexing...">
               Index
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -181,12 +181,12 @@ export default async function ReferencesPage({
                   {canRemove && (
                     <form action={deleteAction}>
                       <input name="id" type="hidden" value={d.id} />
-                      <button
+                      <SubmitButton
                         className="rounded border border-destructive/40 bg-destructive/15 px-2 py-1 text-destructive text-xs hover:bg-destructive/25"
-                        type="submit"
+                        pendingLabel="Removing..."
                       >
                         Remove
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </li>

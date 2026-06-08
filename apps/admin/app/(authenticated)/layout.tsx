@@ -2,9 +2,12 @@ import { SidebarProvider } from "@repo/design-system/components/ui/sidebar";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import type { User } from "@supabase/supabase-js";
+
 import { ApiError, fetchAdminMe } from "@/lib/api";
 import { canAccessPath } from "@/lib/role-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
 import { GlobalSidebar } from "./components/sidebar";
 
 // Every page under (authenticated) reads cookies + headers for auth and
@@ -22,8 +25,7 @@ export default async function AuthenticatedLayout({
   // refresh-token cookies even though the call returns user=null. Trap
   // it here so the dev console stays clean; the !user redirect handles
   // the not-signed-in path either way.
-  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
-    null;
+  let user: User | null = null;
   try {
     const result = await supabase.auth.getUser();
     user = result.data.user;

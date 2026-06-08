@@ -2,8 +2,8 @@
 
 import {
   type PreviewVariantsResponse,
-  previewVariants,
   type ReviseQuestionResponse,
+  previewVariants,
   reviseQuestion,
 } from "@/lib/api";
 
@@ -12,7 +12,7 @@ export async function previewVariantsAction(body: {
   prompt_template: string;
   seed_count?: number;
 }): Promise<PreviewVariantsResponse> {
-  return await previewVariants(body);
+  return previewVariants(body);
 }
 
 type RevisePreserve = Parameters<typeof reviseQuestion>[1]["preserve"];
@@ -21,5 +21,5 @@ export async function reviseQuestionAction(
   questionId: string,
   body: { instruction: string; preserve?: RevisePreserve }
 ): Promise<ReviseQuestionResponse> {
-  return await reviseQuestion(questionId, body);
+  return reviseQuestion(questionId, body);
 }

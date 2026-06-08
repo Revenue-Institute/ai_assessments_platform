@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import {
-  ApiError,
-  getSeriesDetail,
-  getSeriesTrend,
   type SeriesDetail,
   type SeriesTrendLine,
   type SeriesTrendResponse,
+  ApiError,
+  getSeriesDetail,
+  getSeriesTrend,
 } from "@/lib/api";
+
 import { Header } from "../../components/header";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +29,7 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
     throw e;
   }
 
-  // Trend is auxiliary: a missing endpoint should not break the rest of the
-  // page. Render the header, focus list, and assignments table even if the
-  // backend trend route is offline (defensive against API rollout skew).
+  // Trend is auxiliary: render the rest of the page even if the backend trend route is offline.
   let trend: SeriesTrendResponse | null = null;
   let trendError: string | null = null;
   try {
@@ -50,7 +50,7 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h1 className="font-semibold text-xl">{detail.name}</h1>
+              <h2 className="font-semibold text-xl">{detail.name}</h2>
               <p className="text-muted-foreground text-sm">
                 {detail.subject_full_name ? (
                   <Link
@@ -212,9 +212,7 @@ interface ChartProps {
   trend: SeriesTrendResponse | null;
 }
 
-// Brand-leaning palette borrowed from the heatmap. Hand-picked so adjacent
-// competency lines stay distinguishable in both themes; cycled when the
-// focus list exceeds the array length.
+// Brand-leaning palette, hand-picked for distinguishability in both themes; cycled when focus list exceeds array length.
 const TREND_COLORS = [
   "rgb(10 143 93)", // brand forest
   "rgb(56 189 248)", // sky
@@ -245,8 +243,7 @@ function SeriesTrendChart({ focus, trend }: ChartProps) {
     );
   }
 
-  // Determine the x-axis domain from the union of sequence numbers across
-  // every competency line. Empty fallback keeps the SVG renderable.
+  // x-axis domain: union of sequence numbers across all lines; empty fallback keeps the SVG renderable.
   const allSeq = usable.flatMap((l) => l.points.map((p) => p.sequence_number));
   const minSeq = Math.min(...allSeq);
   const maxSeq = Math.max(...allSeq);

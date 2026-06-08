@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+
 import {
   createSeries,
   issueNextForSeries,
@@ -7,6 +8,8 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +75,7 @@ export default async function SeriesPage({
       <Header page="Series" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Assessment series</h1>
+          <h2 className="font-semibold text-xl">Assessment series</h2>
           <p className="text-muted-foreground text-sm">
             Track recurring competency check-ins per subject. Auto-scheduling of
             the next assignment lands in a follow-up worker. For v1, link
@@ -149,9 +152,9 @@ export default async function SeriesPage({
             />
           </label>
           <div className="flex items-end md:col-span-2">
-            <button className="btn-primary text-sm" type="submit">
+            <SubmitButton className="btn-primary text-sm" pendingLabel="Creating...">
               Create series
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
@@ -223,12 +226,12 @@ export default async function SeriesPage({
                       </Link>
                       <form action={issueNext}>
                         <input name="series_id" type="hidden" value={s.id} />
-                        <button
+                        <SubmitButton
                           className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                          type="submit"
+                          pendingLabel="Issuing..."
                         >
                           Issue next
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </td>

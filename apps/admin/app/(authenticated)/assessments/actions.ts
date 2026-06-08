@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+
 import {
   ApiError,
   addAssessmentModule,
@@ -11,8 +12,7 @@ import {
   removeAssessmentModule,
   reorderAssessment,
 } from "@/lib/api";
-import type { ActionResult } from "@/lib/api-helpers";
-import { redirectOnApi, runApiAction } from "@/lib/api-helpers";
+import { type ActionResult, redirectOnApi, runApiAction } from "@/lib/api-helpers";
 
 export type { ActionResult } from "@/lib/api-helpers";
 

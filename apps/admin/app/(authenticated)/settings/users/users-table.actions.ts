@@ -6,5 +6,5 @@ export async function patchAdminUserAction(
   userId: string,
   body: { role: AdminRole }
 ): Promise<AdminUserRow> {
-  return await patchAdminUser(userId, body);
+  return patchAdminUser(userId, body);
 }

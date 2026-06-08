@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+
 import {
   ApiError,
   fetchGenerationRun,
@@ -7,6 +8,7 @@ import {
   generateQuestions,
   type OutlineTopic,
 } from "@/lib/api";
+
 import { Header } from "../../../components/header";
 import { OutlineReviewForm } from "./outline-review-form";
 
@@ -53,8 +55,7 @@ function parseOutlineFromForm(formData: FormData): GeneratedOutline {
     10
   );
 
-  // Topics are collected by index. Since the client reorders the topics
-  // before submit, the submitted indices reflect the user's chosen order.
+  // Indices reflect the client's reordered list, not the original generation order.
   const topics: OutlineTopic[] = [];
   let i = 0;
   while (formData.has(`topics[${i}].name`)) {
@@ -150,8 +151,8 @@ export default async function OutlineReviewPage({
       <Header page="Review outline" pages={["Modules", "New module"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <p className="eyebrow-label">Step 2 of 2 - Outline review</p>
-          <h1 className="mt-1 font-semibold text-2xl">{outline.title}</h1>
+          <p className="eyebrow-label">Step 2 of 2 · Outline review</p>
+          <h2 className="mt-1 font-semibold text-2xl">{outline.title}</h2>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             {outline.description}
           </p>

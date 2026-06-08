@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import {
   ApiError,
   type AssessmentDetail,
@@ -7,6 +8,9 @@ import {
   listModules,
   type ModuleSummary,
 } from "@/lib/api";
+
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../../components/header";
 import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
 import { AssessmentMetaForm } from "./assessment-meta-form";
@@ -90,28 +94,28 @@ export default async function AssessmentDetailPage({
         <section className="flex flex-wrap items-center gap-2">
           {detail.status === "draft" && (
             <form action={publish}>
-              <button
-                className="btn-primary text-sm disabled:opacity-50"
+              <SubmitButton
+                className="btn-primary text-sm"
                 disabled={publishDisabled}
+                pendingLabel="Publishing..."
                 title={
                   publishDisabled
                     ? "Add at least one module before publishing."
                     : undefined
                 }
-                type="submit"
               >
                 Publish
-              </button>
+              </SubmitButton>
             </form>
           )}
           {detail.status === "published" && (
             <form action={archive}>
-              <button
+              <SubmitButton
                 className="rounded border border-border/50 bg-background px-3 py-2 text-sm hover:bg-muted"
-                type="submit"
+                pendingLabel="Archiving..."
               >
                 Archive
-              </button>
+              </SubmitButton>
             </form>
           )}
           <Link

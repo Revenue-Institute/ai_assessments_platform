@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useId, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+
 import type { PreviewVariantRow } from "@/lib/api";
+
 import {
   previewVariantsAction,
   reviseQuestionAction,
@@ -69,8 +71,7 @@ function VariantsPanel({
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PreviewVariantRow[]>([]);
 
-  // Fire once on mount.
-  if (loading && rows.length === 0 && !error) {
+  useEffect(() => {
     previewVariantsAction({
       prompt_template: question.prompt_template,
       variable_schema: question.variable_schema ?? {},
@@ -86,18 +87,20 @@ function VariantsPanel({
         );
         setLoading(false);
       });
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const variableKeys = Object.keys(question.variable_schema ?? {});
-  const rubric = question.rubric ?? {};
-  const rubricCriteria = Array.isArray(
-    (rubric as { criteria?: unknown }).criteria
-  )
-    ? (rubric as { criteria: Record<string, unknown>[] }).criteria
+  const rubricShape = (question.rubric ?? {}) as {
+    criteria?: unknown[];
+    scoring_mode?: unknown;
+  };
+  const rubricCriteria = Array.isArray(rubricShape.criteria)
+    ? (rubricShape.criteria as Record<string, unknown>[])
     : [];
   const scoringMode =
-    typeof (rubric as { scoring_mode?: unknown }).scoring_mode === "string"
-      ? (rubric as { scoring_mode: string }).scoring_mode
+    typeof rubricShape.scoring_mode === "string"
+      ? rubricShape.scoring_mode
       : null;
 
   return (
@@ -356,18 +359,21 @@ function Modal({
   onClose: () => void;
   title: string;
 }) {
+  const titleId = useId();
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         onClose();
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
   }, [onClose]);
 
   return (
     <div
+      aria-labelledby={titleId}
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
       role="dialog"
@@ -380,7 +386,7 @@ function Modal({
       />
       <div className="mt-12 w-full max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium text-sm">{title}</h3>
+          <h3 className="font-medium text-sm" id={titleId}>{title}</h3>
           <button
             aria-label="Close"
             className="rounded border border-border/50 px-2 py-0.5 text-xs hover:bg-muted"

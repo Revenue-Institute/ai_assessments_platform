@@ -2,6 +2,7 @@ import Link from "next/link";
 import { type AssessmentSummary, listAssessments } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
 import { Header } from "../components/header";
+import { StatusBadge } from "@/components/status-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -75,16 +76,3 @@ export default async function AssessmentsPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  let tone = "bg-warning/20 text-warning";
-  if (status === "published") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "archived") {
-    tone = "bg-muted text-muted-foreground";
-  }
-  return (
-    <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
-      {status}
-    </span>
-  );
-}

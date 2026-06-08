@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+
 import {
   ApiError,
   type AssignmentMagicLink,
@@ -7,6 +8,8 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+import { SubmitButton } from "@/components/submit-button";
+
 import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
 
@@ -81,9 +84,9 @@ export default async function NewAssignmentPage({
       <Header page="New assignment" pages={["Assignments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">
+          <h2 className="font-semibold text-xl">
             Issue magic-link assignments
-          </h1>
+          </h2>
           <p className="text-muted-foreground text-sm">
             Pick one or more subjects and a published assessment. Each subject
             gets their own assignment + JWT. Invites are emailed via Resend when
@@ -225,13 +228,13 @@ export default async function NewAssignmentPage({
             </label>
           </div>
 
-          <button
+          <SubmitButton
             className="btn-primary mt-1 text-sm"
             disabled={publishable.length === 0 || subjects.length === 0}
-            type="submit"
+            pendingLabel="Issuing..."
           >
             Issue magic links
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </>

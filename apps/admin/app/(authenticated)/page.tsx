@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+
 import {
   type AssignmentSummary,
   listAssignments,
@@ -8,6 +9,7 @@ import {
   type ModuleSummary,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { Header } from "./components/header";
 import { IntegrityScore } from "./components/integrity-score";
 
@@ -95,7 +97,7 @@ export default async function DashboardPage() {
           <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <h1 className="font-semibold text-lg">Recent assignments</h1>
+                <h2 className="font-semibold text-lg">Recent assignments</h2>
                 <p className="text-muted-foreground text-sm">
                   Latest candidate and employee assessment activity.
                 </p>
@@ -218,14 +220,12 @@ function MetricCard({
   value: number;
   tone: "primary" | "warning" | "destructive" | "neutral";
 }) {
-  let toneClass = "text-foreground";
-  if (tone === "primary") {
-    toneClass = "text-primary";
-  } else if (tone === "warning") {
-    toneClass = "text-warning";
-  } else if (tone === "destructive") {
-    toneClass = "text-destructive";
-  }
+  const toneClass = {
+    primary: "text-primary",
+    warning: "text-warning",
+    destructive: "text-destructive",
+    neutral: "text-foreground",
+  }[tone];
   return (
     <Link
       className="rounded-xl border border-border/50 bg-muted/20 p-4 transition hover:border-primary/40 hover:bg-muted/30"
@@ -303,14 +303,14 @@ function EmptyAction({
 }
 
 function StatusPill({ status }: { status: string }) {
-  let tone = "bg-secondary text-secondary-foreground";
-  if (status === "completed") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "in_progress") {
-    tone = "bg-warning/20 text-warning";
-  } else if (status === "cancelled" || status === "expired") {
-    tone = "bg-muted text-muted-foreground";
-  }
+  const tone =
+    status === "completed"
+      ? "bg-primary/20 text-primary"
+      : status === "in_progress"
+        ? "bg-warning/20 text-warning"
+        : status === "cancelled" || status === "expired"
+          ? "bg-muted text-muted-foreground"
+          : "bg-secondary text-secondary-foreground";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

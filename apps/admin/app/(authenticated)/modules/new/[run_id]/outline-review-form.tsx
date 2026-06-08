@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
 import type { GeneratedOutline, OutlineTopic } from "@/lib/api";
 
-// Pure URL builder; inlined here so this client component does not have to
-// pull a function from `@/lib/api`, which would force Turbopack to bundle
-// the server-only Supabase + next/headers chain into the client.
+// Inlined to avoid importing from `@/lib/api`, which would bundle the server-only Supabase chain into the client.
 function generationRunEventsUrl(runId: string): string {
   return `/api/generation-events?run_id=${encodeURIComponent(runId)}`;
 }
@@ -123,7 +122,7 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
         if (data.error) {
           setTopicError((prev) => ({
             ...prev,
-            [data.topic_name]: data.error ?? "",
+            [data.topic_name]: data.error as string,
           }));
         }
       } catch {
@@ -170,7 +169,13 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleSubmit(new FormData(e.currentTarget));
+      }}
+    >
       <div className="grid gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">
         <Field label="Slug" name="slug" required />
         <Field label="Domain" name="domain" required />
@@ -225,7 +230,7 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
                   onClick={() => move(i, -1)}
                   type="button"
                 >
-                  {"↑"}
+                  ↑
                 </button>
                 <button
                   aria-label={`Move topic ${i + 1} down`}
@@ -234,7 +239,7 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
                   onClick={() => move(i, 1)}
                   type="button"
                 >
-                  {"↓"}
+                  ↓
                 </button>
               </div>
             </div>

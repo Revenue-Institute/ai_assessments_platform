@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
+
 import { ApiError, createModule, type Difficulty } from "@/lib/api";
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../../../components/header";
 
 type SearchParams = Promise<{ error?: string }>;
@@ -56,7 +59,7 @@ export default async function NewModulePage({
       <Header page="New module" pages={["Modules"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <h1 className="font-semibold text-xl">Create draft module</h1>
+          <h2 className="font-semibold text-xl">Create draft module</h2>
           <p className="mt-1 text-muted-foreground text-sm">
             Modules start as drafts. Add questions via the seed script (or AI
             generation in Phase 2), then publish before issuing assignments.
@@ -119,9 +122,9 @@ export default async function NewModulePage({
               <option value="expert">expert</option>
             </select>
           </label>
-          <button className="btn-primary mt-2 text-sm" type="submit">
+          <SubmitButton className="btn-primary mt-2 text-sm" pendingLabel="Creating...">
             Create draft
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </>

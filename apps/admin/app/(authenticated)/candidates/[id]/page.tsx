@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import {
-  ApiError,
   type AssignmentSummary,
   type CompetencyDistributionResponse,
+  type SubjectCompetencyTrend,
+  ApiError,
   competencyDistribution,
   listAssignments,
-  type SubjectCompetencyTrend,
   subjectCompetencyScores,
 } from "@/lib/api";
+
 import { CompetencyRadar } from "../../components/competency-radar";
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";

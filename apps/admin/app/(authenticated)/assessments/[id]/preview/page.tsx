@@ -1,6 +1,7 @@
-import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
+
 import {
   ApiError,
   type AssessmentDetail,
@@ -9,6 +10,7 @@ import {
   type ModulePreviewResponse,
   previewModule,
 } from "@/lib/api";
+
 import { Header } from "../../../components/header";
 import { OpenAsCandidateButton } from "../../../components/open-as-candidate-button";
 import { QuestionPreviewRenderer } from "../../../components/question-preview-renderer";
@@ -71,10 +73,12 @@ export default async function AssessmentPreviewPage({
     })
   );
 
-  let questionOffset = 0;
   const totalQuestions = blocks.reduce(
     (acc, b) => acc + (b.preview?.questions.length ?? 0),
     0
+  );
+  const questionOffsets = blocks.map((_, i) =>
+    blocks.slice(0, i).reduce((s, b) => s + (b.preview?.questions.length ?? 0), 0)
   );
 
   return (
@@ -101,7 +105,7 @@ export default async function AssessmentPreviewPage({
             className="text-primary text-sm hover:underline"
             href={`/assessments/${id}`}
           >
-            {"← Back to assessment"}
+            ← Back to assessment
           </Link>
         </div>
 
@@ -112,9 +116,8 @@ export default async function AssessmentPreviewPage({
         ) : (
           <div className="space-y-6">
             {blocks.map((block, blockIndex) => {
-              const startOffset = questionOffset;
+              const startOffset = questionOffsets[blockIndex] ?? 0;
               const count = block.preview?.questions.length ?? 0;
-              questionOffset += count;
               return (
                 <section
                   className="rounded-xl border border-border/50 bg-muted/20 p-4"
@@ -143,7 +146,7 @@ export default async function AssessmentPreviewPage({
                     </p>
                   )}
 
-                  {block.preview && block.preview.questions.length === 0 && (
+                  {block.preview?.questions.length === 0 && (
                     <p className="text-muted-foreground text-sm">
                       This module has no questions yet.
                     </p>
@@ -158,8 +161,7 @@ export default async function AssessmentPreviewPage({
                         >
                           <header className="mb-2 flex items-center justify-between">
                             <p className="eyebrow-label">
-                              Question {startOffset + i + 1} of {totalQuestions}{" "}
-                              {"·"} {q.type}
+                              Question {startOffset + i + 1} of {totalQuestions} · {q.type}
                             </p>
                             <p className="text-muted-foreground text-xs">
                               {q.max_points} pts

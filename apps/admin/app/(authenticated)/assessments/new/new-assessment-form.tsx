@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+
 import type { ModuleSummary } from "@/lib/api";
+
 import { createAssessmentAction } from "../actions";
 
 function sluggify(input: string): string {
@@ -175,7 +177,7 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                           onClick={() => moveUp(id)}
                           type="button"
                         >
-                          {"↑"}
+                          ↑
                         </button>
                         <button
                           aria-label="Move down"
@@ -184,9 +186,10 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                           onClick={() => moveDown(id)}
                           type="button"
                         >
-                          {"↓"}
+                          ↓
                         </button>
                         <button
+                          aria-label={`Remove ${m?.title}`}
                           className="rounded border border-destructive/40 px-1 text-destructive hover:bg-destructive/15"
                           onClick={() => toggleModule(id)}
                           type="button"

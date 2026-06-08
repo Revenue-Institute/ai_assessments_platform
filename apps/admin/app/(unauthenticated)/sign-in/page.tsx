@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+
 import { signIn } from "./actions";
+import { SignInForm } from "./sign-in-form";
 
 type SearchParams = Promise<{ next?: string; error?: string }>;
 
@@ -21,59 +23,5 @@ export default async function SignInPage({
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="font-semibold text-2xl">Sign in</h1>
-        <p className="text-muted-foreground text-sm">
-          Internal access only. Use your Revenue Institute email.
-        </p>
-      </header>
-
-      <form action={handleSignIn} className="space-y-3">
-        <input name="next" type="hidden" value={next ?? ""} />
-        <div className="space-y-1">
-          <label className="text-sm" htmlFor="email">
-            Email
-          </label>
-          <input
-            autoComplete="email"
-            className="w-full rounded border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            id="email"
-            name="email"
-            required
-            type="email"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm" htmlFor="password">
-            Password
-          </label>
-          <input
-            autoComplete="current-password"
-            className="w-full rounded border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            id="password"
-            name="password"
-            required
-            type="password"
-          />
-        </div>
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
-        <button className="btn-primary w-full" type="submit">
-          Sign in
-        </button>
-      </form>
-
-      <p className="text-muted-foreground text-xs">
-        Account access is provisioned by an admin in the Supabase dashboard.
-      </p>
-    </div>
-  );
+  return <SignInForm action={handleSignIn} error={error} next={next} />;
 }

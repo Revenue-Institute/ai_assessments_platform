@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+
 import {
   ApiError,
   type Difficulty,
   type GenerationBriefIn,
   generateOutline,
 } from "@/lib/api";
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../../components/header";
 
 type SearchParams = Promise<{ error?: string }>;
@@ -28,6 +31,14 @@ export default async function NewModuleWizardPage({
     const responsibilities = String(
       formData.get("responsibilities") ?? ""
     ).trim();
+
+    if (!(role_title && responsibilities)) {
+      redirect(
+        "/modules/new?error=" +
+          encodeURIComponent("Role title and responsibilities are required.")
+      );
+    }
+
     const target_duration_minutes = Number.parseInt(
       String(formData.get("target_duration_minutes") ?? "45"),
       10
@@ -80,13 +91,6 @@ export default async function NewModuleWizardPage({
       notes,
     };
 
-    if (!(role_title && responsibilities)) {
-      redirect(
-        "/modules/new?error=" +
-          encodeURIComponent("Role title and responsibilities are required.")
-      );
-    }
-
     try {
       const result = await generateOutline(brief);
       redirect(`/modules/new/${result.run_id}`);
@@ -105,7 +109,7 @@ export default async function NewModuleWizardPage({
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-6">
           <div>
             <p className="eyebrow-label">Step 1 of 2 · Brief</p>
-            <h1 className="mt-1 font-semibold text-2xl">Describe the role</h1>
+            <h2 className="mt-1 font-semibold text-2xl">Describe the role</h2>
             <p className="mt-1 max-w-prose text-muted-foreground text-sm">
               The AI generator turns a role description into a balanced outline
               you can edit before questions are written.
@@ -202,9 +206,9 @@ export default async function NewModuleWizardPage({
             textarea
           />
 
-          <button className="btn-primary text-sm" type="submit">
+          <SubmitButton className="btn-primary text-sm" pendingLabel="Generating outline...">
             Generate outline
-          </button>
+          </SubmitButton>
           <p className="text-muted-foreground text-xs">
             The first call typically takes 10-25 seconds. You'll review the
             outline before any questions are written.

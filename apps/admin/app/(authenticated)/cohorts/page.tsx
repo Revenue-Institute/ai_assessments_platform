@@ -1,11 +1,12 @@
 import {
   type CohortHeatmapResponse,
-  cohortHeatmap,
   type SubjectType,
   type WeakSpotsResponse,
+  cohortHeatmap,
   weakSpots,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { CompetencyHeatmap } from "../components/competency-heatmap";
 import { Header } from "../components/header";
 
@@ -56,8 +57,7 @@ export default async function CohortsPage({
   const role = params.role?.trim() || undefined;
   const startDate = parseIsoDate(params.start_date);
   const endDate = parseIsoDate(params.end_date);
-  // When an explicit date window is provided, ignore the rolling-days input
-  // so the backend doesn't double-clip the range.
+  // When an explicit date window is set, skip the rolling-days input to avoid double-clipping the range.
   const usingExplicitWindow = Boolean(startDate || endDate);
   const days = resolveDays(usingExplicitWindow, params.days);
   const threshold = params.threshold
@@ -94,7 +94,7 @@ export default async function CohortsPage({
       <Header page="Cohorts" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Cohort benchmarks</h1>
+          <h2 className="font-semibold text-xl">Cohort benchmarks</h2>
           <p className="text-muted-foreground text-sm">
             Latest score per (subject, competency). Filter by subject type,
             domain, role applied for, or an explicit date range. Weak-spot

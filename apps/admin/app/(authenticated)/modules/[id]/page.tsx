@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+
 import {
   ApiError,
   archiveModule,
@@ -7,6 +8,8 @@ import {
   getModule,
   publishModule,
 } from "@/lib/api";
+import { SubmitButton } from "@/components/submit-button";
+
 import { Header } from "../../components/header";
 import { type PreflightIssue, PublishButton } from "./publish-button";
 import { QuestionActions } from "./question-actions";
@@ -81,9 +84,7 @@ export default async function ModuleDetailPage({
     }
   }
 
-  // Spec §6.1 publish-button UX preflight. Server still re-checks via the
-  // fairness validator (spec §8.4); these are surface-level checks based on
-  // the fields the admin module API actually returns to the client.
+  // Spec §6.1 UX preflight; server re-validates via the fairness validator (§8.4).
   const preflight: PreflightIssue[] = [];
   if (detail.questions.length === 0) {
     preflight.push({ message: "Add at least one question before publishing." });
@@ -190,12 +191,12 @@ export default async function ModuleDetailPage({
                             type="hidden"
                             value={q.id}
                           />
-                          <button
+                          <SubmitButton
                             className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15"
-                            type="submit"
+                            pendingLabel="Removing..."
                           >
                             Remove
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </div>
@@ -220,12 +221,12 @@ export default async function ModuleDetailPage({
           )}
           {detail.status !== "archived" && (
             <form action={archive}>
-              <button
+              <SubmitButton
                 className="rounded border border-border/50 bg-background px-3 py-2 text-sm hover:bg-muted"
-                type="submit"
+                pendingLabel="Archiving..."
               >
                 Archive
-              </button>
+              </SubmitButton>
             </form>
           )}
         </section>
