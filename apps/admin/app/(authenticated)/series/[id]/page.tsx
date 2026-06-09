@@ -9,6 +9,7 @@ import {
   getSeriesDetail,
   getSeriesTrend,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../components/header";
 
@@ -127,12 +128,7 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
             </p>
           </div>
           {trendError ? (
-            <p
-              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-              role="alert"
-            >
-              {trendError}
-            </p>
+            <AlertBanner>{trendError}</AlertBanner>
           ) : (
             <SeriesTrendChart focus={detail.competency_focus} trend={trend} />
           )}

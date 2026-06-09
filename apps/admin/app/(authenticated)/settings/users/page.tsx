@@ -1,4 +1,6 @@
 import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
+
 import { Header } from "../../components/header";
 import { UsersTable } from "./users-table";
 
@@ -39,12 +41,7 @@ export default async function SettingsUsersPage() {
             </p>
           </div>
           {usersError ? (
-            <p
-              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-              role="alert"
-            >
-              {usersError}
-            </p>
+            <AlertBanner>{usersError}</AlertBanner>
           ) : (
             <UsersTable currentUserId={me?.user_id ?? null} users={users} />
           )}
@@ -84,14 +81,7 @@ function AccountPanel({
   me: Awaited<ReturnType<typeof fetchAdminMe>> | null;
 }) {
   if (error) {
-    return (
-      <p
-        className="mt-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-        role="alert"
-      >
-        {error}
-      </p>
-    );
+    return <AlertBanner className="mt-2">{error}</AlertBanner>;
   }
   if (!me) {
     return <p className="mt-2 text-muted-foreground text-sm">Loading...</p>;

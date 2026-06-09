@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 
+import { AlertBanner } from "@/components/alert-banner";
 import type { PreviewVariantRow } from "@/lib/api";
 
 import {
@@ -161,14 +162,7 @@ function VariantsPanel({
       {loading && (
         <p className="text-muted-foreground text-sm">Sampling variants...</p>
       )}
-      {error && (
-        <p
-          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      <AlertBanner>{error}</AlertBanner>
       {!(loading || error) && rows.length > 0 && (
         <ol className="grid gap-3 md:grid-cols-2">
           {rows.map((v) => (
@@ -319,14 +313,7 @@ function RegeneratePanel({
             ))}
           </div>
         </fieldset>
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
         <div className="flex justify-end gap-2">
           <button
             className="rounded border border-border/50 px-3 py-1.5 text-sm hover:bg-muted"

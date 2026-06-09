@@ -8,6 +8,7 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+import { AlertBanner } from "@/components/alert-banner";
 import { SubmitButton } from "@/components/submit-button";
 
 import { CopyButton } from "../../components/copy-button";
@@ -94,14 +95,7 @@ export default async function NewAssignmentPage({
           </p>
         </section>
 
-        {(sp.error || loadError) && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {sp.error || loadError}
-          </p>
-        )}
+        <AlertBanner>{sp.error || loadError}</AlertBanner>
 
         {issuedLinks.length > 0 && (
           <output className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm">

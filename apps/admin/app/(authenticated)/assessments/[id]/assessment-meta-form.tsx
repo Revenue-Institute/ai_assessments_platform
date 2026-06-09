@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { AlertBanner } from "@/components/alert-banner";
 import { patchAssessmentAction } from "../actions";
 
 export function AssessmentMetaForm({
@@ -54,14 +55,7 @@ export function AssessmentMetaForm({
         </p>
       </div>
 
-      {error && (
-        <p
-          className="mb-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      <AlertBanner className="mb-2">{error}</AlertBanner>
 
       <div className="grid gap-3">
         <label className="space-y-1">

@@ -7,6 +7,7 @@ import {
   type GenerationBriefIn,
   generateOutline,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
@@ -123,14 +124,7 @@ export default async function NewModuleWizardPage({
           </Link>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <form
           action={action}

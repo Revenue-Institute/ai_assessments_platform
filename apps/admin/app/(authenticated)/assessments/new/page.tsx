@@ -1,5 +1,6 @@
 import { listModules, type ModuleSummary } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../components/header";
 import { NewAssessmentForm } from "./new-assessment-form";
@@ -24,14 +25,7 @@ export default async function NewAssessmentPage() {
           </p>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <NewAssessmentForm modules={publishedModules} />
       </div>

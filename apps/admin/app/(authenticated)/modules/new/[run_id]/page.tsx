@@ -8,6 +8,7 @@ import {
   generateQuestions,
   type OutlineTopic,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../../components/header";
 import { OutlineReviewForm } from "./outline-review-form";
@@ -176,14 +177,7 @@ export default async function OutlineReviewPage({
           </details>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <OutlineReviewForm
           formAction={action}

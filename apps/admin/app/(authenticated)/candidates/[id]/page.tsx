@@ -10,6 +10,7 @@ import {
   listAssignments,
   subjectCompetencyScores,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { CompetencyRadar } from "../../components/competency-radar";
 import { DistributionBox } from "../../components/distribution-box";
@@ -78,14 +79,7 @@ export default async function CandidateDetailPage({
         pages={["Candidates"]}
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <section className="grid gap-4 lg:grid-cols-2">
           <CompetencyRadar slices={radarSlices} />

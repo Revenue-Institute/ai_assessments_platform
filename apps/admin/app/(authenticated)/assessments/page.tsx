@@ -1,13 +1,16 @@
 import Link from "next/link";
+
 import { type AssessmentSummary, listAssessments } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
-import { Header } from "../components/header";
+import { AlertBanner } from "@/components/alert-banner";
 import { StatusBadge } from "@/components/status-badge";
+
+import { Header } from "../components/header";
 
 export const dynamic = "force-dynamic";
 
 export default async function AssessmentsPage() {
-  const { data, error } = await loadOrApiError(() => listAssessments());
+  const { data, error } = await loadOrApiError(listAssessments);
   const assessments: AssessmentSummary[] = data ?? [];
 
   return (
@@ -16,7 +19,7 @@ export default async function AssessmentsPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-4">
           <div>
-            <h1 className="font-semibold text-xl">Assessments</h1>
+            <h2 className="font-semibold text-xl">Assessments</h2>
             <p className="text-muted-foreground text-sm">
               Composed of modules. Publish to assign to subjects.
             </p>
@@ -26,14 +29,7 @@ export default async function AssessmentsPage() {
           </Link>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         {assessments.length === 0 && !error ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">

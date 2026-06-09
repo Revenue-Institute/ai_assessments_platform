@@ -8,6 +8,7 @@ import {
   getModule,
   publishModule,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
@@ -110,18 +111,9 @@ export default async function ModuleDetailPage({
     <>
       <Header page={detail.title} pages={["Modules"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {(error || ok) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error ? "alert" : "status"}
-          >
-            {error || ok}
-          </p>
-        )}
+        <AlertBanner variant={error ? "error" : "success"}>
+          {error || ok}
+        </AlertBanner>
 
         <section className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4">
           <Stat label="Status" value={detail.status} />

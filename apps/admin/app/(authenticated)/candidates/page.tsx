@@ -8,6 +8,8 @@ import {
   type SubjectType,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+import { AlertBanner } from "@/components/alert-banner";
+
 import { Header } from "../components/header";
 import { AddSubjectForm } from "./add-subject-form";
 
@@ -74,18 +76,9 @@ export default async function CandidatesPage({
           </p>
         </section>
 
-        {(error || ok || loadError) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error || loadError
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error || loadError ? "alert" : "status"}
-          >
-            {error || loadError || ok}
-          </p>
-        )}
+        <AlertBanner variant={error || loadError ? "error" : "success"}>
+          {error || loadError || ok}
+        </AlertBanner>
 
         <TypeFilterChips active={filter} all={all} />
 

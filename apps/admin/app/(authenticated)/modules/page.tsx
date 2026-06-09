@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { listModules, type ModuleSummary } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+import { AlertBanner } from "@/components/alert-banner";
 import { StatusBadge } from "@/components/status-badge";
 
 import { Header } from "../components/header";
@@ -29,14 +30,7 @@ export default async function ModulesPage() {
           </Link>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         {modules.length === 0 && !error ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">

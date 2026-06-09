@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
+import { AlertBanner } from "@/components/alert-banner";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
@@ -101,18 +102,9 @@ export default async function ReferencesPage({
           </p>
         </section>
 
-        {(error || ok || loadError) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error || loadError
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error || loadError ? "alert" : "status"}
-          >
-            {error || loadError || ok}
-          </p>
-        )}
+        <AlertBanner variant={error || loadError ? "error" : "success"}>
+          {error || loadError || ok}
+        </AlertBanner>
 
         <div className="grid gap-4 md:grid-cols-2">
           <form

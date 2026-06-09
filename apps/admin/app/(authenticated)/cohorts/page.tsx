@@ -6,6 +6,7 @@ import {
   weakSpots,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { CompetencyHeatmap } from "../components/competency-heatmap";
 import { Header } from "../components/header";
@@ -204,14 +205,7 @@ export default async function CohortsPage({
           </button>
         </form>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <CompetencyHeatmap data={heatmap} />
 

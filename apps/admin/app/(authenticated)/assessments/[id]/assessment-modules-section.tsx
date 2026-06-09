@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { AlertBanner } from "@/components/alert-banner";
 import type { AssessmentDetail, AssessmentStatus, ModuleSummary } from "@/lib/api";
 
 import type { ActionResult } from "../actions";
@@ -92,14 +93,7 @@ export function AssessmentModulesSection({
         )}
       </div>
 
-      {error && (
-        <p
-          className="mb-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      <AlertBanner className="mb-2">{error}</AlertBanner>
 
       {assessment.modules.length === 0 ? (
         <p className="rounded border border-border/60 border-dashed bg-background/30 px-3 py-4 text-center text-muted-foreground text-sm">

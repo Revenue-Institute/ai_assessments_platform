@@ -10,6 +10,7 @@ import {
   type ModulePreviewResponse,
   previewModule,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../../components/header";
 import { OpenAsCandidateButton } from "../../../components/open-as-candidate-button";
@@ -137,14 +138,7 @@ export default async function AssessmentPreviewPage({
                     </p>
                   </header>
 
-                  {block.error && (
-                    <p
-                      className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-                      role="alert"
-                    >
-                      {block.error}
-                    </p>
-                  )}
+                  <AlertBanner>{block.error}</AlertBanner>
 
                   {block.preview?.questions.length === 0 && (
                     <p className="text-muted-foreground text-sm">

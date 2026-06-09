@@ -15,6 +15,7 @@ import { Header } from "../../components/header";
 import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
 import { AssessmentMetaForm } from "./assessment-meta-form";
 import { AssessmentModulesSection } from "./assessment-modules-section";
+import { AlertBanner } from "@/components/alert-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -55,18 +56,9 @@ export default async function AssessmentDetailPage({
     <>
       <Header page={detail.title} pages={["Assessments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {(error || ok) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error ? "alert" : "status"}
-          >
-            {error || ok}
-          </p>
-        )}
+        <AlertBanner variant={error ? "error" : "success"}>
+          {error || ok}
+        </AlertBanner>
 
         <section className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 md:grid-cols-4">
           <Stat label="Status" value={detail.status} />

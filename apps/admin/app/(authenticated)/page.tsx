@@ -8,6 +8,7 @@ import {
   listSeries,
   type ModuleSummary,
 } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
 import { loadOrApiError } from "@/lib/api-helpers";
 
 import { Header } from "./components/header";
@@ -57,14 +58,7 @@ export default async function DashboardPage() {
     <>
       <Header page="Dashboard" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard

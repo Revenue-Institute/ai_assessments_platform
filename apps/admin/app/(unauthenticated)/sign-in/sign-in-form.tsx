@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertBanner } from "@/components/alert-banner";
 import { SubmitButton } from "@/components/submit-button";
 
 export function SignInForm({
@@ -49,15 +50,7 @@ export function SignInForm({
             type="password"
           />
         </div>
-        {error && (
-          <p
-            aria-live="assertive"
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
         <SubmitButton pendingLabel="Signing in...">Sign in</SubmitButton>
       </form>
 
