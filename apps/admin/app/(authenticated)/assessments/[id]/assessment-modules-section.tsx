@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { ActionButton } from "@/components/action-button";
 import { AlertBanner } from "@/components/alert-banner";
 import { FormField, FormSelect } from "@/components/form-fields";
 import type { AssessmentDetail, AssessmentStatus, ModuleSummary } from "@/lib/api";
@@ -117,33 +118,28 @@ export function AssessmentModulesSection({
               </div>
               {editable && (
                 <div className="flex items-center gap-1">
-                  <button
+                  <ActionButton
                     aria-label="Move up"
-                    className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                     disabled={i === 0 || pending}
                     onClick={() => moveUp(i)}
-                    type="button"
                   >
                     ↑
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     aria-label="Move down"
-                    className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                     disabled={i === assessment.modules.length - 1 || pending}
                     onClick={() => moveDown(i)}
-                    type="button"
                   >
                     ↓
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     aria-label={`Remove ${m.title}`}
-                    className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15 disabled:opacity-40"
                     disabled={pending}
                     onClick={() => remove(m.module_id)}
-                    type="button"
+                    variant="destructive"
                   >
                     Remove
-                  </button>
+                  </ActionButton>
                 </div>
               )}
             </li>

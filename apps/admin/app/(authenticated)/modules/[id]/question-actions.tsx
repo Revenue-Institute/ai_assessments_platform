@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 
+import { ActionButton } from "@/components/action-button";
 import { AlertBanner } from "@/components/alert-banner";
 import { FormField, FormTextarea } from "@/components/form-fields";
 import type { PreviewVariantRow } from "@/lib/api";
@@ -33,21 +34,13 @@ export function QuestionActions({
 
   return (
     <div className="flex items-center gap-1">
-      <button
-        className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted"
-        onClick={() => setOpen("variants")}
-        type="button"
-      >
+      <ActionButton onClick={() => setOpen("variants")}>
         Preview 5 variants
-      </button>
+      </ActionButton>
       {editable && (
-        <button
-          className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary text-xs hover:bg-primary/20"
-          onClick={() => setOpen("regenerate")}
-          type="button"
-        >
+        <ActionButton onClick={() => setOpen("regenerate")} variant="primary">
           Regenerate
-        </button>
+        </ActionButton>
       )}
       {open === "variants" && (
         <VariantsPanel onClose={() => setOpen(null)} question={question} />
@@ -374,14 +367,9 @@ function Modal({
       <div className="mt-12 w-full max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-medium text-sm" id={titleId}>{title}</h3>
-          <button
-            aria-label="Close"
-            className="rounded border border-border/50 px-2 py-0.5 text-xs hover:bg-muted"
-            onClick={onClose}
-            type="button"
-          >
+          <ActionButton aria-label="Close" onClick={onClose}>
             Close
-          </button>
+          </ActionButton>
         </div>
         {children}
       </div>

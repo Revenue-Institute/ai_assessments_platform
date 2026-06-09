@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ActionButton } from "@/components/action-button";
 import type { GeneratedOutline, OutlineTopic } from "@/lib/api";
 
 // Inlined to avoid importing from `@/lib/api`, which would bundle the server-only Supabase chain into the client.
@@ -223,24 +224,20 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
                 Topic {i + 1}
               </p>
               <div className="flex items-center gap-1">
-                <button
+                <ActionButton
                   aria-label={`Move topic ${i + 1} up`}
-                  className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                   disabled={i === 0 || submitting}
                   onClick={() => move(i, -1)}
-                  type="button"
                 >
                   ↑
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   aria-label={`Move topic ${i + 1} down`}
-                  className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                   disabled={i === topics.length - 1 || submitting}
                   onClick={() => move(i, 1)}
-                  type="button"
                 >
                   ↓
-                </button>
+                </ActionButton>
               </div>
             </div>
             <Field
