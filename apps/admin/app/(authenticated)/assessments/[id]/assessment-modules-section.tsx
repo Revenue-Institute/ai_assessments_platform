@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormSelect } from "@/components/form-fields";
 import type { AssessmentDetail, AssessmentStatus, ModuleSummary } from "@/lib/api";
 
 import type { ActionResult } from "../actions";
@@ -152,10 +153,9 @@ export function AssessmentModulesSection({
 
       {editable && (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-border/40 border-t pt-3">
-          <label className="min-w-0 flex-1 space-y-1">
-            <span className="text-sm">Add module</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          <FormField className="min-w-0 flex-1" label="Add module">
+            <FormSelect
+              className="focus:border-primary focus:outline-none"
               onChange={(e) => setPickerValue(e.target.value)}
               value={pickerValue}
             >
@@ -170,8 +170,8 @@ export function AssessmentModulesSection({
                   {m.target_duration_minutes}m)
                 </option>
               ))}
-            </select>
-          </label>
+            </FormSelect>
+          </FormField>
           <button
             className="btn-primary text-sm disabled:opacity-60"
             disabled={!pickerValue || pending}

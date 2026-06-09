@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect } from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 import { CopyButton } from "../../components/copy-button";
@@ -149,14 +150,8 @@ export default async function NewAssignmentPage({
           action={action}
           className="grid max-w-3xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
-          <label className="space-y-1">
-            <span className="text-sm">Assessment (published only)</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue=""
-              name="assessment_id"
-              required
-            >
+          <FormField label="Assessment (published only)">
+            <FormSelect defaultValue="" name="assessment_id" required>
               <option disabled value="">
                 {publishable.length === 0
                   ? "No published assessments, publish one first"
@@ -168,8 +163,8 @@ export default async function NewAssignmentPage({
                   min · {a.module_count} modules)
                 </option>
               ))}
-            </select>
-          </label>
+            </FormSelect>
+          </FormField>
 
           <fieldset className="space-y-2 rounded border border-border/40 bg-background/30 p-3">
             <legend className="px-1 text-sm">Candidates</legend>
@@ -204,10 +199,8 @@ export default async function NewAssignmentPage({
           </fieldset>
 
           <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1">
-              <span className="text-sm">Expires in (days)</span>
-              <input
-                className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+            <FormField label="Expires in (days)">
+              <FormInput
                 defaultValue="7"
                 max="90"
                 min="1"
@@ -215,7 +208,7 @@ export default async function NewAssignmentPage({
                 required
                 type="number"
               />
-            </label>
+            </FormField>
             <label className="flex items-center gap-2 text-sm">
               <input defaultChecked name="send_email" type="checkbox" />
               <span>Send invite email via Resend</span>

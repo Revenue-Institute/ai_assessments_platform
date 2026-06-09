@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import type { ModuleSummary } from "@/lib/api";
 
 import { createAssessmentAction } from "../actions";
@@ -85,22 +86,20 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
       className="grid max-w-2xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
       onSubmit={onSubmit}
     >
-      <label className="space-y-1">
-        <span className="text-sm">Title</span>
-        <input
-          className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+      <FormField label="Title">
+        <FormInput
+          className="focus:border-primary focus:outline-none"
           name="title"
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Q2 Sales Operations Assessment"
           required
           value={title}
         />
-      </label>
+      </FormField>
 
-      <label className="space-y-1">
-        <span className="text-sm">Slug</span>
-        <input
-          className="block w-full rounded border border-border/60 bg-background px-3 py-2 font-mono text-sm focus:border-primary focus:outline-none"
+      <FormField label="Slug">
+        <FormInput
+          className="font-mono focus:border-primary focus:outline-none"
           name="slug"
           onChange={(e) => {
             setSlug(e.target.value);
@@ -119,18 +118,17 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
         <span className="text-muted-foreground text-xs">
           Auto-derived from the title until you edit it.
         </span>
-      </label>
+      </FormField>
 
-      <label className="space-y-1">
-        <span className="text-sm">Description (optional)</span>
-        <textarea
-          className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+      <FormField label="Description (optional)">
+        <FormTextarea
+          className="h-24 focus:border-primary focus:outline-none"
           name="description"
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What this assessment covers and who it is for."
           value={description}
         />
-      </label>
+      </FormField>
 
       <div className="space-y-2">
         <p className="text-sm">Modules</p>

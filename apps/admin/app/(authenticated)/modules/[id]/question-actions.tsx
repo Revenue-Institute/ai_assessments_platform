@@ -6,6 +6,7 @@ import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormTextarea } from "@/components/form-fields";
 import type { PreviewVariantRow } from "@/lib/api";
 
 import {
@@ -281,17 +282,16 @@ function RegeneratePanel({
   return (
     <Modal onClose={onClose} title="Regenerate question">
       <div className="space-y-3">
-        <label className="block space-y-1">
-          <span className="text-sm">Revision instruction</span>
-          <textarea
+        <FormField label="Revision instruction">
+          <FormTextarea
             autoFocus
-            className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="h-24 focus:border-primary focus:outline-none"
             disabled={pending}
             onChange={(e) => setInstruction(e.target.value)}
             placeholder="e.g. make this harder, use a Fortune 500 context, use a SaaS scenario"
             value={instruction}
           />
-        </label>
+        </FormField>
         <fieldset className="space-y-1">
           <legend className="text-muted-foreground text-xs uppercase tracking-wide">
             Preserve

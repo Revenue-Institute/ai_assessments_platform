@@ -12,6 +12,7 @@ import {
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
@@ -112,13 +113,27 @@ export default async function ReferencesPage({
             className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4"
           >
             <h2 className="font-medium text-sm">Upload from URL</h2>
-            <Field label="URL" name="url" placeholder="https://..." required />
-            <Field label="Title (optional)" name="title" />
-            <Field
-              label="Domain (optional)"
-              name="domain"
-              placeholder="hubspot, ai..."
-            />
+            <FormField label="URL">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="url"
+                placeholder="https://..."
+                required
+              />
+            </FormField>
+            <FormField label="Title (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="title"
+              />
+            </FormField>
+            <FormField label="Domain (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="domain"
+                placeholder="hubspot, ai..."
+              />
+            </FormField>
             <SubmitButton className="btn-primary text-sm" pendingLabel="Fetching...">
               Fetch + index
             </SubmitButton>
@@ -131,9 +146,25 @@ export default async function ReferencesPage({
             <h2 className="font-medium text-sm">
               Upload markdown / plain text
             </h2>
-            <Field label="Title" name="title" required />
-            <Field label="Domain (optional)" name="domain" />
-            <Field label="Content" name="content" textarea />
+            <FormField label="Title">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="title"
+                required
+              />
+            </FormField>
+            <FormField label="Domain (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="domain"
+              />
+            </FormField>
+            <FormField label="Content">
+              <FormTextarea
+                className="h-40 focus:border-primary focus:outline-none"
+                name="content"
+              />
+            </FormField>
             <SubmitButton className="btn-primary text-sm" pendingLabel="Indexing...">
               Index
             </SubmitButton>
@@ -191,42 +222,3 @@ export default async function ReferencesPage({
   );
 }
 
-function Field({
-  label,
-  name,
-  placeholder,
-  required,
-  textarea = false,
-}: {
-  label: string;
-  name: string;
-  placeholder?: string;
-  required?: boolean;
-  textarea?: boolean;
-}) {
-  const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
-  return (
-    <label className="space-y-1" htmlFor={name}>
-      <span className="text-sm">{label}</span>
-      {textarea ? (
-        <textarea
-          className={`${className} h-40`}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-        />
-      ) : (
-        <input
-          className={className}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          type="text"
-        />
-      )}
-    </label>
-  );
-}

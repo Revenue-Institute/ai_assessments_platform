@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import { patchAssessmentAction } from "../actions";
 
 export function AssessmentMetaForm({
@@ -58,23 +59,21 @@ export function AssessmentMetaForm({
       <AlertBanner className="mb-2">{error}</AlertBanner>
 
       <div className="grid gap-3">
-        <label className="space-y-1">
-          <span className="text-sm">Title</span>
-          <input
-            className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        <FormField label="Title">
+          <FormInput
+            className="focus:border-primary focus:outline-none"
             onChange={(e) => { setTitle(e.target.value); setSaved(false); }}
             value={title}
           />
-        </label>
-        <label className="space-y-1">
-          <span className="text-sm">Description</span>
-          <textarea
-            className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        </FormField>
+        <FormField label="Description">
+          <FormTextarea
+            className="h-24 focus:border-primary focus:outline-none"
             onChange={(e) => { setDescription(e.target.value); setSaved(false); }}
             placeholder="Optional"
             value={description}
           />
-        </label>
+        </FormField>
         <div className="flex items-center gap-3">
           <button
             className="btn-primary text-sm disabled:opacity-60"

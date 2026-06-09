@@ -8,6 +8,7 @@ import {
   generateOutline,
 } from "@/lib/api";
 import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect, FormTextarea } from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
@@ -130,50 +131,54 @@ export default async function NewModuleWizardPage({
           action={action}
           className="grid max-w-3xl gap-4 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
-          <Field
-            label="Role title"
-            name="role_title"
-            placeholder="HubSpot Workflows Architect"
-            required
-          />
-          <Field
-            defaultValue={DEFAULT_RESPONSIBILITIES}
-            label="Responsibilities"
-            name="responsibilities"
-            placeholder="Paste from JD or write 4-8 bullet points"
-            textarea
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Field
-              defaultValue="45"
-              label="Target duration (minutes)"
-              name="target_duration_minutes"
-              type="number"
+          <FormField label="Role title">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="role_title"
+              placeholder="HubSpot Workflows Architect"
+              required
             />
-            <label className="space-y-1">
-              <span className="text-sm">Difficulty</span>
-              <select
-                className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-                defaultValue="mid"
-                name="difficulty"
-              >
+          </FormField>
+          <FormField label="Responsibilities">
+            <FormTextarea
+              className="h-32 focus:border-primary focus:outline-none"
+              defaultValue={DEFAULT_RESPONSIBILITIES}
+              name="responsibilities"
+              placeholder="Paste from JD or write 4-8 bullet points"
+            />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Target duration (minutes)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                defaultValue="45"
+                name="target_duration_minutes"
+                type="number"
+              />
+            </FormField>
+            <FormField label="Difficulty">
+              <FormSelect defaultValue="mid" name="difficulty">
                 <option value="junior">junior</option>
                 <option value="mid">mid</option>
                 <option value="senior">senior</option>
                 <option value="expert">expert</option>
-              </select>
-            </label>
+              </FormSelect>
+            </FormField>
           </div>
-          <Field
-            label="Domains (comma-separated)"
-            name="domains"
-            placeholder="hubspot, marketing, ops"
-          />
-          <Field
-            label="Required competencies"
-            name="required_competencies"
-            placeholder="e.g. hubspot.workflows, marketing.analytics"
-          />
+          <FormField label="Domains (comma-separated)">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="domains"
+              placeholder="hubspot, marketing, ops"
+            />
+          </FormField>
+          <FormField label="Required competencies">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="required_competencies"
+              placeholder="e.g. hubspot.workflows, marketing.analytics"
+            />
+          </FormField>
 
           <fieldset className="space-y-3 rounded border border-border/40 bg-background/30 p-3">
             <legend className="eyebrow-label px-1">
@@ -194,11 +199,12 @@ export default async function NewModuleWizardPage({
             </div>
           </fieldset>
 
-          <Field
-            label="Notes for the generator (optional)"
-            name="notes"
-            textarea
-          />
+          <FormField label="Notes for the generator (optional)">
+            <FormTextarea
+              className="h-32 focus:border-primary focus:outline-none"
+              name="notes"
+            />
+          </FormField>
 
           <SubmitButton className="btn-primary text-sm" pendingLabel="Generating outline...">
             Generate outline
@@ -225,50 +231,6 @@ function optionalPct(form: FormData, name: string): number | null {
   return v;
 }
 
-function Field({
-  label,
-  name,
-  placeholder,
-  defaultValue,
-  required,
-  type = "text",
-  textarea = false,
-}: {
-  label: string;
-  name: string;
-  placeholder?: string;
-  defaultValue?: string;
-  required?: boolean;
-  type?: string;
-  textarea?: boolean;
-}) {
-  const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
-  return (
-    <label className="space-y-1" htmlFor={name}>
-      <span className="text-sm">{label}</span>
-      {textarea ? (
-        <textarea
-          className={`${className} h-32`}
-          defaultValue={defaultValue}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-        />
-      ) : (
-        <input
-          className={className}
-          defaultValue={defaultValue}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          type={type}
-        />
-      )}
-    </label>
-  );
-}
 
 function NumField({ label, name }: { label: string; name: string }) {
   return (
