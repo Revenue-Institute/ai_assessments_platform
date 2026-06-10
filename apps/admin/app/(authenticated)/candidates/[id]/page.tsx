@@ -57,10 +57,8 @@ export default async function CandidateDetailPage({
       );
     }
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
-      notFound();
-    }
     if (e instanceof ApiError) {
+      if (e.status === 404) notFound();
       error = e.message;
     } else {
       throw e;
@@ -171,12 +169,13 @@ function Sparkline({ points }: { points: number[] }) {
   const H = 36;
   const max = 100;
   const stepX = points.length > 1 ? W / (points.length - 1) : 0;
-  const path = points
-    .map((p, i) => {
-      const x = i * stepX;
-      const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
+  const coords = points.map((p, i) => ({
+    x: i * stepX,
+    y: H - (Math.max(0, Math.min(max, p)) / max) * H,
+    p,
+  }));
+  const path = coords
+    .map(({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`)
     .join(" ");
   return (
     <svg
@@ -194,19 +193,15 @@ function Sparkline({ points }: { points: number[] }) {
         strokeLinejoin="round"
         strokeWidth={2}
       />
-      {points.map((p, i) => {
-        const x = i * stepX;
-        const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
-        return (
-          <circle
-            cx={x}
-            cy={y}
-            fill="currentColor"
-            key={`${x.toFixed(1)}-${y.toFixed(1)}-${p}`}
-            r={2}
-          />
-        );
-      })}
+      {coords.map(({ x, y, p }) => (
+        <circle
+          cx={x}
+          cy={y}
+          fill="currentColor"
+          key={`${x.toFixed(1)}-${y.toFixed(1)}-${p}`}
+          r={2}
+        />
+      ))}
     </svg>
   );
 }

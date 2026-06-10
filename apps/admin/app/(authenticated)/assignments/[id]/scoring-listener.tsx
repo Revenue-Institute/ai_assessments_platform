@@ -10,6 +10,13 @@ interface ScoringEvent {
 
 type ScoringPhase = "idle" | "queued" | "completed" | "failed";
 
+const PHASE_LABELS: Record<ScoringPhase, string> = {
+  idle: "",
+  queued: "Scoring...",
+  completed: "Score updated",
+  failed: "Scoring failed",
+};
+
 function toneFor(phase: ScoringPhase): string {
   if (phase === "failed") {
     return "bg-destructive/15 text-destructive";
@@ -53,18 +60,12 @@ export function ScoringListener({ assignmentId }: { assignmentId: string }) {
   if (phase === "idle") {
     return null;
   }
-  const labels: Record<ScoringPhase, string> = {
-    idle: "",
-    queued: "Scoring...",
-    completed: "Score updated",
-    failed: "Scoring failed",
-  };
   return (
     <span
       aria-live="polite"
       className={`inline-flex items-center rounded px-2 py-0.5 font-medium text-[11px] uppercase tracking-wide ${toneFor(phase)}`}
     >
-      {labels[phase]}
+      {PHASE_LABELS[phase]}
     </span>
   );
 }

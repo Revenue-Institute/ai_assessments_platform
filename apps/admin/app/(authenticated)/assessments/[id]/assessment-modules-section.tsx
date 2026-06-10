@@ -43,29 +43,12 @@ export function AssessmentModulesSection({
     });
   }
 
-  function moveUp(index: number) {
-    if (index <= 0) {
-      return;
-    }
+  function move(index: number, delta: -1 | 1) {
     const ids = assessment.modules.map((m) => m.module_id);
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) return;
     const next = ids.slice();
-    [next[index - 1], next[index]] = [
-      next[index] as string,
-      next[index - 1] as string,
-    ];
-    handle(reorderAssessmentAction(assessment.id, next));
-  }
-
-  function moveDown(index: number) {
-    const ids = assessment.modules.map((m) => m.module_id);
-    if (index < 0 || index >= ids.length - 1) {
-      return;
-    }
-    const next = ids.slice();
-    [next[index], next[index + 1]] = [
-      next[index + 1] as string,
-      next[index] as string,
-    ];
+    [next[index], next[target]] = [next[target] as string, next[index] as string];
     handle(reorderAssessmentAction(assessment.id, next));
   }
 
@@ -121,14 +104,14 @@ export function AssessmentModulesSection({
                   <ActionButton
                     aria-label="Move up"
                     disabled={i === 0 || pending}
-                    onClick={() => moveUp(i)}
+                    onClick={() => move(i, -1)}
                   >
                     ↑
                   </ActionButton>
                   <ActionButton
                     aria-label="Move down"
                     disabled={i === assessment.modules.length - 1 || pending}
-                    onClick={() => moveDown(i)}
+                    onClick={() => move(i, 1)}
                   >
                     ↓
                   </ActionButton>

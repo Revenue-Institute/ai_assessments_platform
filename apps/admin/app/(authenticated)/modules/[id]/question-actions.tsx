@@ -97,6 +97,7 @@ function VariantsPanel({
     typeof rubricShape.scoring_mode === "string"
       ? rubricShape.scoring_mode
       : null;
+  const ready = !loading && !error;
 
   return (
     <Modal onClose={onClose} title="5 sampled variants">
@@ -157,7 +158,7 @@ function VariantsPanel({
         <p className="text-muted-foreground text-sm">Sampling variants...</p>
       )}
       <AlertBanner>{error}</AlertBanner>
-      {!(loading || error) && rows.length > 0 && (
+      {ready && rows.length > 0 && (
         <ol className="grid gap-3 md:grid-cols-2">
           {rows.map((v) => (
             <li
@@ -194,7 +195,7 @@ function VariantsPanel({
           ))}
         </ol>
       )}
-      {!(loading || error) && rows.length === 0 && (
+      {ready && rows.length === 0 && (
         <p className="text-muted-foreground text-sm">
           No variants returned. This question may not have a randomized variable
           schema attached.
@@ -347,8 +348,8 @@ function Modal({
         onClose();
       }
     }
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   return (

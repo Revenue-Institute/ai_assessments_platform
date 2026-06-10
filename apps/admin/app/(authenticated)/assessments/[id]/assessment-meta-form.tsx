@@ -62,14 +62,14 @@ export function AssessmentMetaForm({
         <FormField label="Title">
           <FormInput
             className="focus:border-primary focus:outline-none"
-            onChange={(e) => { setTitle(e.target.value); setSaved(false); }}
+            onChange={(e) => setTitle(e.target.value)}
             value={title}
           />
         </FormField>
         <FormField label="Description">
           <FormTextarea
             className="h-24 focus:border-primary focus:outline-none"
-            onChange={(e) => { setDescription(e.target.value); setSaved(false); }}
+            onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional"
             value={description}
           />

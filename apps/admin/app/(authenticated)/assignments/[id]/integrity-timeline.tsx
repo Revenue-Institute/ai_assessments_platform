@@ -152,6 +152,11 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
     });
   }
 
+  const chips = useMemo(
+    () => Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)),
+    [counts]
+  );
+
   if (events.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -159,8 +164,6 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
       </p>
     );
   }
-
-  const chips = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div className="space-y-3">

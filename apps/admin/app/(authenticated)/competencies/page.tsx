@@ -4,6 +4,15 @@ import { Header } from "../components/header";
 
 const ROOTS = taxonomy.filter((c) => c.parent_id === null);
 
+const CHILDREN_BY_PARENT = new Map<string, typeof taxonomy>();
+for (const c of taxonomy) {
+  if (c.parent_id !== null) {
+    const list = CHILDREN_BY_PARENT.get(c.parent_id) ?? [];
+    list.push(c);
+    CHILDREN_BY_PARENT.set(c.parent_id, list);
+  }
+}
+
 export default function CompetenciesPage() {
   return (
     <>
@@ -23,7 +32,7 @@ export default function CompetenciesPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {ROOTS.map((root) => {
-            const children = taxonomy.filter((c) => c.parent_id === root.id);
+            const children = CHILDREN_BY_PARENT.get(root.id) ?? [];
             return (
               <article
                 className="rounded-xl border border-border/50 bg-muted/20 p-4"

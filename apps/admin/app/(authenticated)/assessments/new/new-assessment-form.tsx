@@ -35,26 +35,13 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
     );
   }
 
-  function moveUp(id: string) {
+  function move(id: string, delta: -1 | 1) {
     setSelected((prev) => {
       const i = prev.indexOf(id);
-      if (i <= 0) {
-        return prev;
-      }
+      const target = i + delta;
+      if (i < 0 || target < 0 || target >= prev.length) return prev;
       const next = prev.slice();
-      [next[i - 1], next[i]] = [next[i] as string, next[i - 1] as string];
-      return next;
-    });
-  }
-
-  function moveDown(id: string) {
-    setSelected((prev) => {
-      const i = prev.indexOf(id);
-      if (i < 0 || i >= prev.length - 1) {
-        return prev;
-      }
-      const next = prev.slice();
-      [next[i], next[i + 1]] = [next[i + 1] as string, next[i] as string];
+      [next[i], next[target]] = [next[target] as string, next[i] as string];
       return next;
     });
   }
@@ -172,7 +159,7 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                           aria-label="Move up"
                           className="rounded border border-border/40 px-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
                           disabled={i === 0}
-                          onClick={() => moveUp(id)}
+                          onClick={() => move(id, -1)}
                           type="button"
                         >
                           ↑
@@ -181,13 +168,13 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                           aria-label="Move down"
                           className="rounded border border-border/40 px-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
                           disabled={i === selected.length - 1}
-                          onClick={() => moveDown(id)}
+                          onClick={() => move(id, 1)}
                           type="button"
                         >
                           ↓
                         </button>
                         <button
-                          aria-label={`Remove ${m?.title}`}
+                          aria-label={`Remove ${m.title}`}
                           className="rounded border border-destructive/40 px-1 text-destructive hover:bg-destructive/15"
                           onClick={() => toggleModule(id)}
                           type="button"

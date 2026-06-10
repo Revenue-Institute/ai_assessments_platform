@@ -91,11 +91,7 @@ export default async function AssignmentDetailPage({
           .catch(() => null)
       )
     );
-    for (const d of distributions) {
-      if (d) {
-        distributionRows.push(d);
-      }
-    }
+    distributionRows.push(...distributions.filter((d) => d != null));
   } catch {
     // Distributions are best-effort; assignment detail must still load.
   }
@@ -104,56 +100,42 @@ export default async function AssignmentDetailPage({
     "use server";
     try {
       await cancelAssignment(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
-      }
-      throw e;
+      if (!(e instanceof ApiError)) throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function rescoreAll(): Promise<void> {
     "use server";
     try {
       await rescoreAssignment(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
-      }
-      throw e;
+      if (!(e instanceof ApiError)) throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function resendEmail(): Promise<void> {
     "use server";
     try {
       await resendAssignmentEmail(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
-      }
-      throw e;
+      if (!(e instanceof ApiError)) throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function rescoreOne(formData: FormData): Promise<void> {
     "use server";
     const attemptId = String(formData.get("attempt_id") ?? "");
-    if (!attemptId) {
-      return;
-    }
+    if (!attemptId) return;
     try {
       await rescoreAttempt(attemptId);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
-      }
-      throw e;
+      if (!(e instanceof ApiError)) throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   return (

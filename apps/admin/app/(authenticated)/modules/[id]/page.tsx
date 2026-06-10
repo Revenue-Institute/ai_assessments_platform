@@ -75,7 +75,7 @@ export default async function ModuleDetailPage({
       );
     }
     try {
-      await deleteModuleQuestion(id, questionId as string);
+      await deleteModuleQuestion(id, questionId);
       redirect(`/modules/${id}?ok=${encodeURIComponent("Question removed.")}`);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -90,20 +90,20 @@ export default async function ModuleDetailPage({
   if (detail.questions.length === 0) {
     preflight.push({ message: "Add at least one question before publishing." });
   }
-  const taglessQuestions = detail.questions.filter(
-    (q) => !q.competency_tags || q.competency_tags.length === 0
-  );
-  if (taglessQuestions.length > 0) {
+  let taglessCount = 0;
+  let pointlessCount = 0;
+  for (const q of detail.questions) {
+    if (!q.competency_tags || q.competency_tags.length === 0) taglessCount++;
+    if (!q.max_points || q.max_points <= 0) pointlessCount++;
+  }
+  if (taglessCount > 0) {
     preflight.push({
-      message: `${taglessQuestions.length} question(s) missing a competency tag.`,
+      message: `${taglessCount} question(s) missing a competency tag.`,
     });
   }
-  const pointlessQuestions = detail.questions.filter(
-    (q) => !q.max_points || q.max_points <= 0
-  );
-  if (pointlessQuestions.length > 0) {
+  if (pointlessCount > 0) {
     preflight.push({
-      message: `${pointlessQuestions.length} question(s) have no point value.`,
+      message: `${pointlessCount} question(s) have no point value.`,
     });
   }
 

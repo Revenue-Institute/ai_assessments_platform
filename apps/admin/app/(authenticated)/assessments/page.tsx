@@ -31,7 +31,7 @@ export default async function AssessmentsPage() {
 
         <AlertBanner>{error}</AlertBanner>
 
-        {assessments.length === 0 && !error ? (
+        {!error && assessments.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">
               No assessments yet. Create your first assessment.

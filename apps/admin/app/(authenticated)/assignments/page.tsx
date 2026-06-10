@@ -34,7 +34,7 @@ export default async function AssignmentsPage({
           </div>
           <div className="flex items-center gap-2">
             <Link
-              aria-pressed={reviewOnly}
+              aria-current={reviewOnly ? "page" : undefined}
               className={`rounded border px-3 py-1.5 text-xs ${
                 reviewOnly
                   ? "border-warning/60 bg-warning/15 text-warning"
@@ -52,7 +52,7 @@ export default async function AssignmentsPage({
 
         <AlertBanner>{error}</AlertBanner>
 
-        {assignments.length === 0 && !error ? (
+        {!error && assignments.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">No assignments yet.</p>
             <Link className="btn-primary mt-3 text-sm" href="/assignments/new">

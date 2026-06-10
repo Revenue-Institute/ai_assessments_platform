@@ -81,26 +81,22 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
     );
   }
 
-  const totalQuestions = topics.reduce(
-    (sum, t) => sum + (Number(t.question_count) || 0),
-    0
-  );
-  const totalWeight = topics.reduce(
-    (sum, t) => sum + (Number(t.weight_pct) || 0),
-    0
-  );
+  let totalQuestions = 0;
+  let totalWeight = 0;
+  for (const t of topics) {
+    totalQuestions += Number(t.question_count) || 0;
+    totalWeight += Number(t.weight_pct) || 0;
+  }
 
   function openProgressStream() {
     // Seed every known topic as pending so the UI renders the full list
     // immediately, then SSE events transition individual rows to running /
     // done / failed. Re-open is a no-op if the previous source is alive.
-    setTopicStatus(() => {
-      const initial: Record<string, TopicStatus> = {};
-      for (const t of topics) {
-        initial[t.name] = "pending";
-      }
-      return initial;
-    });
+    const initial: Record<string, TopicStatus> = {};
+    for (const t of topics) {
+      initial[t.name] = "pending";
+    }
+    setTopicStatus(initial);
     setTopicError({});
     eventSourceRef.current?.close();
     let source: EventSource;
@@ -401,24 +397,26 @@ function TopicProgressList({
   );
 }
 
+const STATUS_LABELS: Record<TopicStatus, string> = {
+  pending: "Pending",
+  running: "Running",
+  done: "Done",
+  failed: "Failed",
+};
+
+const STATUS_TONE: Record<TopicStatus, string> = {
+  pending: "border-border/40 bg-muted/40 text-muted-foreground",
+  running: "border-primary/40 bg-primary/10 text-primary",
+  done: "border-primary/50 bg-primary/15 text-primary",
+  failed: "border-destructive/50 bg-destructive/15 text-destructive",
+};
+
 function StatusBadge({ status }: { status: TopicStatus }) {
-  const labels: Record<TopicStatus, string> = {
-    pending: "Pending",
-    running: "Running",
-    done: "Done",
-    failed: "Failed",
-  };
-  const tone: Record<TopicStatus, string> = {
-    pending: "border-border/40 bg-muted/40 text-muted-foreground",
-    running: "border-primary/40 bg-primary/10 text-primary",
-    done: "border-primary/50 bg-primary/15 text-primary",
-    failed: "border-destructive/50 bg-destructive/15 text-destructive",
-  };
   return (
     <span
-      className={`inline-flex items-center rounded border px-2 py-0.5 font-medium text-[10px] uppercase tracking-wide ${tone[status]}`}
+      className={`inline-flex items-center rounded border px-2 py-0.5 font-medium text-[10px] uppercase tracking-wide ${STATUS_TONE[status]}`}
     >
-      {labels[status]}
+      {STATUS_LABELS[status]}
     </span>
   );
 }

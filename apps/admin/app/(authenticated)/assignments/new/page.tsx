@@ -78,8 +78,8 @@ export default async function NewAssignmentPage({
     }
   }
 
-  const issuedLinks = decodeIssuedLinks(sp.links);
-  const failedRows = decodeFailedRows(sp.failed);
+  const issuedLinks = decodeJsonParam<{ assignment_id: string; magic_link_url: string }>(sp.links);
+  const failedRows = decodeJsonParam<{ subject_id: string; detail: string }>(sp.failed);
 
   return (
     <>
@@ -235,25 +235,8 @@ function linkPair(link: AssignmentMagicLink) {
   };
 }
 
-function decodeIssuedLinks(
-  raw: string | undefined
-): Array<{ assignment_id: string; magic_link_url: string }> {
-  if (!raw) {
-    return [];
-  }
-  try {
-    return JSON.parse(decodeURIComponent(raw));
-  } catch {
-    return [];
-  }
-}
-
-function decodeFailedRows(
-  raw: string | undefined
-): Array<{ subject_id: string; detail: string }> {
-  if (!raw) {
-    return [];
-  }
+function decodeJsonParam<T>(raw: string | undefined): T[] {
+  if (!raw) return [];
   try {
     return JSON.parse(decodeURIComponent(raw));
   } catch {

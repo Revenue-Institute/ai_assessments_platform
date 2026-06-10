@@ -32,7 +32,6 @@ export async function createAssessmentAction(input: {
     );
   }
 
-  let createdId: string | null = null;
   try {
     const created = await createAssessment({
       slug,
@@ -40,15 +39,13 @@ export async function createAssessmentAction(input: {
       description,
       module_ids: input.module_ids,
     });
-    createdId = created.id;
+    redirect(`/assessments/${created.id}`);
   } catch (e) {
     if (e instanceof ApiError) {
       redirect(`/assessments/new?error=${encodeURIComponent(e.message)}`);
     }
     throw e;
   }
-
-  redirect(`/assessments/${createdId}`);
 }
 
 export async function patchAssessmentAction(
@@ -59,7 +56,7 @@ export async function patchAssessmentAction(
   if (!title) {
     return { ok: false, error: "Title is required." };
   }
-  return await runApiAction(() =>
+  return runApiAction(() =>
     patchAssessment(id, {
       title,
       description: input.description?.trim() || null,
@@ -71,7 +68,7 @@ export async function addAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  return await runApiAction(() =>
+  return runApiAction(() =>
     addAssessmentModule(id, { module_id: moduleId })
   );
 }
@@ -80,14 +77,14 @@ export async function removeAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  return await runApiAction(() => removeAssessmentModule(id, moduleId));
+  return runApiAction(() => removeAssessmentModule(id, moduleId));
 }
 
 export async function reorderAssessmentAction(
   id: string,
   moduleIds: string[]
 ): Promise<ActionResult> {
-  return await runApiAction(() => reorderAssessment(id, moduleIds));
+  return runApiAction(() => reorderAssessment(id, moduleIds));
 }
 
 export async function publishAssessmentAction(id: string): Promise<void> {

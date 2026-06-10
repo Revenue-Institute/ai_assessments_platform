@@ -258,6 +258,12 @@ function SeriesTrendChart({ focus, trend }: ChartProps) {
   const yFor = (pct: number) =>
     padT + (1 - Math.max(0, Math.min(100, pct)) / 100) * innerH;
 
+  const span = maxSeq - minSeq;
+  const stepSeq = Math.max(1, Math.ceil((span + 1) / 12));
+  const xTicks: number[] = [];
+  for (let s = minSeq; s <= maxSeq; s += stepSeq) xTicks.push(s);
+  if (xTicks.at(-1) !== maxSeq) xTicks.push(maxSeq);
+
   return (
     <div className="text-foreground">
       <svg
@@ -301,43 +307,34 @@ function SeriesTrendChart({ focus, trend }: ChartProps) {
         })}
 
         {/* x-axis ticks: one per integer sequence number, capped at 12 */}
-        {(() => {
-          const span = maxSeq - minSeq;
-          const stepSeq = Math.max(1, Math.ceil((span + 1) / 12));
-          const ticks: number[] = [];
-          for (let s = minSeq; s <= maxSeq; s += stepSeq) {
-            ticks.push(s);
-          }
-          if (ticks.at(-1) !== maxSeq) {
-            ticks.push(maxSeq);
-          }
-          return ticks.map((s) => (
-            <text
-              className="text-muted-foreground"
-              fill="currentColor"
-              fontSize={10}
-              key={`xtick-${s}`}
-              textAnchor="middle"
-              x={xFor(s)}
-              y={H - 10}
-            >
-              #{s}
-            </text>
-          ));
-        })()}
+        {xTicks.map((s) => (
+          <text
+            className="text-muted-foreground"
+            fill="currentColor"
+            fontSize={10}
+            key={`xtick-${s}`}
+            textAnchor="middle"
+            x={xFor(s)}
+            y={H - 10}
+          >
+            #{s}
+          </text>
+        ))}
 
         {usable.map((line, idx) => {
           const color = TREND_COLORS[idx % TREND_COLORS.length];
           const sorted = [...line.points].sort(
             (a, b) => a.sequence_number - b.sequence_number
           );
-          const path = sorted
+          const coords = sorted
             .filter((p) => p.score_pct != null)
-            .map((p, i) => {
-              const x = xFor(p.sequence_number);
-              const y = yFor(p.score_pct ?? 0);
-              return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-            })
+            .map((p) => ({
+              x: xFor(p.sequence_number),
+              y: yFor(p.score_pct ?? 0),
+              seq: p.sequence_number,
+            }));
+          const path = coords
+            .map(({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`)
             .join(" ");
           return (
             <g key={line.competency_id}>
@@ -349,17 +346,15 @@ function SeriesTrendChart({ focus, trend }: ChartProps) {
                 strokeLinejoin="round"
                 strokeWidth={2}
               />
-              {sorted
-                .filter((p) => p.score_pct != null)
-                .map((p) => (
-                  <circle
-                    cx={xFor(p.sequence_number)}
-                    cy={yFor(p.score_pct ?? 0)}
-                    fill={color}
-                    key={`pt-${line.competency_id}-${p.sequence_number}`}
-                    r={3}
-                  />
-                ))}
+              {coords.map(({ x, y, seq }) => (
+                <circle
+                  cx={x}
+                  cy={y}
+                  fill={color}
+                  key={`pt-${line.competency_id}-${seq}`}
+                  r={3}
+                />
+              ))}
             </g>
           );
         })}

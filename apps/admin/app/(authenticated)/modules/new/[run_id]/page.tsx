@@ -138,14 +138,12 @@ export default async function OutlineReviewPage({
     }
   }
 
-  const totalQuestions = outline.topics.reduce(
-    (sum, t) => sum + (t.question_count || 0),
-    0
-  );
-  const totalWeight = outline.topics.reduce(
-    (sum, t) => sum + (t.weight_pct || 0),
-    0
-  );
+  let totalQuestions = 0;
+  let totalWeight = 0;
+  for (const t of outline.topics) {
+    totalQuestions += t.question_count || 0;
+    totalWeight += t.weight_pct || 0;
+  }
 
   return (
     <>

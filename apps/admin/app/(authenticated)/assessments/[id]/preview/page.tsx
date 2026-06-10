@@ -78,9 +78,12 @@ export default async function AssessmentPreviewPage({
     (acc, b) => acc + (b.preview?.questions.length ?? 0),
     0
   );
-  const questionOffsets = blocks.map((_, i) =>
-    blocks.slice(0, i).reduce((s, b) => s + (b.preview?.questions.length ?? 0), 0)
-  );
+  const questionOffsets: number[] = [];
+  let running = 0;
+  for (const b of blocks) {
+    questionOffsets.push(running);
+    running += b.preview?.questions.length ?? 0;
+  }
 
   return (
     <>

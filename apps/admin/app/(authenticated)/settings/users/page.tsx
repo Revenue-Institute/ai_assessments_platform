@@ -7,22 +7,24 @@ import { UsersTable } from "./users-table";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsUsersPage() {
-  let me: Awaited<ReturnType<typeof fetchAdminMe>> | null = null;
-  let users: Awaited<ReturnType<typeof listAdminUsers>> = [];
-  let meError: string | null = null;
-  let usersError: string | null = null;
-
-  try {
-    me = await fetchAdminMe();
-  } catch (e) {
-    meError = e instanceof ApiError ? e.message : "Could not load profile.";
-  }
-  try {
-    users = await listAdminUsers();
-  } catch (e) {
-    usersError =
-      e instanceof ApiError ? e.message : "Could not load internal users.";
-  }
+  const [meResult, usersResult] = await Promise.allSettled([
+    fetchAdminMe(),
+    listAdminUsers(),
+  ]);
+  const me = meResult.status === "fulfilled" ? meResult.value : null;
+  const meError =
+    meResult.status === "rejected"
+      ? meResult.reason instanceof ApiError
+        ? meResult.reason.message
+        : "Could not load profile."
+      : null;
+  const users = usersResult.status === "fulfilled" ? usersResult.value : [];
+  const usersError =
+    usersResult.status === "rejected"
+      ? usersResult.reason instanceof ApiError
+        ? usersResult.reason.message
+        : "Could not load internal users."
+      : null;
 
   return (
     <>

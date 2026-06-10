@@ -146,7 +146,7 @@ function TypeFilterChips({
         const isActive = active === opt.value;
         return (
           <Link
-            aria-pressed={isActive}
+            aria-current={isActive ? "page" : undefined}
             className={`rounded border px-3 py-1.5 text-xs transition ${
               isActive
                 ? "border-primary/60 bg-primary/15 text-primary"
