@@ -103,9 +103,11 @@ export function NotebookRenderer({
   const [running, setRunning] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
 
-  useUnsavedChangesWarning(
-    JSON.stringify(cells) !== JSON.stringify(initialBootstrapped)
+  const initialSerialized = useMemo(
+    () => JSON.stringify(initialBootstrapped),
+    [initialBootstrapped]
   );
+  useUnsavedChangesWarning(JSON.stringify(cells) !== initialSerialized);
 
   function makeCellOnMount(i: number): OnMount {
     return (editor) => {

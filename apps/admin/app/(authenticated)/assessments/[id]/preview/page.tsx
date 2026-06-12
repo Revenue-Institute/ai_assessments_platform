@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
@@ -19,6 +20,16 @@ import { QuestionPreviewRenderer } from "../../../components/question-preview-re
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getAssessment(id);
+    return { title: `Preview - ${detail.title}` };
+  } catch {
+    return { title: "Assessment Preview" };
+  }
+}
 
 interface ModulePreviewBlock {
   error: string | null;

@@ -168,13 +168,13 @@ export function CandidateMonitor({
         );
       }
     };
-    addEventListener("beforeunload", onUnload);
+    window.addEventListener("beforeunload", onUnload);
 
     return () => {
       teardown();
       clearInterval(flushTimer);
       clearInterval(heartbeatTimer);
-      removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("beforeunload", onUnload);
       flushEvents();
       sendHeartbeat();
     };
@@ -208,9 +208,9 @@ export function CandidateMonitor({
         e.preventDefault();
       }
     };
-    addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown);
       modalReturnFocusRef.current?.focus?.();
     };
   }, [showExitModal, enterFullscreen]);

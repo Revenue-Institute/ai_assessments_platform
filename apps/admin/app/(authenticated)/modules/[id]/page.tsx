@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -18,6 +19,16 @@ import { QuestionActions } from "./question-actions";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getModule(id);
+    return { title: detail.title };
+  } catch {
+    return { title: "Module" };
+  }
+}
 type SearchParams = Promise<{ error?: string; ok?: string }>;
 
 export default async function ModuleDetailPage({

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -27,6 +28,16 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getAssignment(id);
+    return { title: detail.subject_full_name ?? "Assignment" };
+  } catch {
+    return { title: "Assignment" };
+  }
+}
+
 export default async function AssignmentDetailPage({
   params,
 }: {
@@ -34,22 +45,22 @@ export default async function AssignmentDetailPage({
 }) {
   const { id } = await params;
 
-  let detail: Awaited<ReturnType<typeof getAssignment>>;
-  try {
-    detail = await getAssignment(id);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
+  const [detailResult, eventsResult] = await Promise.allSettled([
+    getAssignment(id),
+    listAssignmentEvents(id),
+  ]);
+
+  if (detailResult.status === "rejected") {
+    if (detailResult.reason instanceof ApiError && detailResult.reason.status === 404) {
       notFound();
     }
-    throw e;
+    throw detailResult.reason;
   }
 
-  let events: AttemptEvent[] = [];
-  try {
-    events = await listAssignmentEvents(id);
-  } catch {
-    // Soft fail: timeline is auxiliary; the rest of the page still loads.
-  }
+  const detail = detailResult.value;
+  // Soft fail: timeline is auxiliary; the rest of the page still loads.
+  const events: AttemptEvent[] =
+    eventsResult.status === "fulfilled" ? eventsResult.value : [];
 
   // §11.3: pull subject competency scores, match to this assignment, fetch team distribution per competency. Soft-fails.
   const distributionRows: Array<{

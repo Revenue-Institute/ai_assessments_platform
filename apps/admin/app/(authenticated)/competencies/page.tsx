@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
+
 import { taxonomy } from "@repo/competencies";
 
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Competencies" };
 
 const ROOTS = taxonomy.filter((c) => c.parent_id === null);
 

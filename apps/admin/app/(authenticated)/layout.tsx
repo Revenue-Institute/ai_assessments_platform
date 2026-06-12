@@ -8,6 +8,7 @@ import { ApiError, fetchAdminMe } from "@/lib/api";
 import { canAccessPath } from "@/lib/role-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { NavigationProgress } from "@/components/navigation-progress";
 import { GlobalSidebar } from "./components/sidebar";
 
 // Every page under (authenticated) reads cookies + headers for auth and
@@ -60,6 +61,7 @@ export default async function AuthenticatedLayout({
 
   return (
     <SidebarProvider>
+      <NavigationProgress />
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:font-medium focus:text-primary-foreground"
         href="#admin-main"

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import {
@@ -14,6 +15,8 @@ import { SubmitButton } from "@/components/submit-button";
 
 import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
+
+export const metadata: Metadata = { title: "New Assignment" };
 
 export const dynamic = "force-dynamic";
 

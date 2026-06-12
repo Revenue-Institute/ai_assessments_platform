@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import {
   type CohortHeatmapResponse,
   type SubjectType,
@@ -10,6 +12,8 @@ import { AlertBanner } from "@/components/alert-banner";
 
 import { CompetencyHeatmap } from "../components/competency-heatmap";
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Cohorts" };
 
 export const dynamic = "force-dynamic";
 

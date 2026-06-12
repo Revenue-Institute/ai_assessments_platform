@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -13,6 +14,8 @@ import { FormField, FormInput, FormSelect } from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Series" };
 
 export const dynamic = "force-dynamic";
 

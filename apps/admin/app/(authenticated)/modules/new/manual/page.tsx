@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ApiError, createModule, type Difficulty } from "@/lib/api";
@@ -6,6 +7,8 @@ import { FormField, FormInput, FormSelect, FormTextarea } from "@/components/for
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../../components/header";
+
+export const metadata: Metadata = { title: "New Module" };
 
 type SearchParams = Promise<{ error?: string }>;
 

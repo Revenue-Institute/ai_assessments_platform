@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -20,6 +21,16 @@ import { AssessmentModulesSection } from "./assessment-modules-section";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getAssessment(id);
+    return { title: detail.title };
+  } catch {
+    return { title: "Assessment" };
+  }
+}
 type SearchParams = Promise<{ error?: string; ok?: string }>;
 
 export default async function AssessmentDetailPage({

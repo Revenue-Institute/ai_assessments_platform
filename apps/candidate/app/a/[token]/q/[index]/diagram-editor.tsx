@@ -34,7 +34,7 @@ interface DiagramConfig {
   }>;
 }
 
-type Saved =
+export type Saved =
   | {
       nodes: Array<{
         id: string;
@@ -58,8 +58,7 @@ const FALLBACK_PALETTE = [
   { type: "default", label: "Decision" },
 ];
 
-let nextId = 1;
-const newNodeId = (): string => `n${Date.now().toString(36)}-${nextId++}`;
+const newNodeId = (): string => `n${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 function bootstrapNodes(config: DiagramConfig, saved: Saved): Node[] {
   const source = saved?.nodes?.length
@@ -121,10 +120,11 @@ function DiagramCanvas({
     label: string;
   } | null>(null);
 
-  useUnsavedChangesWarning(
-    JSON.stringify({ nodes, edges }) !==
-      JSON.stringify({ nodes: initialNodes, edges: initialEdges })
+  const initialSerialized = useMemo(
+    () => JSON.stringify({ nodes: initialNodes, edges: initialEdges }),
+    [initialNodes, initialEdges]
   );
+  useUnsavedChangesWarning(JSON.stringify({ nodes, edges }) !== initialSerialized);
 
   // Debounce diagram saves into a single `interactive_state_saved` event
   // every 2 seconds. The graph mutates on every drag tick, so emitting
@@ -236,10 +236,10 @@ function DiagramCanvas({
       />
       <div className="flex flex-wrap gap-2 text-xs">
         <span className="text-muted-foreground">Add:</span>
-        {palette.map((item) => (
+        {palette.map((item, i) => (
           <button
             className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10"
-            key={`${item.type}-${item.label}`}
+            key={`${i}-${item.type}-${item.label}`}
             onClick={() => addNode(item)}
             type="button"
           >

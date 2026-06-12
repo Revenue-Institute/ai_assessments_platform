@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -8,6 +9,7 @@ import {
   ApiError,
   competencyDistribution,
   listAssignments,
+  listSubjects,
   subjectCompetencyScores,
 } from "@/lib/api";
 import { AlertBanner } from "@/components/alert-banner";
@@ -20,6 +22,17 @@ import { IntegrityScore } from "../../components/integrity-score";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const subjects = await listSubjects();
+    const subject = subjects.find((s) => s.id === id);
+    return { title: subject?.full_name ?? "Candidate" };
+  } catch {
+    return { title: "Candidate" };
+  }
+}
 
 export default async function CandidateDetailPage({
   params,

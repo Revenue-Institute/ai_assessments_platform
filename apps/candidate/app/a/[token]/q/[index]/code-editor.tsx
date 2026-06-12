@@ -309,7 +309,10 @@ export function CodeRenderer({
       </div>
 
       {error && (
-        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
+        <p
+          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+          role="alert"
+        >
           {error}
         </p>
       )}
@@ -356,9 +359,7 @@ function StreamingResultPane({
     <section
       aria-live="polite"
       className="rounded-lg border border-border bg-card p-3 text-xs"
-      ref={(el) => {
-        paneRef.current = el;
-      }}
+      ref={paneRef}
     >
       <header className="mb-2 flex items-center justify-between">
         <p className="font-medium text-primary">Run output</p>

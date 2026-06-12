@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
+
 import { listModules, type ModuleSummary } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
 import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../components/header";
 import { NewAssessmentForm } from "./new-assessment-form";
+
+export const metadata: Metadata = { title: "New Assessment" };
 
 export const dynamic = "force-dynamic";
 

@@ -16,7 +16,7 @@ const TREND_COLORS = [
 ];
 
 export function SeriesTrendChart({ focus, trend }: SeriesTrendChartProps) {
-  const lines: SeriesTrendLine[] = trend?.trends ?? [];
+  const lines: SeriesTrendLine[] = Array.isArray(trend?.trends) ? trend.trends : [];
   const usable = lines.filter((l) => l.points.length > 0);
 
   if (focus.length === 0) {

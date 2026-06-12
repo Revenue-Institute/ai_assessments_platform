@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import {
@@ -9,13 +10,15 @@ import {
   uploadReferenceText,
   uploadReferenceUrl,
 } from "@/lib/api";
-import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+import { redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
 import { AlertBanner } from "@/components/alert-banner";
 import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "References" };
 
 export const dynamic = "force-dynamic";
 
@@ -28,19 +31,26 @@ export default async function ReferencesPage({
 }) {
   const { error, ok } = await searchParams;
 
-  const { data, error: loadError } = await loadOrApiError(listReferences);
-  const documents: ReferenceDocumentSummary[] = data ?? [];
+  const [refsResult, meResult] = await Promise.allSettled([
+    listReferences(),
+    fetchAdminMe(),
+  ]);
 
-  let canRemove = false;
-  try {
-    const me = await fetchAdminMe();
-    canRemove = roleSatisfies(me.role, "admin");
-  } catch (e) {
-    // Soft-fail: reviewers fall through with canRemove=false; hard backend rules still apply at /api.
-    if (!(e instanceof ApiError)) {
-      throw e;
-    }
+  const documents: ReferenceDocumentSummary[] =
+    refsResult.status === "fulfilled" ? refsResult.value : [];
+  const loadError: string | null =
+    refsResult.status === "rejected"
+      ? refsResult.reason instanceof ApiError
+        ? refsResult.reason.message
+        : "Could not load references."
+      : null;
+
+  // Soft-fail: reviewers fall through with canRemove=false; hard backend rules still apply at /api.
+  if (meResult.status === "rejected" && !(meResult.reason instanceof ApiError)) {
+    throw meResult.reason;
   }
+  const canRemove =
+    meResult.status === "fulfilled" && roleSatisfies(meResult.value.role, "admin");
 
   async function uploadUrlAction(formData: FormData): Promise<void> {
     "use server";

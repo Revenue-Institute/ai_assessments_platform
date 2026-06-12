@@ -17,8 +17,8 @@ function useBlockBackNavigation() {
       history.pushState(null, "", url);
     }
 
-    addEventListener("popstate", onPopState);
-    return () => removeEventListener("popstate", onPopState);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 }
 
@@ -115,9 +115,5 @@ export function QuestionNavigator({ current, total }: Props) {
 }
 
 function questionNumbers(total: number): number[] {
-  const numbers: number[] = [];
-  for (let number = 1; number <= total; number++) {
-    numbers.push(number);
-  }
-  return numbers;
+  return Array.from({ length: total }, (_, i) => i + 1);
 }

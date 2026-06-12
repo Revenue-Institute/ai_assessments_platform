@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { signIn } from "./actions";
 import { SignInForm } from "./sign-in-form";
+
+export const metadata: Metadata = { title: "Sign In" };
 
 type SearchParams = Promise<{ next?: string; error?: string }>;
 

@@ -124,12 +124,17 @@ export function SqlRenderer({
       </button>
 
       {networkError && (
-        <p className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm">
+        <p
+          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
+          role="alert"
+        >
           {networkError}
         </p>
       )}
 
-      {result && <ResultPane result={result} />}
+      <div aria-live="polite" aria-atomic="true">
+        {result && <ResultPane result={result} />}
+      </div>
     </div>
   );
 }

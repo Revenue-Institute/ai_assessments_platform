@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** Live countdown driven by the server's expires_at. The timer is a
  * display only; deadline enforcement happens server-side per spec §10.1.
@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
  * every 30 s under 5 min, and on each second in the final minute, plus
  * an `aria-live="assertive"` announcement when the deadline elapses. */
 export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
-  const deadline = new Date(deadlineIso).getTime();
+  const deadline = useMemo(() => new Date(deadlineIso).getTime(), [deadlineIso]);
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {

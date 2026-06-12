@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import {
@@ -17,6 +18,17 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ run_id: string }>;
 type SearchParams = Promise<{ error?: string }>;
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { run_id } = await params;
+  try {
+    const run = await fetchGenerationRun(run_id);
+    const brief = run.input_brief as { role_title?: string };
+    return { title: brief.role_title ? `Generate - ${brief.role_title}` : "Generate Module" };
+  } catch {
+    return { title: "Generate Module" };
+  }
+}
 
 function splitCsv(value: string): string[] {
   return value

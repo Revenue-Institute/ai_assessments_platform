@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { type AssignmentSummary, listAssignments } from "@/lib/api";
@@ -5,6 +6,8 @@ import { loadOrApiError } from "@/lib/api-helpers";
 import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Assignments" };
 
 export const dynamic = "force-dynamic";
 

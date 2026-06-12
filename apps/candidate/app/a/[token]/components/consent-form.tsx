@@ -1,3 +1,7 @@
+"use client";
+
+import { useFormStatus } from "react-dom";
+
 export function ConsentForm({
   action,
   error,
@@ -17,14 +21,22 @@ export function ConsentForm({
         </p>
       )}
       <form action={action}>
-        <button
-          aria-describedby="monitor-heading"
-          className="btn-primary w-full"
-          type="submit"
-        >
-          I understand and consent to begin
-        </button>
+        <ConsentSubmitButton />
       </form>
     </>
+  );
+}
+
+function ConsentSubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      aria-describedby="monitor-heading"
+      className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+      disabled={pending}
+      type="submit"
+    >
+      {pending ? "Starting..." : "I understand and consent to begin"}
+    </button>
   );
 }

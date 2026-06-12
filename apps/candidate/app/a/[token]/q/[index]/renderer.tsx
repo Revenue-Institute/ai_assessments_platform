@@ -1,3 +1,5 @@
+"use client";
+
 import {
   LongAnswerRenderer,
   McqRenderer,
@@ -6,14 +8,39 @@ import {
   ShortAnswerRenderer,
 } from "@repo/design-system/components/question-renderer";
 import { parseCodeConfig, parseSqlConfig } from "@repo/schemas";
+import dynamic from "next/dynamic";
 
 import type { CandidateQuestionView } from "@/lib/api";
+import type { Saved as DiagramSaved } from "./diagram-editor";
 
-import { CodeRenderer } from "./code-editor";
-import { DiagramRenderer } from "./diagram-editor";
-import { N8nRenderer } from "./n8n-editor";
-import { NotebookRenderer } from "./notebook-editor";
-import { SqlRenderer } from "./sql-editor";
+function EditorSkeleton() {
+  return (
+    <div className="h-64 animate-pulse rounded border border-border bg-muted/20" />
+  );
+}
+
+// Heavy editors loaded dynamically so each question page only downloads
+// the bundle it actually needs (Monaco, React Flow, n8n iframe, E2B).
+const CodeRenderer = dynamic(
+  () => import("./code-editor").then((m) => m.CodeRenderer),
+  { ssr: false, loading: () => <EditorSkeleton /> }
+);
+const SqlRenderer = dynamic(
+  () => import("./sql-editor").then((m) => m.SqlRenderer),
+  { ssr: false, loading: () => <EditorSkeleton /> }
+);
+const DiagramRenderer = dynamic(
+  () => import("./diagram-editor").then((m) => m.DiagramRenderer),
+  { ssr: false, loading: () => <EditorSkeleton /> }
+);
+const NotebookRenderer = dynamic(
+  () => import("./notebook-editor").then((m) => m.NotebookRenderer),
+  { ssr: false, loading: () => <EditorSkeleton /> }
+);
+const N8nRenderer = dynamic(
+  () => import("./n8n-editor").then((m) => m.N8nRenderer),
+  { ssr: false, loading: () => <EditorSkeleton /> }
+);
 
 /**
  * Top-level dispatch for candidate question rendering. Static types
@@ -104,7 +131,7 @@ export function QuestionRenderer({
       };
       const previous = (
         question.raw_answer?.value as
-          | { diagram?: Parameters<typeof DiagramRenderer>[0]["initialAnswer"] }
+          | { diagram?: DiagramSaved }
           | undefined
       )?.diagram;
       return <DiagramRenderer config={config} initialAnswer={previous} />;

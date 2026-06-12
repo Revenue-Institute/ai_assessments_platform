@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -12,6 +13,8 @@ import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../components/header";
 import { AddSubjectForm } from "./add-subject-form";
+
+export const metadata: Metadata = { title: "Candidates" };
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { type AssessmentSummary, listAssessments } from "@/lib/api";
@@ -6,6 +7,8 @@ import { AlertBanner } from "@/components/alert-banner";
 import { StatusBadge } from "@/components/status-badge";
 
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Assessments" };
 
 export const dynamic = "force-dynamic";
 

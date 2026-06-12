@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
+
 import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
 import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../components/header";
 import { UsersTable } from "./users-table";
+
+export const metadata: Metadata = { title: "Users" };
 
 export const dynamic = "force-dynamic";
 

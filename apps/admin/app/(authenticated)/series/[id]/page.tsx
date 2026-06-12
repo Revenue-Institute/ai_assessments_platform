@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -17,28 +18,42 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getSeriesDetail(id);
+    return { title: detail.name };
+  } catch {
+    return { title: "Series" };
+  }
+}
+
 export default async function SeriesDetailPage({ params }: { params: Params }) {
   const { id } = await params;
 
-  let detail: SeriesDetail;
-  try {
-    detail = await getSeriesDetail(id);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
+  const [detailResult, trendResult] = await Promise.allSettled([
+    getSeriesDetail(id),
+    getSeriesTrend(id),
+  ]);
+
+  if (detailResult.status === "rejected") {
+    if (detailResult.reason instanceof ApiError && detailResult.reason.status === 404) {
       notFound();
     }
-    throw e;
+    throw detailResult.reason;
   }
 
+  const detail: SeriesDetail = detailResult.value;
+
   // Trend is auxiliary: render the rest of the page even if the backend trend route is offline.
-  let trend: SeriesTrendResponse | null = null;
-  let trendError: string | null = null;
-  try {
-    trend = await getSeriesTrend(id);
-  } catch (e) {
-    trendError =
-      e instanceof ApiError ? e.message : "Could not load trend data.";
-  }
+  const trend: SeriesTrendResponse | null =
+    trendResult.status === "fulfilled" ? trendResult.value : null;
+  const trendError: string | null =
+    trendResult.status === "rejected"
+      ? trendResult.reason instanceof ApiError
+        ? trendResult.reason.message
+        : "Could not load trend data."
+      : null;
 
   const orderedAssignments = [...detail.assignments].sort(
     (a, b) => a.sequence_number - b.sequence_number
