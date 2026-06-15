@@ -136,7 +136,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_ADMIN_URL=${{ vars.NEXT_PUBLIC_ADMIN_URL }}
             NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
-            NEXT_PUBLIC_SENTRY_DSN_ADMIN=${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN }}
+            NEXT_PUBLIC_SENTRY_DSN_ADMIN=${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN || 'https://5354628f04f9429e615371fc371f0011@sentry.revenueinstitute.com/5' }}
 
       - name: Build and push (candidate)
         if: matrix.service == 'candidate'
@@ -154,7 +154,7 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
             NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=/a
-            NEXT_PUBLIC_SENTRY_DSN_CANDIDATE=${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE }}
+            NEXT_PUBLIC_SENTRY_DSN_CANDIDATE=${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE || 'https://16c2aa266d5d39b8fda33bc3aa3aeef8@sentry.revenueinstitute.com/6' }}
 
   deploy:
     name: SSH deploy
@@ -269,9 +269,9 @@ jobs:
           NEXT_PUBLIC_CANDIDATE_URL: ${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
-          SENTRY_DSN_API: ${{ vars.SENTRY_DSN_API }}
-          NEXT_PUBLIC_SENTRY_DSN_ADMIN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN }}
-          NEXT_PUBLIC_SENTRY_DSN_CANDIDATE: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE }}
+          SENTRY_DSN_API: ${{ vars.SENTRY_DSN_API || 'https://9c754dd655a2c0604f7e531969f876cb@sentry.revenueinstitute.com/4' }}
+          NEXT_PUBLIC_SENTRY_DSN_ADMIN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN || 'https://5354628f04f9429e615371fc371f0011@sentry.revenueinstitute.com/5' }}
+          NEXT_PUBLIC_SENTRY_DSN_CANDIDATE: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE || 'https://16c2aa266d5d39b8fda33bc3aa3aeef8@sentry.revenueinstitute.com/6' }}
           # Sensitive: GitHub environment Secrets (masked in logs).
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
