@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
   type AssignmentSummary,
   listAssignments,
@@ -8,7 +8,6 @@ import {
   listSeries,
   type ModuleSummary,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
 import { loadOrApiError } from "@/lib/api-helpers";
 
 import { Header } from "./components/header";
@@ -297,14 +296,13 @@ function EmptyAction({
 }
 
 function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === "completed"
-      ? "bg-primary/20 text-primary"
-      : status === "in_progress"
-        ? "bg-warning/20 text-warning"
-        : status === "cancelled" || status === "expired"
-          ? "bg-muted text-muted-foreground"
-          : "bg-secondary text-secondary-foreground";
+  const tones: Record<string, string> = {
+    completed: "bg-primary/20 text-primary",
+    in_progress: "bg-warning/20 text-warning",
+    cancelled: "bg-muted text-muted-foreground",
+    expired: "bg-muted text-muted-foreground",
+  };
+  const tone = tones[status] ?? "bg-secondary text-secondary-foreground";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

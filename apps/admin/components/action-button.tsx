@@ -18,7 +18,9 @@ export function ActionButton({
 }) {
   return (
     <button
-      className={className ? `${VARIANTS[variant]} ${className}` : VARIANTS[variant]}
+      className={
+        className ? `${VARIANTS[variant]} ${className}` : VARIANTS[variant]
+      }
       type="button"
       {...props}
     />

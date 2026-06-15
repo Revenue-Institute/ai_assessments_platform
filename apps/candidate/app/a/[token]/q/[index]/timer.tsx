@@ -11,7 +11,10 @@ import { useEffect, useMemo, useState } from "react";
  * every 30 s under 5 min, and on each second in the final minute, plus
  * an `aria-live="assertive"` announcement when the deadline elapses. */
 export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
-  const deadline = useMemo(() => new Date(deadlineIso).getTime(), [deadlineIso]);
+  const deadline = useMemo(
+    () => new Date(deadlineIso).getTime(),
+    [deadlineIso]
+  );
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {

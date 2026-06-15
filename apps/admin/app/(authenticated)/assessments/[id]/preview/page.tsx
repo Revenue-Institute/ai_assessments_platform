@@ -1,8 +1,8 @@
+import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
   ApiError,
   type AssessmentDetail,
@@ -11,7 +11,6 @@ import {
   type ModulePreviewResponse,
   previewModule,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../../components/header";
 import { OpenAsCandidateButton } from "../../../components/open-as-candidate-button";
@@ -21,7 +20,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getAssessment(id);
@@ -169,7 +172,8 @@ export default async function AssessmentPreviewPage({
                         >
                           <header className="mb-2 flex items-center justify-between">
                             <p className="eyebrow-label">
-                              Question {startOffset + i + 1} of {totalQuestions} · {q.type}
+                              Question {startOffset + i + 1} of {totalQuestions}{" "}
+                              · {q.type}
                             </p>
                             <p className="text-muted-foreground text-xs">
                               {q.max_points} pts

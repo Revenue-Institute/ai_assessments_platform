@@ -1,4 +1,4 @@
-import { ApiError, createCallApi } from "@repo/api-client";
+import { createCallApi } from "@repo/api-client";
 
 import { env } from "@/env";
 

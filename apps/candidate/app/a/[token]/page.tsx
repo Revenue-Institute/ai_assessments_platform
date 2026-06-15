@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ApiError, fetchAssignment, postConsent } from "@/lib/api";
 import { ErrorView } from "@/app/components/error-view";
 import { NoticeView } from "@/app/components/notice-view";
+import { ApiError, fetchAssignment, postConsent } from "@/lib/api";
 import { AssignmentCard } from "./components/assignment-card";
 import { ConsentForm } from "./components/consent-form";
 import { MonitoringDisclosure } from "./components/monitoring-disclosure";
@@ -30,7 +30,13 @@ export default async function CandidateLandingPage({
     assignment = await fetchAssignment(token);
   } catch (error) {
     if (error instanceof ApiError) {
-      return <ErrorView message={error.message} status={error.status} token={token} />;
+      return (
+        <ErrorView
+          message={error.message}
+          status={error.status}
+          token={token}
+        />
+      );
     }
     throw error;
   }

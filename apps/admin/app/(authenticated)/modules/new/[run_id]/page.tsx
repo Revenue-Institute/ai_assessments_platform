@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
   ApiError,
   fetchGenerationRun,
@@ -9,7 +9,6 @@ import {
   generateQuestions,
   type OutlineTopic,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../../components/header";
 import { OutlineReviewForm } from "./outline-review-form";
@@ -19,12 +18,20 @@ export const dynamic = "force-dynamic";
 type Params = Promise<{ run_id: string }>;
 type SearchParams = Promise<{ error?: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { run_id } = await params;
   try {
     const run = await fetchGenerationRun(run_id);
     const brief = run.input_brief as { role_title?: string };
-    return { title: brief.role_title ? `Generate - ${brief.role_title}` : "Generate Module" };
+    return {
+      title: brief.role_title
+        ? `Generate - ${brief.role_title}`
+        : "Generate Module",
+    };
   } catch {
     return { title: "Generate Module" };
   }

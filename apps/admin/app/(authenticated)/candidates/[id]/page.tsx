@@ -1,18 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
+  ApiError,
   type AssignmentSummary,
   type CompetencyDistributionResponse,
-  type SubjectCompetencyTrend,
-  ApiError,
   competencyDistribution,
   listAssignments,
   listSubjects,
+  type SubjectCompetencyTrend,
   subjectCompetencyScores,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { CompetencyRadar } from "../../components/competency-radar";
 import { DistributionBox } from "../../components/distribution-box";
@@ -23,7 +22,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const subjects = await listSubjects();
@@ -71,7 +74,9 @@ export default async function CandidateDetailPage({
     }
   } catch (e) {
     if (e instanceof ApiError) {
-      if (e.status === 404) notFound();
+      if (e.status === 404) {
+        notFound();
+      }
       error = e.message;
     } else {
       throw e;
@@ -188,7 +193,9 @@ function Sparkline({ points }: { points: number[] }) {
     p,
   }));
   const path = coords
-    .map(({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`)
+    .map(
+      ({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`
+    )
     .join(" ");
   return (
     <svg

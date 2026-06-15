@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
   createSubject,
   listSubjects,
@@ -9,7 +9,6 @@ import {
   type SubjectType,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../components/header";
 import { AddSubjectForm } from "./add-subject-form";

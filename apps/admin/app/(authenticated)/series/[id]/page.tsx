@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
-  type SeriesDetail,
-  type SeriesTrendResponse,
   ApiError,
   getSeriesDetail,
   getSeriesTrend,
+  type SeriesDetail,
+  type SeriesTrendResponse,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../../components/header";
 import { SeriesTrendChart } from "./series-trend-chart";
@@ -18,7 +17,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getSeriesDetail(id);
@@ -37,7 +40,10 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
   ]);
 
   if (detailResult.status === "rejected") {
-    if (detailResult.reason instanceof ApiError && detailResult.reason.status === 404) {
+    if (
+      detailResult.reason instanceof ApiError &&
+      detailResult.reason.status === 404
+    ) {
       notFound();
     }
     throw detailResult.reason;
@@ -48,12 +54,13 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
   // Trend is auxiliary: render the rest of the page even if the backend trend route is offline.
   const trend: SeriesTrendResponse | null =
     trendResult.status === "fulfilled" ? trendResult.value : null;
-  const trendError: string | null =
-    trendResult.status === "rejected"
-      ? trendResult.reason instanceof ApiError
+  let trendError: string | null = null;
+  if (trendResult.status === "rejected") {
+    trendError =
+      trendResult.reason instanceof ApiError
         ? trendResult.reason.message
-        : "Could not load trend data."
-      : null;
+        : "Could not load trend data.";
+  }
 
   const orderedAssignments = [...detail.assignments].sort(
     (a, b) => a.sequence_number - b.sequence_number

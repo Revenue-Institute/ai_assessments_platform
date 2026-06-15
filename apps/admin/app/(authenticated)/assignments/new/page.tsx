@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AssignmentMagicLink,
@@ -9,9 +11,6 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
-import { AlertBanner } from "@/components/alert-banner";
-import { FormField, FormInput, FormSelect } from "@/components/form-fields";
-import { SubmitButton } from "@/components/submit-button";
 
 import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
@@ -81,8 +80,13 @@ export default async function NewAssignmentPage({
     }
   }
 
-  const issuedLinks = decodeJsonParam<{ assignment_id: string; magic_link_url: string }>(sp.links);
-  const failedRows = decodeJsonParam<{ subject_id: string; detail: string }>(sp.failed);
+  const issuedLinks = decodeJsonParam<{
+    assignment_id: string;
+    magic_link_url: string;
+  }>(sp.links);
+  const failedRows = decodeJsonParam<{ subject_id: string; detail: string }>(
+    sp.failed
+  );
 
   return (
     <>
@@ -239,7 +243,9 @@ function linkPair(link: AssignmentMagicLink) {
 }
 
 function decodeJsonParam<T>(raw: string | undefined): T[] {
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   try {
     return JSON.parse(decodeURIComponent(raw));
   } catch {

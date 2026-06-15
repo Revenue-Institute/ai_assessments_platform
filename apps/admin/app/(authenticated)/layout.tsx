@@ -1,14 +1,12 @@
 import { SidebarProvider } from "@repo/design-system/components/ui/sidebar";
+import type { User } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import type { User } from "@supabase/supabase-js";
-
+import { NavigationProgress } from "@/components/navigation-progress";
 import { ApiError, fetchAdminMe } from "@/lib/api";
 import { canAccessPath } from "@/lib/role-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-import { NavigationProgress } from "@/components/navigation-progress";
 import { GlobalSidebar } from "./components/sidebar";
 
 // Every page under (authenticated) reads cookies + headers for auth and

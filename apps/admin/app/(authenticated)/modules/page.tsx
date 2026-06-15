@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
-import { listModules, type ModuleSummary } from "@/lib/api";
-import { loadOrApiError } from "@/lib/api-helpers";
 import { AlertBanner } from "@/components/alert-banner";
 import { StatusBadge } from "@/components/status-badge";
+import { listModules, type ModuleSummary } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 
 import { Header } from "../components/header";
 

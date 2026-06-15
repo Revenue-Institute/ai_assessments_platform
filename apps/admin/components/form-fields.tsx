@@ -13,6 +13,7 @@ export function FormField({
   children: ReactNode;
 }) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: wrapping label -- child element is the implicit control
     <label className={`space-y-1${className ? ` ${className}` : ""}`}>
       <span className="text-sm">{label}</span>
       {children}
@@ -25,7 +26,10 @@ export function FormInput({
   ...props
 }: ComponentPropsWithoutRef<"input">) {
   return (
-    <input className={className ? `${INPUT_BASE} ${className}` : INPUT_BASE} {...props} />
+    <input
+      className={className ? `${INPUT_BASE} ${className}` : INPUT_BASE}
+      {...props}
+    />
   );
 }
 
@@ -47,7 +51,10 @@ export function FormSelect({
   ...props
 }: ComponentPropsWithoutRef<"select">) {
   return (
-    <select className={className ? `${INPUT_BASE} ${className}` : INPUT_BASE} {...props}>
+    <select
+      className={className ? `${INPUT_BASE} ${className}` : INPUT_BASE}
+      {...props}
+    >
       {children}
     </select>
   );

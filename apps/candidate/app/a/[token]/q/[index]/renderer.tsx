@@ -130,9 +130,7 @@ export function QuestionRenderer({
         palette?: Array<{ type: string; label: string }>;
       };
       const previous = (
-        question.raw_answer?.value as
-          | { diagram?: DiagramSaved }
-          | undefined
+        question.raw_answer?.value as { diagram?: DiagramSaved } | undefined
       )?.diagram;
       return <DiagramRenderer config={config} initialAnswer={previous} />;
     }

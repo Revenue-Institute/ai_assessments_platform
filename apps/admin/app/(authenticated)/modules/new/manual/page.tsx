@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-
-import { ApiError, createModule, type Difficulty } from "@/lib/api";
 import { AlertBanner } from "@/components/alert-banner";
-import { FormField, FormInput, FormSelect, FormTextarea } from "@/components/form-fields";
+import {
+  FormField,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from "@/components/form-fields";
 import { SubmitButton } from "@/components/submit-button";
+import { ApiError, createModule, type Difficulty } from "@/lib/api";
 
 import { Header } from "../../../components/header";
 
@@ -124,7 +128,10 @@ export default async function NewModulePage({
               <option value="expert">expert</option>
             </FormSelect>
           </FormField>
-          <SubmitButton className="btn-primary mt-2 text-sm" pendingLabel="Creating...">
+          <SubmitButton
+            className="btn-primary mt-2 text-sm"
+            pendingLabel="Creating..."
+          >
             Create draft
           </SubmitButton>
         </form>

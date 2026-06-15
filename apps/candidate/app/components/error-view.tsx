@@ -11,8 +11,11 @@ export function ErrorView({
 }) {
   let headline = headlineOverride ?? "Something went wrong";
   if (!headlineOverride) {
-    if (status === 410) headline = "Link expired";
-    else if (status === 404) headline = "Link not recognized";
+    if (status === 410) {
+      headline = "Link expired";
+    } else if (status === 404) {
+      headline = "Link not recognized";
+    }
   }
 
   return (

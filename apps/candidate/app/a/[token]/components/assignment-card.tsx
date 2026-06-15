@@ -19,9 +19,7 @@ export function AssignmentCard({
       </div>
       <div>
         <dt className="eyebrow-label">Questions</dt>
-        <dd className="mt-1 font-medium">
-          {assignment.module.question_count}
-        </dd>
+        <dd className="mt-1 font-medium">{assignment.module.question_count}</dd>
       </div>
       <div>
         <dt className="eyebrow-label">Link expires</dt>

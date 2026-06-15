@@ -419,4 +419,3 @@ function TestResultPane({ result }: { result: TestResult }) {
     </section>
   );
 }
-

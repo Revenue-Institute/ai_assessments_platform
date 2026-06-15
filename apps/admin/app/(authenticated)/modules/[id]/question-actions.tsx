@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useState, useTransition } from "react";
 
 import { ActionButton } from "@/components/action-button";
 import { AlertBanner } from "@/components/alert-banner";
@@ -82,8 +82,7 @@ function VariantsPanel({
         );
         setLoading(false);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [question.prompt_template, question.variable_schema]);
 
   const variableKeys = Object.keys(question.variable_schema ?? {});
   const rubricShape = (question.rubric ?? {}) as {
@@ -97,7 +96,7 @@ function VariantsPanel({
     typeof rubricShape.scoring_mode === "string"
       ? rubricShape.scoring_mode
       : null;
-  const ready = !loading && !error;
+  const ready = !(loading || error);
 
   return (
     <Modal onClose={onClose} title="5 sampled variants">
@@ -367,7 +366,9 @@ function Modal({
       />
       <div className="mt-12 w-full max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium text-sm" id={titleId}>{title}</h3>
+          <h3 className="font-medium text-sm" id={titleId}>
+            {title}
+          </h3>
           <ActionButton aria-label="Close" onClick={onClose}>
             Close
           </ActionButton>

@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AttemptEvent,
@@ -16,7 +16,6 @@ import {
   resendAssignmentEmail,
   subjectCompetencyScores,
 } from "@/lib/api";
-import { SubmitButton } from "@/components/submit-button";
 
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
@@ -28,7 +27,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getAssignment(id);
@@ -51,7 +54,10 @@ export default async function AssignmentDetailPage({
   ]);
 
   if (detailResult.status === "rejected") {
-    if (detailResult.reason instanceof ApiError && detailResult.reason.status === 404) {
+    if (
+      detailResult.reason instanceof ApiError &&
+      detailResult.reason.status === 404
+    ) {
       notFound();
     }
     throw detailResult.reason;
@@ -112,7 +118,9 @@ export default async function AssignmentDetailPage({
     try {
       await cancelAssignment(id);
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
     }
     redirect(`/assignments/${id}`);
   }
@@ -122,7 +130,9 @@ export default async function AssignmentDetailPage({
     try {
       await rescoreAssignment(id);
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
     }
     redirect(`/assignments/${id}`);
   }
@@ -132,7 +142,9 @@ export default async function AssignmentDetailPage({
     try {
       await resendAssignmentEmail(id);
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
     }
     redirect(`/assignments/${id}`);
   }
@@ -140,11 +152,15 @@ export default async function AssignmentDetailPage({
   async function rescoreOne(formData: FormData): Promise<void> {
     "use server";
     const attemptId = String(formData.get("attempt_id") ?? "");
-    if (!attemptId) return;
+    if (!attemptId) {
+      return;
+    }
     try {
       await rescoreAttempt(attemptId);
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
     }
     redirect(`/assignments/${id}`);
   }

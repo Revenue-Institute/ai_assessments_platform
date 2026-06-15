@@ -14,7 +14,9 @@ export function AlertBanner({
   className?: string;
   variant?: "error" | "success";
 }) {
-  if (!children) return null;
+  if (!children) {
+    return null;
+  }
   return (
     <p
       className={`rounded border px-3 py-2 text-sm ${STYLES[variant]}${className ? ` ${className}` : ""}`}

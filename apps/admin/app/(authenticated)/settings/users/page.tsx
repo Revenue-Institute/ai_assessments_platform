@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-
-import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
 import { AlertBanner } from "@/components/alert-banner";
+import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
 
 import { Header } from "../../components/header";
 import { UsersTable } from "./users-table";
@@ -16,19 +15,21 @@ export default async function SettingsUsersPage() {
     listAdminUsers(),
   ]);
   const me = meResult.status === "fulfilled" ? meResult.value : null;
-  const meError =
-    meResult.status === "rejected"
-      ? meResult.reason instanceof ApiError
+  let meError: string | null = null;
+  if (meResult.status === "rejected") {
+    meError =
+      meResult.reason instanceof ApiError
         ? meResult.reason.message
-        : "Could not load profile."
-      : null;
+        : "Could not load profile.";
+  }
   const users = usersResult.status === "fulfilled" ? usersResult.value : [];
-  const usersError =
-    usersResult.status === "rejected"
-      ? usersResult.reason instanceof ApiError
+  let usersError: string | null = null;
+  if (usersResult.status === "rejected") {
+    usersError =
+      usersResult.reason instanceof ApiError
         ? usersResult.reason.message
-        : "Could not load internal users."
-      : null;
+        : "Could not load internal users.";
+  }
 
   return (
     <>

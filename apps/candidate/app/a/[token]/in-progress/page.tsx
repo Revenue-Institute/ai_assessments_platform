@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { ApiError, fetchAssignment } from "@/lib/api";
 import { ErrorView } from "@/app/components/error-view";
+import { ApiError, fetchAssignment } from "@/lib/api";
 
 interface Params {
   token: string;

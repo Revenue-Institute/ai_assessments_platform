@@ -39,7 +39,9 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
     setSelected((prev) => {
       const i = prev.indexOf(id);
       const target = i + delta;
-      if (i < 0 || target < 0 || target >= prev.length) return prev;
+      if (i < 0 || target < 0 || target >= prev.length) {
+        return prev;
+      }
       const next = prev.slice();
       [next[i], next[target]] = [next[target] as string, next[i] as string];
       return next;

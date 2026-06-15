@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
-  type ReferenceDocumentSummary,
   ApiError,
   deleteReference,
   fetchAdminMe,
   listReferences,
+  type ReferenceDocumentSummary,
   uploadReferenceText,
   uploadReferenceUrl,
 } from "@/lib/api";
 import { redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
-import { AlertBanner } from "@/components/alert-banner";
-import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
-import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
 
@@ -38,19 +37,24 @@ export default async function ReferencesPage({
 
   const documents: ReferenceDocumentSummary[] =
     refsResult.status === "fulfilled" ? refsResult.value : [];
-  const loadError: string | null =
-    refsResult.status === "rejected"
-      ? refsResult.reason instanceof ApiError
+  let loadError: string | null = null;
+  if (refsResult.status === "rejected") {
+    loadError =
+      refsResult.reason instanceof ApiError
         ? refsResult.reason.message
-        : "Could not load references."
-      : null;
+        : "Could not load references.";
+  }
 
   // Soft-fail: reviewers fall through with canRemove=false; hard backend rules still apply at /api.
-  if (meResult.status === "rejected" && !(meResult.reason instanceof ApiError)) {
+  if (
+    meResult.status === "rejected" &&
+    !(meResult.reason instanceof ApiError)
+  ) {
     throw meResult.reason;
   }
   const canRemove =
-    meResult.status === "fulfilled" && roleSatisfies(meResult.value.role, "admin");
+    meResult.status === "fulfilled" &&
+    roleSatisfies(meResult.value.role, "admin");
 
   async function uploadUrlAction(formData: FormData): Promise<void> {
     "use server";
@@ -144,7 +148,10 @@ export default async function ReferencesPage({
                 placeholder="hubspot, ai..."
               />
             </FormField>
-            <SubmitButton className="btn-primary text-sm" pendingLabel="Fetching...">
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Fetching..."
+            >
               Fetch + index
             </SubmitButton>
           </form>
@@ -175,7 +182,10 @@ export default async function ReferencesPage({
                 name="content"
               />
             </FormField>
-            <SubmitButton className="btn-primary text-sm" pendingLabel="Indexing...">
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Indexing..."
+            >
               Index
             </SubmitButton>
           </form>
@@ -231,4 +241,3 @@ export default async function ReferencesPage({
     </>
   );
 }
-

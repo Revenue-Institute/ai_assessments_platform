@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
-import { type AssessmentSummary, listAssessments } from "@/lib/api";
-import { loadOrApiError } from "@/lib/api-helpers";
 import { AlertBanner } from "@/components/alert-banner";
 import { StatusBadge } from "@/components/status-badge";
+import { type AssessmentSummary, listAssessments } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
 
 import { Header } from "../components/header";
 
@@ -74,4 +73,3 @@ export default async function AssessmentsPage() {
     </>
   );
 }
-

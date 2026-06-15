@@ -16,7 +16,9 @@ const TREND_COLORS = [
 ];
 
 export function SeriesTrendChart({ focus, trend }: SeriesTrendChartProps) {
-  const lines: SeriesTrendLine[] = Array.isArray(trend?.trends) ? trend.trends : [];
+  const lines: SeriesTrendLine[] = Array.isArray(trend?.trends)
+    ? trend.trends
+    : [];
   const usable = lines.filter((l) => l.points.length > 0);
 
   if (focus.length === 0) {
@@ -58,8 +60,12 @@ export function SeriesTrendChart({ focus, trend }: SeriesTrendChartProps) {
   const span = maxSeq - minSeq;
   const stepSeq = Math.max(1, Math.ceil((span + 1) / 12));
   const xTicks: number[] = [];
-  for (let s = minSeq; s <= maxSeq; s += stepSeq) xTicks.push(s);
-  if (xTicks.at(-1) !== maxSeq) xTicks.push(maxSeq);
+  for (let s = minSeq; s <= maxSeq; s += stepSeq) {
+    xTicks.push(s);
+  }
+  if (xTicks.at(-1) !== maxSeq) {
+    xTicks.push(maxSeq);
+  }
 
   return (
     <div className="text-foreground">
@@ -131,7 +137,10 @@ export function SeriesTrendChart({ focus, trend }: SeriesTrendChartProps) {
               seq: p.sequence_number,
             }));
           const path = coords
-            .map(({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`)
+            .map(
+              ({ x, y }, i) =>
+                `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`
+            )
             .join(" ");
           return (
             <g key={line.competency_id}>

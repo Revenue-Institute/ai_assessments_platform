@@ -170,7 +170,9 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        void handleSubmit(new FormData(e.currentTarget));
+        handleSubmit(new FormData(e.currentTarget)).catch(
+          (err: unknown) => err
+        );
       }}
     >
       <div className="grid gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">

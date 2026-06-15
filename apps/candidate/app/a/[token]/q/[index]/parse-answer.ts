@@ -77,10 +77,6 @@ function parseLegacySelectedAnswer(formData: FormData, selected: string) {
     : { selected_index: parsedIndex, selected };
 }
 
-function redirectWithSubmitError(
-  token: string,
-  idx: number,
-  message: string
-) {
+function redirectWithSubmitError(token: string, idx: number, message: string) {
   redirect(`/a/${token}/q/${idx}?error=${encodeURIComponent(message)}`);
 }

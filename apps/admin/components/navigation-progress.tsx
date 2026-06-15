@@ -21,28 +21,46 @@ export function NavigationProgress() {
       }
     }
     return () => {
-      if (doneTimer.current) clearTimeout(doneTimer.current);
+      if (doneTimer.current) {
+        clearTimeout(doneTimer.current);
+      }
     };
   }, [pathname, phase]);
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       const anchor = (e.target as Element).closest("a[href]");
-      if (!anchor) return;
+      if (!anchor) {
+        return;
+      }
       const href = anchor.getAttribute("href") ?? "";
-      if (!href || href.startsWith("#") || href.startsWith("http") || href.startsWith("mailto:")) return;
-      // Skip if clicking the current page — pathname won't change so bar would loop forever
-      if (href === currentPath.current) return;
+      if (
+        !href ||
+        href.startsWith("#") ||
+        href.startsWith("http") ||
+        href.startsWith("mailto:")
+      ) {
+        return;
+      }
+      // Skip if clicking the current page (pathname won't change so bar would loop forever)
+      if (href === currentPath.current) {
+        return;
+      }
       setPhase("loading");
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  if (phase === "idle") return null;
+  if (phase === "idle") {
+    return null;
+  }
 
   return (
-    <div aria-hidden="true" className="fixed left-0 top-0 z-50 h-[2px] w-full overflow-hidden bg-primary/20">
+    <div
+      aria-hidden="true"
+      className="fixed top-0 left-0 z-50 h-[2px] w-full overflow-hidden bg-primary/20"
+    >
       {phase === "loading" && (
         <div
           className="h-full w-1/3 bg-primary"

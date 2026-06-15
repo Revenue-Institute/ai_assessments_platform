@@ -18,7 +18,7 @@ export function SubmitButton({
   const { pending } = useFormStatus();
   return (
     <button
-      className={`${className} disabled:opacity-60 disabled:cursor-not-allowed`}
+      className={`${className} disabled:cursor-not-allowed disabled:opacity-60`}
       disabled={pending || externalDisabled}
       title={title}
       type="submit"

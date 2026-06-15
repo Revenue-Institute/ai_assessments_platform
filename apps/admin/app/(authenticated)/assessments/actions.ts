@@ -12,7 +12,11 @@ import {
   removeAssessmentModule,
   reorderAssessment,
 } from "@/lib/api";
-import { type ActionResult, redirectOnApi, runApiAction } from "@/lib/api-helpers";
+import {
+  type ActionResult,
+  redirectOnApi,
+  runApiAction,
+} from "@/lib/api-helpers";
 
 export type { ActionResult } from "@/lib/api-helpers";
 
@@ -48,7 +52,7 @@ export async function createAssessmentAction(input: {
   }
 }
 
-export async function patchAssessmentAction(
+export function patchAssessmentAction(
   id: string,
   input: { title: string; description: string | null }
 ): Promise<ActionResult> {
@@ -64,23 +68,21 @@ export async function patchAssessmentAction(
   );
 }
 
-export async function addAssessmentModuleAction(
+export function addAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  return runApiAction(() =>
-    addAssessmentModule(id, { module_id: moduleId })
-  );
+  return runApiAction(() => addAssessmentModule(id, { module_id: moduleId }));
 }
 
-export async function removeAssessmentModuleAction(
+export function removeAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
   return runApiAction(() => removeAssessmentModule(id, moduleId));
 }
 
-export async function reorderAssessmentAction(
+export function reorderAssessmentAction(
   id: string,
   moduleIds: string[]
 ): Promise<ActionResult> {

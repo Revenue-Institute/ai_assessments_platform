@@ -1,6 +1,6 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import { notFound, redirect } from "next/navigation";
-
+import { ErrorView } from "@/app/components/error-view";
 import {
   ApiError,
   type CandidateQuestionView,
@@ -8,7 +8,6 @@ import {
   fetchQuestion,
   submitQuestion,
 } from "@/lib/api";
-import { ErrorView } from "@/app/components/error-view";
 
 import { CandidateMonitor } from "./candidate-monitor";
 import { parseSubmittedAnswer } from "./parse-answer";
@@ -180,4 +179,3 @@ export default async function QuestionPage({
     </main>
   );
 }
-

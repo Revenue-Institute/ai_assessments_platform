@@ -32,17 +32,16 @@ export function SubmitButton({
     }
   }
 
-  const label = pending
-    ? last
-      ? "Submitting..."
-      : "Saving..."
-    : last
-      ? "Submit and finish"
-      : "Save and continue";
+  let label: string;
+  if (pending) {
+    label = last ? "Submitting..." : "Saving...";
+  } else {
+    label = last ? "Submit and finish" : "Save and continue";
+  }
 
   return (
     <button
-      className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+      className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending}
       onClick={onClick}
       type="submit"

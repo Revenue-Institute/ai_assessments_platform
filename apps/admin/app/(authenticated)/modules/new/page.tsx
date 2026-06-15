@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import {
+  FormField,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type Difficulty,
   type GenerationBriefIn,
   generateOutline,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
-import { FormField, FormInput, FormSelect, FormTextarea } from "@/components/form-fields";
-import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
 
@@ -209,7 +213,10 @@ export default async function NewModuleWizardPage({
             />
           </FormField>
 
-          <SubmitButton className="btn-primary text-sm" pendingLabel="Generating outline...">
+          <SubmitButton
+            className="btn-primary text-sm"
+            pendingLabel="Generating outline..."
+          >
             Generate outline
           </SubmitButton>
           <p className="text-muted-foreground text-xs">
@@ -233,7 +240,6 @@ function optionalPct(form: FormData, name: string): number | null {
   }
   return v;
 }
-
 
 function NumField({ label, name }: { label: string; name: string }) {
   return (

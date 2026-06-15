@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { ActionButton } from "@/components/action-button";
 import { AlertBanner } from "@/components/alert-banner";
 import { FormField, FormSelect } from "@/components/form-fields";
-import type { AssessmentDetail, AssessmentStatus, ModuleSummary } from "@/lib/api";
+import type {
+  AssessmentDetail,
+  AssessmentStatus,
+  ModuleSummary,
+} from "@/lib/api";
 
 import type { ActionResult } from "../actions";
 import {
@@ -46,9 +50,14 @@ export function AssessmentModulesSection({
   function move(index: number, delta: -1 | 1) {
     const ids = assessment.modules.map((m) => m.module_id);
     const target = index + delta;
-    if (target < 0 || target >= ids.length) return;
+    if (target < 0 || target >= ids.length) {
+      return;
+    }
     const next = ids.slice();
-    [next[index], next[target]] = [next[target] as string, next[index] as string];
+    [next[index], next[target]] = [
+      next[target] as string,
+      next[index] as string,
+    ];
     handle(reorderAssessmentAction(assessment.id, next));
   }
 

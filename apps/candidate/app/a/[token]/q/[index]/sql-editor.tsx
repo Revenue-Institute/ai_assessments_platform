@@ -132,7 +132,7 @@ export function SqlRenderer({
         </p>
       )}
 
-      <div aria-live="polite" aria-atomic="true">
+      <div aria-atomic="true" aria-live="polite">
         {result && <ResultPane result={result} />}
       </div>
     </div>
@@ -209,4 +209,3 @@ function formatCell(value: unknown): string {
   }
   return String(value);
 }
-

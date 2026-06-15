@@ -348,4 +348,3 @@ function CellOutputView({ output }: { output: CellOutput }) {
     </div>
   );
 }
-

@@ -58,7 +58,8 @@ const FALLBACK_PALETTE = [
   { type: "default", label: "Decision" },
 ];
 
-const newNodeId = (): string => `n${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const newNodeId = (): string =>
+  `n${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 function bootstrapNodes(config: DiagramConfig, saved: Saved): Node[] {
   const source = saved?.nodes?.length
@@ -124,7 +125,9 @@ function DiagramCanvas({
     () => JSON.stringify({ nodes: initialNodes, edges: initialEdges }),
     [initialNodes, initialEdges]
   );
-  useUnsavedChangesWarning(JSON.stringify({ nodes, edges }) !== initialSerialized);
+  useUnsavedChangesWarning(
+    JSON.stringify({ nodes, edges }) !== initialSerialized
+  );
 
   // Debounce diagram saves into a single `interactive_state_saved` event
   // every 2 seconds. The graph mutates on every drag tick, so emitting
@@ -236,10 +239,10 @@ function DiagramCanvas({
       />
       <div className="flex flex-wrap gap-2 text-xs">
         <span className="text-muted-foreground">Add:</span>
-        {palette.map((item, i) => (
+        {palette.map((item) => (
           <button
             className="rounded border border-border bg-card px-2 py-1 hover:bg-primary/10"
-            key={`${i}-${item.type}-${item.label}`}
+            key={`${item.type}-${item.label}`}
             onClick={() => addNode(item)}
             type="button"
           >

@@ -32,7 +32,7 @@ function ConsentSubmitButton() {
   return (
     <button
       aria-describedby="monitor-heading"
-      className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+      className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending}
       type="submit"
     >

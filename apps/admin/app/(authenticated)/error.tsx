@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function Error({
+export default function ErrorBoundary({
   error,
   reset,
 }: {
@@ -16,18 +16,19 @@ export default function Error({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold">Something went wrong</h2>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          {error.message || "An unexpected error occurred. Try again or contact support if the problem persists."}
+        <h2 className="font-semibold text-lg">Something went wrong</h2>
+        <p className="max-w-sm text-muted-foreground text-sm">
+          {error.message ||
+            "An unexpected error occurred. Try again or contact support if the problem persists."}
         </p>
         {error.digest && (
-          <p className="text-xs text-muted-foreground/60 font-mono">
+          <p className="font-mono text-muted-foreground/60 text-xs">
             ID: {error.digest}
           </p>
         )}
       </div>
       <button
-        className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        className="inline-flex items-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
         onClick={reset}
         type="button"
       >

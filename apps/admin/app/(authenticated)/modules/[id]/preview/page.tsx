@@ -1,7 +1,7 @@
+import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 
 import {
   ApiError,
@@ -18,7 +18,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getModule(id);

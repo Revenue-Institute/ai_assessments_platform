@@ -139,8 +139,7 @@ export function CandidateMonitor({
     // `question_served` fires unconditionally on every question mount.
     try {
       const attemptStartedKey = `ri:attempt_started:${assignmentId}`;
-      const alreadyStarted =
-        sessionStorage.getItem(attemptStartedKey) === "1";
+      const alreadyStarted = sessionStorage.getItem(attemptStartedKey) === "1";
       if (!alreadyStarted) {
         emitIntegrityEvent("attempt_started", { assignment_id: assignmentId });
         sessionStorage.setItem(attemptStartedKey, "1");

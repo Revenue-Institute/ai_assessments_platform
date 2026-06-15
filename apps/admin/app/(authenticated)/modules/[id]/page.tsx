@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   archiveModule,
@@ -9,8 +10,6 @@ import {
   getModule,
   publishModule,
 } from "@/lib/api";
-import { AlertBanner } from "@/components/alert-banner";
-import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
 import { type PreflightIssue, PublishButton } from "./publish-button";
@@ -20,7 +19,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getModule(id);
@@ -104,8 +107,12 @@ export default async function ModuleDetailPage({
   let taglessCount = 0;
   let pointlessCount = 0;
   for (const q of detail.questions) {
-    if (!q.competency_tags || q.competency_tags.length === 0) taglessCount++;
-    if (!q.max_points || q.max_points <= 0) pointlessCount++;
+    if (!q.competency_tags || q.competency_tags.length === 0) {
+      taglessCount++;
+    }
+    if (!q.max_points || q.max_points <= 0) {
+      pointlessCount++;
+    }
   }
   if (taglessCount > 0) {
     preflight.push({

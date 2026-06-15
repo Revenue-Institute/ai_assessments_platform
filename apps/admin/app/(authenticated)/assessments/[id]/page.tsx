@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AssessmentDetail,
@@ -9,9 +10,6 @@ import {
   listModules,
   type ModuleSummary,
 } from "@/lib/api";
-
-import { AlertBanner } from "@/components/alert-banner";
-import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../../components/header";
 import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
@@ -22,7 +20,11 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
   const { id } = await params;
   try {
     const detail = await getAssessment(id);

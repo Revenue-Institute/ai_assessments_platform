@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   createSeries,
   issueNextForSeries,
@@ -9,9 +11,6 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
-import { AlertBanner } from "@/components/alert-banner";
-import { FormField, FormInput, FormSelect } from "@/components/form-fields";
-import { SubmitButton } from "@/components/submit-button";
 
 import { Header } from "../components/header";
 
@@ -137,7 +136,10 @@ export default async function SeriesPage({
             />
           </FormField>
           <div className="flex items-end md:col-span-2">
-            <SubmitButton className="btn-primary text-sm" pendingLabel="Creating...">
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Creating..."
+            >
               Create series
             </SubmitButton>
           </div>

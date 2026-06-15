@@ -1,6 +1,5 @@
-import type { Metadata } from "next";
-
 import { taxonomy } from "@repo/competencies";
+import type { Metadata } from "next";
 
 import { Header } from "../components/header";
 

@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-
+import { AlertBanner } from "@/components/alert-banner";
 import {
   type CohortHeatmapResponse,
+  cohortHeatmap,
   type SubjectType,
   type WeakSpotsResponse,
-  cohortHeatmap,
   weakSpots,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { CompetencyHeatmap } from "../components/competency-heatmap";
 import { Header } from "../components/header";

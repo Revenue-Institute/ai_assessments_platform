@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
+import { AlertBanner } from "@/components/alert-banner";
 import { type AssignmentSummary, listAssignments } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
-import { AlertBanner } from "@/components/alert-banner";
 
 import { Header } from "../components/header";
 
