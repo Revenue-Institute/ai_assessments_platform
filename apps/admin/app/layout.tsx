@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
+
 import "./styles.css";
 
 const headingFont = Plus_Jakarta_Sans({
@@ -15,9 +16,7 @@ const headingFont = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-// Satoshi (variable), licensed self-hosted woff2 at
-// app/fonts/Satoshi-Variable.woff2 (compressed from the source ttf
-// via `woff2_compress`).
+// Satoshi variable font, self-hosted woff2 at app/fonts/Satoshi-Variable.woff2 (compressed via woff2_compress).
 const bodyFont = localFont({
   src: "./fonts/Satoshi-Variable.woff2",
   variable: "--font-sans",

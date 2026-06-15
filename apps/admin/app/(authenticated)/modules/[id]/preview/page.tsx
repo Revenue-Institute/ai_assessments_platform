@@ -1,12 +1,15 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import {
   ApiError,
   createModulePreviewMagicLink,
   getModule,
   previewModule,
 } from "@/lib/api";
+
 import { Header } from "../../../components/header";
 import { OpenAsCandidateButton } from "../../../components/open-as-candidate-button";
 import { QuestionPreviewRenderer } from "../../../components/question-preview-renderer";
@@ -14,6 +17,20 @@ import { QuestionPreviewRenderer } from "../../../components/question-preview-re
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getModule(id);
+    return { title: `Preview - ${detail.title}` };
+  } catch {
+    return { title: "Module Preview" };
+  }
+}
 
 export default async function ModulePreviewPage({
   params,
@@ -63,7 +80,7 @@ export default async function ModulePreviewPage({
             className="text-primary text-sm hover:underline"
             href={`/modules/${id}`}
           >
-            &larr; Back to module
+            ← Back to module
           </Link>
         </div>
 
@@ -80,8 +97,7 @@ export default async function ModulePreviewPage({
               >
                 <header className="mb-2 flex items-center justify-between">
                   <p className="eyebrow-label">
-                    Question {i + 1} of {preview.questions.length} &middot;{" "}
-                    {q.type}
+                    Question {i + 1} of {preview.questions.length} · {q.type}
                   </p>
                   <p className="text-muted-foreground text-xs">
                     {q.max_points} pts

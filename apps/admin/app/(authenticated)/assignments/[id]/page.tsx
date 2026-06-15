@@ -1,6 +1,8 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AttemptEvent,
@@ -14,6 +16,7 @@ import {
   resendAssignmentEmail,
   subjectCompetencyScores,
 } from "@/lib/api";
+
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
 import { IntegrityScore } from "../../components/integrity-score";
@@ -24,6 +27,20 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getAssignment(id);
+    return { title: detail.subject_full_name ?? "Assignment" };
+  } catch {
+    return { title: "Assignment" };
+  }
+}
+
 export default async function AssignmentDetailPage({
   params,
 }: {
@@ -31,28 +48,27 @@ export default async function AssignmentDetailPage({
 }) {
   const { id } = await params;
 
-  let detail: Awaited<ReturnType<typeof getAssignment>>;
-  try {
-    detail = await getAssignment(id);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
+  const [detailResult, eventsResult] = await Promise.allSettled([
+    getAssignment(id),
+    listAssignmentEvents(id),
+  ]);
+
+  if (detailResult.status === "rejected") {
+    if (
+      detailResult.reason instanceof ApiError &&
+      detailResult.reason.status === 404
+    ) {
       notFound();
     }
-    throw e;
+    throw detailResult.reason;
   }
 
-  let events: AttemptEvent[] = [];
-  try {
-    events = await listAssignmentEvents(id);
-  } catch {
-    // Soft fail: timeline is auxiliary; the rest of the page still loads.
-  }
+  const detail = detailResult.value;
+  // Soft fail: timeline is auxiliary; the rest of the page still loads.
+  const events: AttemptEvent[] =
+    eventsResult.status === "fulfilled" ? eventsResult.value : [];
 
-  // Spec §11.3 candidate-vs-team overlay: pull competency scores for this
-  // subject, restrict to the ones tied to this assignment, then fetch the
-  // matching team distribution for each one. Soft-fails so the existing
-  // attempts + integrity timeline still render if the benchmark endpoints
-  // are unavailable.
+  // §11.3: pull subject competency scores, match to this assignment, fetch team distribution per competency. Soft-fails.
   const distributionRows: Array<{
     candidate_score_pct: number;
     competency_id: string;
@@ -92,11 +108,7 @@ export default async function AssignmentDetailPage({
           .catch(() => null)
       )
     );
-    for (const d of distributions) {
-      if (d) {
-        distributionRows.push(d);
-      }
-    }
+    distributionRows.push(...distributions.filter((d) => d != null));
   } catch {
     // Distributions are best-effort; assignment detail must still load.
   }
@@ -105,39 +117,36 @@ export default async function AssignmentDetailPage({
     "use server";
     try {
       await cancelAssignment(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
+      if (!(e instanceof ApiError)) {
+        throw e;
       }
-      throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function rescoreAll(): Promise<void> {
     "use server";
     try {
       await rescoreAssignment(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
+      if (!(e instanceof ApiError)) {
+        throw e;
       }
-      throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function resendEmail(): Promise<void> {
     "use server";
     try {
       await resendAssignmentEmail(id);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
+      if (!(e instanceof ApiError)) {
+        throw e;
       }
-      throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   async function rescoreOne(formData: FormData): Promise<void> {
@@ -148,13 +157,12 @@ export default async function AssignmentDetailPage({
     }
     try {
       await rescoreAttempt(attemptId);
-      redirect(`/assignments/${id}`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        redirect(`/assignments/${id}`);
+      if (!(e instanceof ApiError)) {
+        throw e;
       }
-      throw e;
     }
+    redirect(`/assignments/${id}`);
   }
 
   return (
@@ -284,12 +292,12 @@ export default async function AssignmentDetailPage({
                     {a.submitted_at && (
                       <form action={rescoreOne} className="ml-auto">
                         <input name="attempt_id" type="hidden" value={a.id} />
-                        <button
+                        <SubmitButton
                           className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                          type="submit"
+                          pendingLabel="Rescoring..."
                         >
                           Rescore
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>
@@ -362,7 +370,7 @@ function RelatedEntities({
           className="hover:text-primary hover:underline"
           href={`/candidates/${detail.subject_id}`}
         >
-          {"↗ Candidate: "}
+          ↗ Candidate:{" "}
           {detail.subject_full_name ?? detail.subject_id.slice(0, 8)}
         </Link>
       )}
@@ -405,31 +413,31 @@ function AssignmentActions({
     <div className="flex flex-wrap gap-2">
       {status === "completed" && (
         <form action={rescoreAll}>
-          <button
+          <SubmitButton
             className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-            type="submit"
+            pendingLabel="Rescoring..."
           >
             Rescore all attempts
-          </button>
+          </SubmitButton>
         </form>
       )}
       {canManageLink && (
         <>
           <form action={resendEmail}>
-            <button
+            <SubmitButton
               className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
-              type="submit"
+              pendingLabel="Sending..."
             >
               Resend magic link
-            </button>
+            </SubmitButton>
           </form>
           <form action={cancel}>
-            <button
+            <SubmitButton
               className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm hover:bg-destructive/25"
-              type="submit"
+              pendingLabel="Cancelling..."
             >
               Cancel assignment
-            </button>
+            </SubmitButton>
           </form>
         </>
       )}

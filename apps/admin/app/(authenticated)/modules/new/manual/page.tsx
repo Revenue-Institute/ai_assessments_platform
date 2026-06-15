@@ -1,6 +1,18 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import {
+  FormField,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import { ApiError, createModule, type Difficulty } from "@/lib/api";
+
 import { Header } from "../../../components/header";
+
+export const metadata: Metadata = { title: "New Module" };
 
 type SearchParams = Promise<{ error?: string }>;
 
@@ -56,119 +68,74 @@ export default async function NewModulePage({
       <Header page="New module" pages={["Modules"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <h1 className="font-semibold text-xl">Create draft module</h1>
+          <h2 className="font-semibold text-xl">Create draft module</h2>
           <p className="mt-1 text-muted-foreground text-sm">
             Modules start as drafts. Add questions via the seed script (or AI
             generation in Phase 2), then publish before issuing assignments.
           </p>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <form
           action={action}
           className="grid max-w-xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
-          <Field
-            label="Slug"
-            name="slug"
-            placeholder="hubspot-workflows-v1"
-            required
-          />
-          <Field
-            label="Title"
-            name="title"
-            placeholder="HubSpot Workflows"
-            required
-          />
-          <Field
-            label="Description"
-            name="description"
-            placeholder="Optional"
-            textarea
-          />
-          <Field
-            label="Domain"
-            name="domain"
-            placeholder="hubspot, data, sales..."
-            required
-          />
-          <Field
-            defaultValue="30"
-            label="Target duration (minutes)"
-            name="target_duration_minutes"
-            type="number"
-          />
-          <label className="space-y-1">
-            <span className="text-sm">Difficulty</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue="junior"
-              name="difficulty"
-            >
+          <FormField label="Slug">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="slug"
+              placeholder="hubspot-workflows-v1"
+              required
+            />
+          </FormField>
+          <FormField label="Title">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="title"
+              placeholder="HubSpot Workflows"
+              required
+            />
+          </FormField>
+          <FormField label="Description">
+            <FormTextarea
+              className="h-24 focus:border-primary focus:outline-none"
+              name="description"
+              placeholder="Optional"
+            />
+          </FormField>
+          <FormField label="Domain">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              name="domain"
+              placeholder="hubspot, data, sales..."
+              required
+            />
+          </FormField>
+          <FormField label="Target duration (minutes)">
+            <FormInput
+              className="focus:border-primary focus:outline-none"
+              defaultValue="30"
+              name="target_duration_minutes"
+              type="number"
+            />
+          </FormField>
+          <FormField label="Difficulty">
+            <FormSelect defaultValue="junior" name="difficulty">
               <option value="junior">junior</option>
               <option value="mid">mid</option>
               <option value="senior">senior</option>
               <option value="expert">expert</option>
-            </select>
-          </label>
-          <button className="btn-primary mt-2 text-sm" type="submit">
+            </FormSelect>
+          </FormField>
+          <SubmitButton
+            className="btn-primary mt-2 text-sm"
+            pendingLabel="Creating..."
+          >
             Create draft
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </>
-  );
-}
-
-function Field({
-  label,
-  name,
-  placeholder,
-  defaultValue,
-  required,
-  type = "text",
-  textarea = false,
-}: {
-  label: string;
-  name: string;
-  placeholder?: string;
-  defaultValue?: string;
-  required?: boolean;
-  type?: string;
-  textarea?: boolean;
-}) {
-  const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
-  return (
-    <label className="space-y-1" htmlFor={name}>
-      <span className="text-sm">{label}</span>
-      {textarea ? (
-        <textarea
-          className={`${className} h-24`}
-          defaultValue={defaultValue}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-        />
-      ) : (
-        <input
-          className={className}
-          defaultValue={defaultValue}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          type={type}
-        />
-      )}
-    </label>
   );
 }

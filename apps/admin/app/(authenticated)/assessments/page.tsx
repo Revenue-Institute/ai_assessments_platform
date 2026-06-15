@@ -1,12 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { AlertBanner } from "@/components/alert-banner";
+import { StatusBadge } from "@/components/status-badge";
 import { type AssessmentSummary, listAssessments } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Assessments" };
 
 export const dynamic = "force-dynamic";
 
 export default async function AssessmentsPage() {
-  const { data, error } = await loadOrApiError(() => listAssessments());
+  const { data, error } = await loadOrApiError(listAssessments);
   const assessments: AssessmentSummary[] = data ?? [];
 
   return (
@@ -15,7 +21,7 @@ export default async function AssessmentsPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-4">
           <div>
-            <h1 className="font-semibold text-xl">Assessments</h1>
+            <h2 className="font-semibold text-xl">Assessments</h2>
             <p className="text-muted-foreground text-sm">
               Composed of modules. Publish to assign to subjects.
             </p>
@@ -25,16 +31,9 @@ export default async function AssessmentsPage() {
           </Link>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
-        {assessments.length === 0 && !error ? (
+        {!error && assessments.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">
               No assessments yet. Create your first assessment.
@@ -72,19 +71,5 @@ export default async function AssessmentsPage() {
         )}
       </div>
     </>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  let tone = "bg-warning/20 text-warning";
-  if (status === "published") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "archived") {
-    tone = "bg-muted text-muted-foreground";
-  }
-  return (
-    <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
-      {status}
-    </span>
   );
 }

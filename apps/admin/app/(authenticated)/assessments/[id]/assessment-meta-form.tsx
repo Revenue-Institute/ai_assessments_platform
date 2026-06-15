@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import { patchAssessmentAction } from "../actions";
 
 export function AssessmentMetaForm({
@@ -20,7 +23,7 @@ export function AssessmentMetaForm({
   const [description, setDescription] = useState(initialDescription);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const dirty =
     title.trim() !== initialTitle.trim() ||
@@ -28,13 +31,14 @@ export function AssessmentMetaForm({
 
   function onSave() {
     setError(null);
+    setSaved(false);
     startTransition(async () => {
       const result = await patchAssessmentAction(id, {
         title,
         description: description || null,
       });
       if (result.ok) {
-        setSavedAt(Date.now());
+        setSaved(true);
         router.refresh();
       } else {
         setError(result.error);
@@ -52,33 +56,24 @@ export function AssessmentMetaForm({
         </p>
       </div>
 
-      {error && (
-        <p
-          className="mb-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      <AlertBanner className="mb-2">{error}</AlertBanner>
 
       <div className="grid gap-3">
-        <label className="space-y-1">
-          <span className="text-sm">Title</span>
-          <input
-            className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        <FormField label="Title">
+          <FormInput
+            className="focus:border-primary focus:outline-none"
             onChange={(e) => setTitle(e.target.value)}
             value={title}
           />
-        </label>
-        <label className="space-y-1">
-          <span className="text-sm">Description</span>
-          <textarea
-            className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        </FormField>
+        <FormField label="Description">
+          <FormTextarea
+            className="h-24 focus:border-primary focus:outline-none"
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional"
             value={description}
           />
-        </label>
+        </FormField>
         <div className="flex items-center gap-3">
           <button
             className="btn-primary text-sm disabled:opacity-60"
@@ -88,7 +83,7 @@ export function AssessmentMetaForm({
           >
             {pending ? "Saving..." : "Save"}
           </button>
-          {savedAt && !dirty && !pending && (
+          {saved && !dirty && !pending && (
             <span className="text-muted-foreground text-xs">Saved.</span>
           )}
           {dirty && !pending && (

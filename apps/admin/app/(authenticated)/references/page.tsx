@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   deleteReference,
@@ -8,9 +12,12 @@ import {
   uploadReferenceText,
   uploadReferenceUrl,
 } from "@/lib/api";
-import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+import { redirectOnApi } from "@/lib/api-helpers";
 import { roleSatisfies } from "@/lib/role-policy";
+
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "References" };
 
 export const dynamic = "force-dynamic";
 
@@ -23,22 +30,31 @@ export default async function ReferencesPage({
 }) {
   const { error, ok } = await searchParams;
 
-  const { data, error: loadError } = await loadOrApiError(() =>
-    listReferences()
-  );
-  const documents: ReferenceDocumentSummary[] = data ?? [];
+  const [refsResult, meResult] = await Promise.allSettled([
+    listReferences(),
+    fetchAdminMe(),
+  ]);
 
-  let canRemove = false;
-  try {
-    const me = await fetchAdminMe();
-    canRemove = roleSatisfies(me.role, "admin");
-  } catch (e) {
-    // Soft-fail role check: reviewers fall through with canRemove=false, which
-    // hides the Remove button. Hard backend rules still apply at /api.
-    if (!(e instanceof ApiError)) {
-      throw e;
-    }
+  const documents: ReferenceDocumentSummary[] =
+    refsResult.status === "fulfilled" ? refsResult.value : [];
+  let loadError: string | null = null;
+  if (refsResult.status === "rejected") {
+    loadError =
+      refsResult.reason instanceof ApiError
+        ? refsResult.reason.message
+        : "Could not load references.";
   }
+
+  // Soft-fail: reviewers fall through with canRemove=false; hard backend rules still apply at /api.
+  if (
+    meResult.status === "rejected" &&
+    !(meResult.reason instanceof ApiError)
+  ) {
+    throw meResult.reason;
+  }
+  const canRemove =
+    meResult.status === "fulfilled" &&
+    roleSatisfies(meResult.value.role, "admin");
 
   async function uploadUrlAction(formData: FormData): Promise<void> {
     "use server";
@@ -93,7 +109,7 @@ export default async function ReferencesPage({
       <Header page="References" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Reference library</h1>
+          <h2 className="font-semibold text-xl">Reference library</h2>
           <p className="text-muted-foreground text-sm">
             Documents are chunked and embedded with Voyage-3. The generator
             retrieves the top 10 chunks per topic when references are attached
@@ -101,18 +117,9 @@ export default async function ReferencesPage({
           </p>
         </section>
 
-        {(error || ok || loadError) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error || loadError
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error || loadError ? "alert" : "status"}
-          >
-            {error || loadError || ok}
-          </p>
-        )}
+        <AlertBanner variant={error || loadError ? "error" : "success"}>
+          {error || loadError || ok}
+        </AlertBanner>
 
         <div className="grid gap-4 md:grid-cols-2">
           <form
@@ -120,16 +127,33 @@ export default async function ReferencesPage({
             className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4"
           >
             <h2 className="font-medium text-sm">Upload from URL</h2>
-            <Field label="URL" name="url" placeholder="https://..." required />
-            <Field label="Title (optional)" name="title" />
-            <Field
-              label="Domain (optional)"
-              name="domain"
-              placeholder="hubspot, ai..."
-            />
-            <button className="btn-primary text-sm" type="submit">
+            <FormField label="URL">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="url"
+                placeholder="https://..."
+                required
+              />
+            </FormField>
+            <FormField label="Title (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="title"
+              />
+            </FormField>
+            <FormField label="Domain (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="domain"
+                placeholder="hubspot, ai..."
+              />
+            </FormField>
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Fetching..."
+            >
               Fetch + index
-            </button>
+            </SubmitButton>
           </form>
 
           <form
@@ -139,12 +163,31 @@ export default async function ReferencesPage({
             <h2 className="font-medium text-sm">
               Upload markdown / plain text
             </h2>
-            <Field label="Title" name="title" required />
-            <Field label="Domain (optional)" name="domain" />
-            <Field label="Content" name="content" textarea />
-            <button className="btn-primary text-sm" type="submit">
+            <FormField label="Title">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="title"
+                required
+              />
+            </FormField>
+            <FormField label="Domain (optional)">
+              <FormInput
+                className="focus:border-primary focus:outline-none"
+                name="domain"
+              />
+            </FormField>
+            <FormField label="Content">
+              <FormTextarea
+                className="h-40 focus:border-primary focus:outline-none"
+                name="content"
+              />
+            </FormField>
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Indexing..."
+            >
               Index
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -181,12 +224,12 @@ export default async function ReferencesPage({
                   {canRemove && (
                     <form action={deleteAction}>
                       <input name="id" type="hidden" value={d.id} />
-                      <button
+                      <SubmitButton
                         className="rounded border border-destructive/40 bg-destructive/15 px-2 py-1 text-destructive text-xs hover:bg-destructive/25"
-                        type="submit"
+                        pendingLabel="Removing..."
                       >
                         Remove
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </li>
@@ -196,45 +239,5 @@ export default async function ReferencesPage({
         </section>
       </div>
     </>
-  );
-}
-
-function Field({
-  label,
-  name,
-  placeholder,
-  required,
-  textarea = false,
-}: {
-  label: string;
-  name: string;
-  placeholder?: string;
-  required?: boolean;
-  textarea?: boolean;
-}) {
-  const className =
-    "block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none";
-  return (
-    <label className="space-y-1" htmlFor={name}>
-      <span className="text-sm">{label}</span>
-      {textarea ? (
-        <textarea
-          className={`${className} h-40`}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-        />
-      ) : (
-        <input
-          className={className}
-          id={name}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          type="text"
-        />
-      )}
-    </label>
   );
 }

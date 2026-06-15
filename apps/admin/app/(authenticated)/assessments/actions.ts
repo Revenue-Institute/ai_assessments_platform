@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+
 import {
   ApiError,
   addAssessmentModule,
@@ -11,8 +12,11 @@ import {
   removeAssessmentModule,
   reorderAssessment,
 } from "@/lib/api";
-import type { ActionResult } from "@/lib/api-helpers";
-import { redirectOnApi, runApiAction } from "@/lib/api-helpers";
+import {
+  type ActionResult,
+  redirectOnApi,
+  runApiAction,
+} from "@/lib/api-helpers";
 
 export type { ActionResult } from "@/lib/api-helpers";
 
@@ -32,7 +36,6 @@ export async function createAssessmentAction(input: {
     );
   }
 
-  let createdId: string | null = null;
   try {
     const created = await createAssessment({
       slug,
@@ -40,26 +43,24 @@ export async function createAssessmentAction(input: {
       description,
       module_ids: input.module_ids,
     });
-    createdId = created.id;
+    redirect(`/assessments/${created.id}`);
   } catch (e) {
     if (e instanceof ApiError) {
       redirect(`/assessments/new?error=${encodeURIComponent(e.message)}`);
     }
     throw e;
   }
-
-  redirect(`/assessments/${createdId}`);
 }
 
-export async function patchAssessmentAction(
+export function patchAssessmentAction(
   id: string,
   input: { title: string; description: string | null }
 ): Promise<ActionResult> {
   const title = input.title.trim();
   if (!title) {
-    return { ok: false, error: "Title is required." };
+    return Promise.resolve({ ok: false, error: "Title is required." });
   }
-  return await runApiAction(() =>
+  return runApiAction(() =>
     patchAssessment(id, {
       title,
       description: input.description?.trim() || null,
@@ -67,27 +68,25 @@ export async function patchAssessmentAction(
   );
 }
 
-export async function addAssessmentModuleAction(
+export function addAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  return await runApiAction(() =>
-    addAssessmentModule(id, { module_id: moduleId })
-  );
+  return runApiAction(() => addAssessmentModule(id, { module_id: moduleId }));
 }
 
-export async function removeAssessmentModuleAction(
+export function removeAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
-  return await runApiAction(() => removeAssessmentModule(id, moduleId));
+  return runApiAction(() => removeAssessmentModule(id, moduleId));
 }
 
-export async function reorderAssessmentAction(
+export function reorderAssessmentAction(
   id: string,
   moduleIds: string[]
 ): Promise<ActionResult> {
-  return await runApiAction(() => reorderAssessment(id, moduleIds));
+  return runApiAction(() => reorderAssessment(id, moduleIds));
 }
 
 export async function publishAssessmentAction(id: string): Promise<void> {

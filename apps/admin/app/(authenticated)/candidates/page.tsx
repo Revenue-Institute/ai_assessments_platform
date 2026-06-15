@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
 import {
   createSubject,
   listSubjects,
@@ -7,7 +9,11 @@ import {
   type SubjectType,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+
 import { Header } from "../components/header";
+import { AddSubjectForm } from "./add-subject-form";
+
+export const metadata: Metadata = { title: "Candidates" };
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +41,7 @@ export default async function CandidatesPage({
   const { error, ok, type } = await searchParams;
   const filter = normalizeFilter(type);
 
-  const { data, error: loadError } = await loadOrApiError(() => listSubjects());
+  const { data, error: loadError } = await loadOrApiError(listSubjects);
   const all: SubjectSummary[] = data ?? [];
 
   const candidates =
@@ -66,66 +72,19 @@ export default async function CandidatesPage({
       <Header page="Candidates" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Candidates</h1>
+          <h2 className="font-semibold text-xl">Candidates</h2>
           <p className="text-muted-foreground text-sm">
             People who can be assigned assessments.
           </p>
         </section>
 
-        {(error || ok || loadError) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error || loadError
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error || loadError ? "alert" : "status"}
-          >
-            {error || loadError || ok}
-          </p>
-        )}
+        <AlertBanner variant={error || loadError ? "error" : "success"}>
+          {error || loadError || ok}
+        </AlertBanner>
 
         <TypeFilterChips active={filter} all={all} />
 
-        <form
-          action={action}
-          className="grid max-w-2xl grid-cols-1 gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-3"
-        >
-          <label className="space-y-1 md:col-span-1">
-            <span className="text-sm">Type</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue="candidate"
-              name="type"
-            >
-              <option value="candidate">candidate</option>
-              <option value="employee">employee</option>
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm">Full name</span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              name="full_name"
-              required
-              type="text"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm">Email</span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              name="email"
-              required
-              type="email"
-            />
-          </label>
-          <div className="md:col-span-3">
-            <button className="btn-primary text-sm" type="submit">
-              Add candidate
-            </button>
-          </div>
-        </form>
+        <AddSubjectForm action={action} />
 
         <ul className="divide-y divide-border/40 rounded-xl border border-border/50 bg-muted/20">
           {candidates.length === 0 ? (
@@ -189,7 +148,7 @@ function TypeFilterChips({
         const isActive = active === opt.value;
         return (
           <Link
-            aria-pressed={isActive}
+            aria-current={isActive ? "page" : undefined}
             className={`rounded border px-3 py-1.5 text-xs transition ${
               isActive
                 ? "border-primary/60 bg-primary/15 text-primary"

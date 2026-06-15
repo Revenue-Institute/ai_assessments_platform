@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   createSeries,
   issueNextForSeries,
@@ -7,7 +11,10 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError, redirectOnApi } from "@/lib/api-helpers";
+
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Series" };
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +79,7 @@ export default async function SeriesPage({
       <Header page="Series" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">Assessment series</h1>
+          <h2 className="font-semibold text-xl">Assessment series</h2>
           <p className="text-muted-foreground text-sm">
             Track recurring competency check-ins per subject. Auto-scheduling of
             the next assignment lands in a follow-up worker. For v1, link
@@ -80,31 +87,16 @@ export default async function SeriesPage({
           </p>
         </section>
 
-        {(error || ok || loadError) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error || loadError
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error || loadError ? "alert" : "status"}
-          >
-            {error || loadError || ok}
-          </p>
-        )}
+        <AlertBanner variant={error || loadError ? "error" : "success"}>
+          {error || loadError || ok}
+        </AlertBanner>
 
         <form
           action={action}
           className="grid max-w-2xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2"
         >
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-sm">Subject</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue=""
-              name="subject_id"
-              required
-            >
+          <FormField className="md:col-span-2" label="Subject">
+            <FormSelect defaultValue="" name="subject_id" required>
               <option disabled value="">
                 {subjects.length === 0
                   ? "No candidates, add one in Candidates"
@@ -115,43 +107,41 @@ export default async function SeriesPage({
                   {s.full_name} · {s.email} ({s.type})
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-sm">Name</span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+            </FormSelect>
+          </FormField>
+          <FormField className="md:col-span-2" label="Name">
+            <FormInput
               name="name"
               placeholder="HubSpot Workflows competency"
               required
             />
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-sm">
-              Competency focus (taxonomy ids, comma-separated)
-            </span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          </FormField>
+          <FormField
+            className="md:col-span-2"
+            label="Competency focus (taxonomy ids, comma-separated)"
+          >
+            <FormInput
               name="competency_focus"
               placeholder="hubspot.workflows, marketing.analytics"
               required
             />
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm">Cadence (days, optional)</span>
-            <input
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          </FormField>
+          <FormField label="Cadence (days, optional)">
+            <FormInput
               max="365"
               min="1"
               name="cadence_days"
               placeholder="30"
               type="number"
             />
-          </label>
+          </FormField>
           <div className="flex items-end md:col-span-2">
-            <button className="btn-primary text-sm" type="submit">
+            <SubmitButton
+              className="btn-primary text-sm"
+              pendingLabel="Creating..."
+            >
               Create series
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
@@ -223,12 +213,12 @@ export default async function SeriesPage({
                       </Link>
                       <form action={issueNext}>
                         <input name="series_id" type="hidden" value={s.id} />
-                        <button
+                        <SubmitButton
                           className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                          type="submit"
+                          pendingLabel="Issuing..."
                         >
                           Issue next
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </td>

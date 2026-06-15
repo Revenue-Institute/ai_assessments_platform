@@ -3,8 +3,13 @@
 import { ApiError } from "@repo/api-client";
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition } from "react";
+
+import { ActionButton } from "@/components/action-button";
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormTextarea } from "@/components/form-fields";
 import type { PreviewVariantRow } from "@/lib/api";
+
 import {
   previewVariantsAction,
   reviseQuestionAction,
@@ -29,21 +34,13 @@ export function QuestionActions({
 
   return (
     <div className="flex items-center gap-1">
-      <button
-        className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted"
-        onClick={() => setOpen("variants")}
-        type="button"
-      >
+      <ActionButton onClick={() => setOpen("variants")}>
         Preview 5 variants
-      </button>
+      </ActionButton>
       {editable && (
-        <button
-          className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary text-xs hover:bg-primary/20"
-          onClick={() => setOpen("regenerate")}
-          type="button"
-        >
+        <ActionButton onClick={() => setOpen("regenerate")} variant="primary">
           Regenerate
-        </button>
+        </ActionButton>
       )}
       {open === "variants" && (
         <VariantsPanel onClose={() => setOpen(null)} question={question} />
@@ -69,8 +66,7 @@ function VariantsPanel({
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PreviewVariantRow[]>([]);
 
-  // Fire once on mount.
-  if (loading && rows.length === 0 && !error) {
+  useEffect(() => {
     previewVariantsAction({
       prompt_template: question.prompt_template,
       variable_schema: question.variable_schema ?? {},
@@ -86,19 +82,21 @@ function VariantsPanel({
         );
         setLoading(false);
       });
-  }
+  }, [question.prompt_template, question.variable_schema]);
 
   const variableKeys = Object.keys(question.variable_schema ?? {});
-  const rubric = question.rubric ?? {};
-  const rubricCriteria = Array.isArray(
-    (rubric as { criteria?: unknown }).criteria
-  )
-    ? (rubric as { criteria: Record<string, unknown>[] }).criteria
+  const rubricShape = (question.rubric ?? {}) as {
+    criteria?: unknown[];
+    scoring_mode?: unknown;
+  };
+  const rubricCriteria = Array.isArray(rubricShape.criteria)
+    ? (rubricShape.criteria as Record<string, unknown>[])
     : [];
   const scoringMode =
-    typeof (rubric as { scoring_mode?: unknown }).scoring_mode === "string"
-      ? (rubric as { scoring_mode: string }).scoring_mode
+    typeof rubricShape.scoring_mode === "string"
+      ? rubricShape.scoring_mode
       : null;
+  const ready = !(loading || error);
 
   return (
     <Modal onClose={onClose} title="5 sampled variants">
@@ -158,15 +156,8 @@ function VariantsPanel({
       {loading && (
         <p className="text-muted-foreground text-sm">Sampling variants...</p>
       )}
-      {error && (
-        <p
-          className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-      {!(loading || error) && rows.length > 0 && (
+      <AlertBanner>{error}</AlertBanner>
+      {ready && rows.length > 0 && (
         <ol className="grid gap-3 md:grid-cols-2">
           {rows.map((v) => (
             <li
@@ -203,7 +194,7 @@ function VariantsPanel({
           ))}
         </ol>
       )}
-      {!(loading || error) && rows.length === 0 && (
+      {ready && rows.length === 0 && (
         <p className="text-muted-foreground text-sm">
           No variants returned. This question may not have a randomized variable
           schema attached.
@@ -284,17 +275,16 @@ function RegeneratePanel({
   return (
     <Modal onClose={onClose} title="Regenerate question">
       <div className="space-y-3">
-        <label className="block space-y-1">
-          <span className="text-sm">Revision instruction</span>
-          <textarea
+        <FormField label="Revision instruction">
+          <FormTextarea
             autoFocus
-            className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="h-24 focus:border-primary focus:outline-none"
             disabled={pending}
             onChange={(e) => setInstruction(e.target.value)}
             placeholder="e.g. make this harder, use a Fortune 500 context, use a SaaS scenario"
             value={instruction}
           />
-        </label>
+        </FormField>
         <fieldset className="space-y-1">
           <legend className="text-muted-foreground text-xs uppercase tracking-wide">
             Preserve
@@ -316,14 +306,7 @@ function RegeneratePanel({
             ))}
           </div>
         </fieldset>
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
         <div className="flex justify-end gap-2">
           <button
             className="rounded border border-border/50 px-3 py-1.5 text-sm hover:bg-muted"
@@ -356,6 +339,8 @@ function Modal({
   onClose: () => void;
   title: string;
 }) {
+  const titleId = useId();
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -368,6 +353,7 @@ function Modal({
 
   return (
     <div
+      aria-labelledby={titleId}
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
       role="dialog"
@@ -380,15 +366,12 @@ function Modal({
       />
       <div className="mt-12 w-full max-w-3xl rounded-xl border border-border/60 bg-card p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium text-sm">{title}</h3>
-          <button
-            aria-label="Close"
-            className="rounded border border-border/50 px-2 py-0.5 text-xs hover:bg-muted"
-            onClick={onClose}
-            type="button"
-          >
+          <h3 className="font-medium text-sm" id={titleId}>
+            {title}
+          </h3>
+          <ActionButton aria-label="Close" onClick={onClose}>
             Close
-          </button>
+          </ActionButton>
         </div>
         {children}
       </div>

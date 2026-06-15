@@ -9,8 +9,8 @@
     "fmt": "uv run ruff format src tests",
     "typecheck": "uv run python -c 'import ri_assessments_api'",
     "gen-schemas": "uv run python scripts/gen_schemas.py",
-    "migrate": "uv run python scripts/apply_migrations.py",
-    "seed": "uv run python scripts/seed_test_assignment.py",
+    "migrate": "uv run --env-file .env.local python scripts/apply_migrations.py",
+    "seed": "uv run --env-file .env.local python scripts/seed_test_assignment.py",
     "clean": "git clean -xdf .cache .turbo dist node_modules .venv"
   }
 }

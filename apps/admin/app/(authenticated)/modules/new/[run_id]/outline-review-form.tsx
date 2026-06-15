@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
+import { ActionButton } from "@/components/action-button";
 import type { GeneratedOutline, OutlineTopic } from "@/lib/api";
 
-// Pure URL builder; inlined here so this client component does not have to
-// pull a function from `@/lib/api`, which would force Turbopack to bundle
-// the server-only Supabase + next/headers chain into the client.
+// Inlined to avoid importing from `@/lib/api`, which would bundle the server-only Supabase chain into the client.
 function generationRunEventsUrl(runId: string): string {
   return `/api/generation-events?run_id=${encodeURIComponent(runId)}`;
 }
@@ -81,26 +81,22 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
     );
   }
 
-  const totalQuestions = topics.reduce(
-    (sum, t) => sum + (Number(t.question_count) || 0),
-    0
-  );
-  const totalWeight = topics.reduce(
-    (sum, t) => sum + (Number(t.weight_pct) || 0),
-    0
-  );
+  let totalQuestions = 0;
+  let totalWeight = 0;
+  for (const t of topics) {
+    totalQuestions += Number(t.question_count) || 0;
+    totalWeight += Number(t.weight_pct) || 0;
+  }
 
   function openProgressStream() {
     // Seed every known topic as pending so the UI renders the full list
     // immediately, then SSE events transition individual rows to running /
     // done / failed. Re-open is a no-op if the previous source is alive.
-    setTopicStatus(() => {
-      const initial: Record<string, TopicStatus> = {};
-      for (const t of topics) {
-        initial[t.name] = "pending";
-      }
-      return initial;
-    });
+    const initial: Record<string, TopicStatus> = {};
+    for (const t of topics) {
+      initial[t.name] = "pending";
+    }
+    setTopicStatus(initial);
     setTopicError({});
     eventSourceRef.current?.close();
     let source: EventSource;
@@ -123,7 +119,7 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
         if (data.error) {
           setTopicError((prev) => ({
             ...prev,
-            [data.topic_name]: data.error ?? "",
+            [data.topic_name]: data.error as string,
           }));
         }
       } catch {
@@ -170,7 +166,15 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit(new FormData(e.currentTarget)).catch(
+          (err: unknown) => err
+        );
+      }}
+    >
       <div className="grid gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">
         <Field label="Slug" name="slug" required />
         <Field label="Domain" name="domain" required />
@@ -218,24 +222,20 @@ export function OutlineReviewForm({ formAction, outline, runId }: Props) {
                 Topic {i + 1}
               </p>
               <div className="flex items-center gap-1">
-                <button
+                <ActionButton
                   aria-label={`Move topic ${i + 1} up`}
-                  className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                   disabled={i === 0 || submitting}
                   onClick={() => move(i, -1)}
-                  type="button"
                 >
-                  {"↑"}
-                </button>
-                <button
+                  ↑
+                </ActionButton>
+                <ActionButton
                   aria-label={`Move topic ${i + 1} down`}
-                  className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                   disabled={i === topics.length - 1 || submitting}
                   onClick={() => move(i, 1)}
-                  type="button"
                 >
-                  {"↓"}
-                </button>
+                  ↓
+                </ActionButton>
               </div>
             </div>
             <Field
@@ -399,24 +399,26 @@ function TopicProgressList({
   );
 }
 
+const STATUS_LABELS: Record<TopicStatus, string> = {
+  pending: "Pending",
+  running: "Running",
+  done: "Done",
+  failed: "Failed",
+};
+
+const STATUS_TONE: Record<TopicStatus, string> = {
+  pending: "border-border/40 bg-muted/40 text-muted-foreground",
+  running: "border-primary/40 bg-primary/10 text-primary",
+  done: "border-primary/50 bg-primary/15 text-primary",
+  failed: "border-destructive/50 bg-destructive/15 text-destructive",
+};
+
 function StatusBadge({ status }: { status: TopicStatus }) {
-  const labels: Record<TopicStatus, string> = {
-    pending: "Pending",
-    running: "Running",
-    done: "Done",
-    failed: "Failed",
-  };
-  const tone: Record<TopicStatus, string> = {
-    pending: "border-border/40 bg-muted/40 text-muted-foreground",
-    running: "border-primary/40 bg-primary/10 text-primary",
-    done: "border-primary/50 bg-primary/15 text-primary",
-    failed: "border-destructive/50 bg-destructive/15 text-destructive",
-  };
   return (
     <span
-      className={`inline-flex items-center rounded border px-2 py-0.5 font-medium text-[10px] uppercase tracking-wide ${tone[status]}`}
+      className={`inline-flex items-center rounded border px-2 py-0.5 font-medium text-[10px] uppercase tracking-wide ${STATUS_TONE[status]}`}
     >
-      {labels[status]}
+      {STATUS_LABELS[status]}
     </span>
   );
 }

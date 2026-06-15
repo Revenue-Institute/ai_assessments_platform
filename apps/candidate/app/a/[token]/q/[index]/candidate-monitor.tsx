@@ -36,22 +36,20 @@ export function CandidateMonitor({
 }) {
   const queueRef = useRef<IntegrityEvent[]>([]);
   const focusedSecondsRef = useRef(0);
-  const lastTickRef = useRef<number>(Date.now());
-  const isFocusedRef = useRef<boolean>(true);
+  const lastTickRef = useRef(Date.now());
+  const isFocusedRef = useRef(true);
   // Initialized inside the first useEffect so React StrictMode's double-mount
   // does not leak a stale mountedAt across unmount/remount cycles.
-  const mountedAtRef = useRef<number>(0);
+  const mountedAtRef = useRef(0);
 
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [showExitModal, setShowExitModal] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const modalReturnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     mountedAtRef.current = Date.now();
-    if (typeof document !== "undefined") {
-      isFocusedRef.current = !document.hidden && document.hasFocus();
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    }
+    isFocusedRef.current = !document.hidden && document.hasFocus();
+    setIsFullscreen(Boolean(document.fullscreenElement));
 
     const apiBase = env.NEXT_PUBLIC_API_URL.replace(TRAILING_SLASH_RE, "");
     const eventsUrl = `${apiBase}/a/${encodeURIComponent(token)}/events`;
@@ -141,14 +139,10 @@ export function CandidateMonitor({
     // `question_served` fires unconditionally on every question mount.
     try {
       const attemptStartedKey = `ri:attempt_started:${assignmentId}`;
-      const alreadyStarted =
-        typeof sessionStorage !== "undefined" &&
-        sessionStorage.getItem(attemptStartedKey) === "1";
+      const alreadyStarted = sessionStorage.getItem(attemptStartedKey) === "1";
       if (!alreadyStarted) {
         emitIntegrityEvent("attempt_started", { assignment_id: assignmentId });
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.setItem(attemptStartedKey, "1");
-        }
+        sessionStorage.setItem(attemptStartedKey, "1");
       }
     } catch {
       // sessionStorage can throw in private browsing; emit anyway so we
@@ -160,11 +154,8 @@ export function CandidateMonitor({
       question_index: questionIndex,
     });
 
-    const flushTimer = window.setInterval(flushEvents, EVENTS_FLUSH_MS);
-    const heartbeatTimer = window.setInterval(
-      sendHeartbeat,
-      HEARTBEAT_INTERVAL_MS
-    );
+    const flushTimer = setInterval(flushEvents, EVENTS_FLUSH_MS);
+    const heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 
     const onUnload = () => {
       if (queueRef.current.length > 0) {
@@ -180,8 +171,8 @@ export function CandidateMonitor({
 
     return () => {
       teardown();
-      window.clearInterval(flushTimer);
-      window.clearInterval(heartbeatTimer);
+      clearInterval(flushTimer);
+      clearInterval(heartbeatTimer);
       window.removeEventListener("beforeunload", onUnload);
       flushEvents();
       sendHeartbeat();
@@ -206,10 +197,7 @@ export function CandidateMonitor({
     if (!showExitModal) {
       return;
     }
-    if (typeof document !== "undefined") {
-      modalReturnFocusRef.current =
-        (document.activeElement as HTMLElement) ?? null;
-    }
+    modalReturnFocusRef.current = document.activeElement as HTMLElement | null;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();

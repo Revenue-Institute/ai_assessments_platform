@@ -2,9 +2,9 @@
 
 import { type AdminRole, type AdminUserRow, patchAdminUser } from "@/lib/api";
 
-export async function patchAdminUserAction(
+export function patchAdminUserAction(
   userId: string,
   body: { role: AdminRole }
 ): Promise<AdminUserRow> {
-  return await patchAdminUser(userId, body);
+  return patchAdminUser(userId, body);
 }

@@ -1,14 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
 import {
   ApiError,
   type AssignmentSummary,
   type CompetencyDistributionResponse,
   competencyDistribution,
   listAssignments,
+  listSubjects,
   type SubjectCompetencyTrend,
   subjectCompetencyScores,
 } from "@/lib/api";
+
 import { CompetencyRadar } from "../../components/competency-radar";
 import { DistributionBox } from "../../components/distribution-box";
 import { Header } from "../../components/header";
@@ -17,6 +21,21 @@ import { IntegrityScore } from "../../components/integrity-score";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const subjects = await listSubjects();
+    const subject = subjects.find((s) => s.id === id);
+    return { title: subject?.full_name ?? "Candidate" };
+  } catch {
+    return { title: "Candidate" };
+  }
+}
 
 export default async function CandidateDetailPage({
   params,
@@ -54,10 +73,10 @@ export default async function CandidateDetailPage({
       );
     }
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
-      notFound();
-    }
     if (e instanceof ApiError) {
+      if (e.status === 404) {
+        notFound();
+      }
       error = e.message;
     } else {
       throw e;
@@ -76,14 +95,7 @@ export default async function CandidateDetailPage({
         pages={["Candidates"]}
       />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <section className="grid gap-4 lg:grid-cols-2">
           <CompetencyRadar slices={radarSlices} />
@@ -175,12 +187,15 @@ function Sparkline({ points }: { points: number[] }) {
   const H = 36;
   const max = 100;
   const stepX = points.length > 1 ? W / (points.length - 1) : 0;
-  const path = points
-    .map((p, i) => {
-      const x = i * stepX;
-      const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
+  const coords = points.map((p, i) => ({
+    x: i * stepX,
+    y: H - (Math.max(0, Math.min(max, p)) / max) * H,
+    p,
+  }));
+  const path = coords
+    .map(
+      ({ x, y }, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`
+    )
     .join(" ");
   return (
     <svg
@@ -198,19 +213,15 @@ function Sparkline({ points }: { points: number[] }) {
         strokeLinejoin="round"
         strokeWidth={2}
       />
-      {points.map((p, i) => {
-        const x = i * stepX;
-        const y = H - (Math.max(0, Math.min(max, p)) / max) * H;
-        return (
-          <circle
-            cx={x}
-            cy={y}
-            fill="currentColor"
-            key={`${x.toFixed(1)}-${y.toFixed(1)}-${p}`}
-            r={2}
-          />
-        );
-      })}
+      {coords.map(({ x, y, p }) => (
+        <circle
+          cx={x}
+          cy={y}
+          fill="currentColor"
+          key={`${x.toFixed(1)}-${y.toFixed(1)}-${p}`}
+          r={2}
+        />
+      ))}
     </svg>
   );
 }

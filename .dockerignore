@@ -1,0 +1,22 @@
+# Never bake secrets into images
+.env
+.env.local
+.env*.local
+**/.env
+**/.env.local
+**/.env*.local
+
+# Dev artifacts
+node_modules
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+.venv
+apps/api/.venv
+
+# Git / editor
+.git
+.gitignore
+.vscode
+.idea

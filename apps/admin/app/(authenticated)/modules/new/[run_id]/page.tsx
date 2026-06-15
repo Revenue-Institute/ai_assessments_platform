@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
 import {
   ApiError,
   fetchGenerationRun,
@@ -7,6 +9,7 @@ import {
   generateQuestions,
   type OutlineTopic,
 } from "@/lib/api";
+
 import { Header } from "../../../components/header";
 import { OutlineReviewForm } from "./outline-review-form";
 
@@ -14,6 +17,25 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ run_id: string }>;
 type SearchParams = Promise<{ error?: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { run_id } = await params;
+  try {
+    const run = await fetchGenerationRun(run_id);
+    const brief = run.input_brief as { role_title?: string };
+    return {
+      title: brief.role_title
+        ? `Generate - ${brief.role_title}`
+        : "Generate Module",
+    };
+  } catch {
+    return { title: "Generate Module" };
+  }
+}
 
 function splitCsv(value: string): string[] {
   return value
@@ -53,8 +75,7 @@ function parseOutlineFromForm(formData: FormData): GeneratedOutline {
     10
   );
 
-  // Topics are collected by index. Since the client reorders the topics
-  // before submit, the submitted indices reflect the user's chosen order.
+  // Indices reflect the client's reordered list, not the original generation order.
   const topics: OutlineTopic[] = [];
   let i = 0;
   while (formData.has(`topics[${i}].name`)) {
@@ -136,22 +157,20 @@ export default async function OutlineReviewPage({
     }
   }
 
-  const totalQuestions = outline.topics.reduce(
-    (sum, t) => sum + (t.question_count || 0),
-    0
-  );
-  const totalWeight = outline.topics.reduce(
-    (sum, t) => sum + (t.weight_pct || 0),
-    0
-  );
+  let totalQuestions = 0;
+  let totalWeight = 0;
+  for (const t of outline.topics) {
+    totalQuestions += t.question_count || 0;
+    totalWeight += t.weight_pct || 0;
+  }
 
   return (
     <>
       <Header page="Review outline" pages={["Modules", "New module"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <p className="eyebrow-label">Step 2 of 2 - Outline review</p>
-          <h1 className="mt-1 font-semibold text-2xl">{outline.title}</h1>
+          <p className="eyebrow-label">Step 2 of 2 · Outline review</p>
+          <h2 className="mt-1 font-semibold text-2xl">{outline.title}</h2>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             {outline.description}
           </p>
@@ -175,14 +194,7 @@ export default async function OutlineReviewPage({
           </details>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <OutlineReviewForm
           formAction={action}

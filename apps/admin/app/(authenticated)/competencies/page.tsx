@@ -1,7 +1,20 @@
 import { taxonomy } from "@repo/competencies";
+import type { Metadata } from "next";
+
 import { Header } from "../components/header";
 
+export const metadata: Metadata = { title: "Competencies" };
+
 const ROOTS = taxonomy.filter((c) => c.parent_id === null);
+
+const CHILDREN_BY_PARENT = new Map<string, typeof taxonomy>();
+for (const c of taxonomy) {
+  if (c.parent_id !== null) {
+    const list = CHILDREN_BY_PARENT.get(c.parent_id) ?? [];
+    list.push(c);
+    CHILDREN_BY_PARENT.set(c.parent_id, list);
+  }
+}
 
 export default function CompetenciesPage() {
   return (
@@ -9,7 +22,7 @@ export default function CompetenciesPage() {
       <Header page="Competencies" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-6">
-          <h1 className="font-semibold text-2xl">Competency taxonomy</h1>
+          <h2 className="font-semibold text-2xl">Competency taxonomy</h2>
           <p className="mt-1 max-w-prose text-muted-foreground text-sm">
             Read-only view of{" "}
             <code className="rounded bg-muted px-1">
@@ -22,7 +35,7 @@ export default function CompetenciesPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {ROOTS.map((root) => {
-            const children = taxonomy.filter((c) => c.parent_id === root.id);
+            const children = CHILDREN_BY_PARENT.get(root.id) ?? [];
             return (
               <article
                 className="rounded-xl border border-border/50 bg-muted/20 p-4"

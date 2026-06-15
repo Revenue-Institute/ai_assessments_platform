@@ -243,12 +243,17 @@ instance and set `N8N_ADMIN_API_KEY`.
 ## 5. Local dev (Docker)
 
 ```sh
-docker compose up --build
+docker compose --env-file .env.local up -d --build
 ```
 
 This brings up FastAPI, admin, candidate, n8n (community edition), and
-redis. Supabase and the SaaS providers stay external; fill
-`apps/api/.env.local` first.
+Redis. Supabase and all SaaS providers stay external.
+
+Fill `.env.local` at the repo root first (see §2), then run
+`bash scripts/link-env.sh` to symlink it into each app directory.
+The `--env-file` flag is required so Docker Compose can interpolate
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as
+build args into the Next.js client bundles at compile time.
 
 n8n on first run prints a signup URL in its log. Sign up locally → owner
 account → Settings → API → create personal API key → put it in
@@ -486,7 +491,7 @@ $EDITOR .env.local
 bash scripts/link-env.sh
 
 # 4. Docker stack (Postgres-less local; Supabase + SaaS providers stay external)
-docker compose up -d --build
+docker compose --env-file .env.local up -d --build
 
 # 5. Apply migrations + seed a test assignment
 bun --filter api migrate

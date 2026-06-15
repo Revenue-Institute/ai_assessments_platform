@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { AlertBanner } from "@/components/alert-banner";
 import { type AssignmentSummary, listAssignments } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Assignments" };
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +28,7 @@ export default async function AssignmentsPage({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-4">
           <div>
-            <h1 className="font-semibold text-xl">Assignments</h1>
+            <h2 className="font-semibold text-xl">Assignments</h2>
             <p className="text-muted-foreground text-sm">
               Magic-link assignments. Status and scores update as candidates
               submit.
@@ -31,7 +36,7 @@ export default async function AssignmentsPage({
           </div>
           <div className="flex items-center gap-2">
             <Link
-              aria-pressed={reviewOnly}
+              aria-current={reviewOnly ? "page" : undefined}
               className={`rounded border px-3 py-1.5 text-xs ${
                 reviewOnly
                   ? "border-warning/60 bg-warning/15 text-warning"
@@ -47,16 +52,9 @@ export default async function AssignmentsPage({
           </div>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
-        {assignments.length === 0 && !error ? (
+        {!error && assignments.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">No assignments yet.</p>
             <Link className="btn-primary mt-3 text-sm" href="/assignments/new">
@@ -144,14 +142,13 @@ export default async function AssignmentsPage({
 }
 
 function StatusPill({ status }: { status: string }) {
-  let tone = "bg-secondary text-secondary-foreground";
-  if (status === "completed") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "in_progress") {
-    tone = "bg-warning/20 text-warning";
-  } else if (status === "cancelled" || status === "expired") {
-    tone = "bg-muted text-muted-foreground";
-  }
+  const tones: Record<string, string> = {
+    completed: "bg-primary/20 text-primary",
+    in_progress: "bg-warning/20 text-warning",
+    cancelled: "bg-muted text-muted-foreground",
+    expired: "bg-muted text-muted-foreground",
+  };
+  const tone = tones[status] ?? "bg-secondary text-secondary-foreground";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

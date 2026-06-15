@@ -1,25 +1,34 @@
+import type { Metadata } from "next";
+import { AlertBanner } from "@/components/alert-banner";
 import { ApiError, fetchAdminMe, listAdminUsers } from "@/lib/api";
+
 import { Header } from "../../components/header";
 import { UsersTable } from "./users-table";
+
+export const metadata: Metadata = { title: "Users" };
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsUsersPage() {
-  let me: Awaited<ReturnType<typeof fetchAdminMe>> | null = null;
-  let users: Awaited<ReturnType<typeof listAdminUsers>> = [];
+  const [meResult, usersResult] = await Promise.allSettled([
+    fetchAdminMe(),
+    listAdminUsers(),
+  ]);
+  const me = meResult.status === "fulfilled" ? meResult.value : null;
   let meError: string | null = null;
-  let usersError: string | null = null;
-
-  try {
-    me = await fetchAdminMe();
-  } catch (e) {
-    meError = e instanceof ApiError ? e.message : "Could not load profile.";
+  if (meResult.status === "rejected") {
+    meError =
+      meResult.reason instanceof ApiError
+        ? meResult.reason.message
+        : "Could not load profile.";
   }
-  try {
-    users = await listAdminUsers();
-  } catch (e) {
+  const users = usersResult.status === "fulfilled" ? usersResult.value : [];
+  let usersError: string | null = null;
+  if (usersResult.status === "rejected") {
     usersError =
-      e instanceof ApiError ? e.message : "Could not load internal users.";
+      usersResult.reason instanceof ApiError
+        ? usersResult.reason.message
+        : "Could not load internal users.";
   }
 
   return (
@@ -39,12 +48,7 @@ export default async function SettingsUsersPage() {
             </p>
           </div>
           {usersError ? (
-            <p
-              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-              role="alert"
-            >
-              {usersError}
-            </p>
+            <AlertBanner>{usersError}</AlertBanner>
           ) : (
             <UsersTable currentUserId={me?.user_id ?? null} users={users} />
           )}
@@ -84,14 +88,7 @@ function AccountPanel({
   me: Awaited<ReturnType<typeof fetchAdminMe>> | null;
 }) {
   if (error) {
-    return (
-      <p
-        className="mt-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-        role="alert"
-      >
-        {error}
-      </p>
-    );
+    return <AlertBanner className="mt-2">{error}</AlertBanner>;
   }
   if (!me) {
     return <p className="mt-2 text-muted-foreground text-sm">Loading...</p>;

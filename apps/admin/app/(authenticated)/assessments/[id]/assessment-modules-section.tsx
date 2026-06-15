@@ -2,11 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+
+import { ActionButton } from "@/components/action-button";
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormSelect } from "@/components/form-fields";
 import type {
   AssessmentDetail,
   AssessmentStatus,
   ModuleSummary,
 } from "@/lib/api";
+
+import type { ActionResult } from "../actions";
 import {
   addAssessmentModuleAction,
   removeAssessmentModuleAction,
@@ -29,9 +35,7 @@ export function AssessmentModulesSection({
 
   const editable = status === "draft";
 
-  function handle(
-    promise: Promise<{ ok: true } | { ok: false; error: string }>
-  ) {
+  function handle(promise: Promise<ActionResult>) {
     setError(null);
     startTransition(async () => {
       const r = await promise;
@@ -43,27 +47,15 @@ export function AssessmentModulesSection({
     });
   }
 
-  function moveUp(index: number) {
-    if (index <= 0) {
-      return;
-    }
+  function move(index: number, delta: -1 | 1) {
     const ids = assessment.modules.map((m) => m.module_id);
-    const next = ids.slice();
-    [next[index - 1], next[index]] = [
-      next[index] as string,
-      next[index - 1] as string,
-    ];
-    handle(reorderAssessmentAction(assessment.id, next));
-  }
-
-  function moveDown(index: number) {
-    const ids = assessment.modules.map((m) => m.module_id);
-    if (index < 0 || index >= ids.length - 1) {
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) {
       return;
     }
     const next = ids.slice();
-    [next[index], next[index + 1]] = [
-      next[index + 1] as string,
+    [next[index], next[target]] = [
+      next[target] as string,
       next[index] as string,
     ];
     handle(reorderAssessmentAction(assessment.id, next));
@@ -95,14 +87,7 @@ export function AssessmentModulesSection({
         )}
       </div>
 
-      {error && (
-        <p
-          className="mb-2 rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      <AlertBanner className="mb-2">{error}</AlertBanner>
 
       {assessment.modules.length === 0 ? (
         <p className="rounded border border-border/60 border-dashed bg-background/30 px-3 py-4 text-center text-muted-foreground text-sm">
@@ -125,32 +110,28 @@ export function AssessmentModulesSection({
               </div>
               {editable && (
                 <div className="flex items-center gap-1">
-                  <button
+                  <ActionButton
                     aria-label="Move up"
-                    className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                     disabled={i === 0 || pending}
-                    onClick={() => moveUp(i)}
-                    type="button"
+                    onClick={() => move(i, -1)}
                   >
-                    {"↑"}
-                  </button>
-                  <button
+                    ↑
+                  </ActionButton>
+                  <ActionButton
                     aria-label="Move down"
-                    className="rounded border border-border/40 px-2 py-0.5 text-xs hover:bg-muted disabled:opacity-40"
                     disabled={i === assessment.modules.length - 1 || pending}
-                    onClick={() => moveDown(i)}
-                    type="button"
+                    onClick={() => move(i, 1)}
                   >
-                    {"↓"}
-                  </button>
-                  <button
-                    className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15 disabled:opacity-40"
+                    ↓
+                  </ActionButton>
+                  <ActionButton
+                    aria-label={`Remove ${m.title}`}
                     disabled={pending}
                     onClick={() => remove(m.module_id)}
-                    type="button"
+                    variant="destructive"
                   >
                     Remove
-                  </button>
+                  </ActionButton>
                 </div>
               )}
             </li>
@@ -160,10 +141,9 @@ export function AssessmentModulesSection({
 
       {editable && (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-border/40 border-t pt-3">
-          <label className="min-w-0 flex-1 space-y-1">
-            <span className="text-sm">Add module</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          <FormField className="min-w-0 flex-1" label="Add module">
+            <FormSelect
+              className="focus:border-primary focus:outline-none"
               onChange={(e) => setPickerValue(e.target.value)}
               value={pickerValue}
             >
@@ -178,8 +158,8 @@ export function AssessmentModulesSection({
                   {m.target_duration_minutes}m)
                 </option>
               ))}
-            </select>
-          </label>
+            </FormSelect>
+          </FormField>
           <button
             className="btn-primary text-sm disabled:opacity-60"
             disabled={!pickerValue || pending}

@@ -2,28 +2,26 @@
 
 import { useTransition } from "react";
 
-// Single-host prod: admin and candidate share assessments.revenueinstitute.com.
-// A server-action `redirect()` to /a/{token} therefore looks same-origin to
-// Next's client router, which tries a soft router navigation instead of a
-// full page load. The admin app has no /a/{token} route, so the click
-// silently no-ops. Doing window.location.assign() here forces a hard
-// navigation through nginx, which path-routes /a/* to the candidate.
+// window.location.assign forces a hard navigation so nginx can route /a/* to the candidate app (soft nav silently no-ops on single-host prod).
 export function OpenAsCandidateButton({
   getUrl,
 }: {
   getUrl: () => Promise<string>;
 }) {
   const [pending, startTransition] = useTransition();
+
+  function handleOpen() {
+    startTransition(async () => {
+      const url = await getUrl();
+      window.location.assign(url);
+    });
+  }
+
   return (
     <button
       className="btn-primary text-sm"
       disabled={pending}
-      onClick={() => {
-        startTransition(async () => {
-          const url = await getUrl();
-          window.location.assign(url);
-        });
-      }}
+      onClick={handleOpen}
       type="button"
     >
       {pending ? "Opening..." : "Open as candidate"}

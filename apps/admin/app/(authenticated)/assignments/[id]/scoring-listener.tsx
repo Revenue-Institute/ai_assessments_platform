@@ -10,6 +10,13 @@ interface ScoringEvent {
 
 type ScoringPhase = "idle" | "queued" | "completed" | "failed";
 
+const PHASE_LABELS: Record<ScoringPhase, string> = {
+  idle: "",
+  queued: "Scoring...",
+  completed: "Score updated",
+  failed: "Scoring failed",
+};
+
 function toneFor(phase: ScoringPhase): string {
   if (phase === "failed") {
     return "bg-destructive/15 text-destructive";
@@ -20,11 +27,7 @@ function toneFor(phase: ScoringPhase): string {
   return "bg-muted text-muted-foreground";
 }
 
-/** Listens to the SSE stream for the current assignment and triggers a
- * server-component refresh when the score lands. The page already does
- * the heavy data fetching, so a router.refresh() picks up the new score
- * without extra wiring. A live "Scoring..." badge surfaces the queued
- * state. */
+// Listens to the SSE scoring stream and calls router.refresh() when the score lands; shows a live badge during queued/failed states.
 export function ScoringListener({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
   const [phase, setPhase] = useState<ScoringPhase>("idle");
@@ -57,18 +60,12 @@ export function ScoringListener({ assignmentId }: { assignmentId: string }) {
   if (phase === "idle") {
     return null;
   }
-  const labels: Record<ScoringPhase, string> = {
-    idle: "",
-    queued: "Scoring...",
-    completed: "Score updated",
-    failed: "Scoring failed",
-  };
   return (
     <span
       aria-live="polite"
       className={`inline-flex items-center rounded px-2 py-0.5 font-medium text-[11px] uppercase tracking-wide ${toneFor(phase)}`}
     >
-      {labels[phase]}
+      {PHASE_LABELS[phase]}
     </span>
   );
 }

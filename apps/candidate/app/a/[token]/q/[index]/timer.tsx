@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** Live countdown driven by the server's expires_at. The timer is a
  * display only; deadline enforcement happens server-side per spec §10.1.
@@ -11,13 +11,32 @@ import { useEffect, useState } from "react";
  * every 30 s under 5 min, and on each second in the final minute, plus
  * an `aria-live="assertive"` announcement when the deadline elapses. */
 export function CountdownTimer({ deadlineIso }: { deadlineIso: string }) {
-  const deadline = new Date(deadlineIso).getTime();
-  const [now, setNow] = useState(() => Date.now());
+  const deadline = useMemo(
+    () => new Date(deadlineIso).getTime(),
+    [deadlineIso]
+  );
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
   }, []);
+
+  // Before hydration, defer rendering to avoid server/client mismatch.
+  if (now === null) {
+    return (
+      <span className="inline-flex">
+        <span
+          aria-hidden="true"
+          className="whitespace-nowrap rounded border border-primary/40 bg-primary/10 px-2 py-1 font-mono text-primary text-xs tabular-nums"
+        >
+          --:--
+        </span>
+        <span aria-live="polite" className="sr-only" />
+      </span>
+    );
+  }
 
   const remainingMs = Math.max(0, deadline - now);
   const totalSeconds = Math.floor(remainingMs / 1000);

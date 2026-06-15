@@ -1,42 +1,65 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
 import {
   ApiError,
   getSeriesDetail,
   getSeriesTrend,
   type SeriesDetail,
-  type SeriesTrendLine,
   type SeriesTrendResponse,
 } from "@/lib/api";
+
 import { Header } from "../../components/header";
+import { SeriesTrendChart } from "./series-trend-chart";
 
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getSeriesDetail(id);
+    return { title: detail.name };
+  } catch {
+    return { title: "Series" };
+  }
+}
+
 export default async function SeriesDetailPage({ params }: { params: Params }) {
   const { id } = await params;
 
-  let detail: SeriesDetail;
-  try {
-    detail = await getSeriesDetail(id);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
+  const [detailResult, trendResult] = await Promise.allSettled([
+    getSeriesDetail(id),
+    getSeriesTrend(id),
+  ]);
+
+  if (detailResult.status === "rejected") {
+    if (
+      detailResult.reason instanceof ApiError &&
+      detailResult.reason.status === 404
+    ) {
       notFound();
     }
-    throw e;
+    throw detailResult.reason;
   }
 
-  // Trend is auxiliary: a missing endpoint should not break the rest of the
-  // page. Render the header, focus list, and assignments table even if the
-  // backend trend route is offline (defensive against API rollout skew).
-  let trend: SeriesTrendResponse | null = null;
+  const detail: SeriesDetail = detailResult.value;
+
+  // Trend is auxiliary: render the rest of the page even if the backend trend route is offline.
+  const trend: SeriesTrendResponse | null =
+    trendResult.status === "fulfilled" ? trendResult.value : null;
   let trendError: string | null = null;
-  try {
-    trend = await getSeriesTrend(id);
-  } catch (e) {
+  if (trendResult.status === "rejected") {
     trendError =
-      e instanceof ApiError ? e.message : "Could not load trend data.";
+      trendResult.reason instanceof ApiError
+        ? trendResult.reason.message
+        : "Could not load trend data.";
   }
 
   const orderedAssignments = [...detail.assignments].sort(
@@ -50,7 +73,7 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h1 className="font-semibold text-xl">{detail.name}</h1>
+              <h2 className="font-semibold text-xl">{detail.name}</h2>
               <p className="text-muted-foreground text-sm">
                 {detail.subject_full_name ? (
                   <Link
@@ -127,12 +150,7 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
             </p>
           </div>
           {trendError ? (
-            <p
-              className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-              role="alert"
-            >
-              {trendError}
-            </p>
+            <AlertBanner>{trendError}</AlertBanner>
           ) : (
             <SeriesTrendChart focus={detail.competency_focus} trend={trend} />
           )}
@@ -204,191 +222,5 @@ export default async function SeriesDetailPage({ params }: { params: Params }) {
         </section>
       </div>
     </>
-  );
-}
-
-interface ChartProps {
-  focus: string[];
-  trend: SeriesTrendResponse | null;
-}
-
-// Brand-leaning palette borrowed from the heatmap. Hand-picked so adjacent
-// competency lines stay distinguishable in both themes; cycled when the
-// focus list exceeds the array length.
-const TREND_COLORS = [
-  "rgb(10 143 93)", // brand forest
-  "rgb(56 189 248)", // sky
-  "rgb(217 119 6)", // amber
-  "rgb(244 63 94)", // rose
-  "rgb(167 139 250)", // violet
-  "rgb(45 212 191)", // teal
-];
-
-function SeriesTrendChart({ focus, trend }: ChartProps) {
-  const lines: SeriesTrendLine[] = trend?.trends ?? [];
-  const usable = lines.filter((l) => l.points.length > 0);
-
-  if (focus.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        This series has no competency focus to plot.
-      </p>
-    );
-  }
-
-  if (usable.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No scored assignments in this series yet. Once attempts complete and
-        score, a line per competency lands here.
-      </p>
-    );
-  }
-
-  // Determine the x-axis domain from the union of sequence numbers across
-  // every competency line. Empty fallback keeps the SVG renderable.
-  const allSeq = usable.flatMap((l) => l.points.map((p) => p.sequence_number));
-  const minSeq = Math.min(...allSeq);
-  const maxSeq = Math.max(...allSeq);
-  const spanSeq = Math.max(1, maxSeq - minSeq);
-
-  const W = 640;
-  const H = 220;
-  const padL = 36;
-  const padR = 16;
-  const padT = 12;
-  const padB = 28;
-  const innerW = W - padL - padR;
-  const innerH = H - padT - padB;
-
-  const xFor = (seq: number) => padL + ((seq - minSeq) / spanSeq) * innerW;
-  const yFor = (pct: number) =>
-    padT + (1 - Math.max(0, Math.min(100, pct)) / 100) * innerH;
-
-  return (
-    <div className="text-foreground">
-      <svg
-        aria-labelledby="series-trend-title"
-        height={H}
-        role="img"
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <title id="series-trend-title">
-          Competency score trend by sequence number
-        </title>
-        {/* gridlines + axis labels (0, 25, 50, 75, 100) */}
-        {[0, 25, 50, 75, 100].map((tick) => {
-          const y = yFor(tick);
-          return (
-            <g key={`grid-${tick}`}>
-              <line
-                stroke="currentColor"
-                strokeOpacity={0.1}
-                strokeWidth={1}
-                x1={padL}
-                x2={W - padR}
-                y1={y}
-                y2={y}
-              />
-              <text
-                className="text-muted-foreground"
-                dominantBaseline="middle"
-                fill="currentColor"
-                fontSize={10}
-                textAnchor="end"
-                x={padL - 6}
-                y={y}
-              >
-                {tick}%
-              </text>
-            </g>
-          );
-        })}
-
-        {/* x-axis ticks: one per integer sequence number, capped at 12 */}
-        {(() => {
-          const span = maxSeq - minSeq;
-          const stepSeq = Math.max(1, Math.ceil((span + 1) / 12));
-          const ticks: number[] = [];
-          for (let s = minSeq; s <= maxSeq; s += stepSeq) {
-            ticks.push(s);
-          }
-          if (ticks.at(-1) !== maxSeq) {
-            ticks.push(maxSeq);
-          }
-          return ticks.map((s) => (
-            <text
-              className="text-muted-foreground"
-              fill="currentColor"
-              fontSize={10}
-              key={`xtick-${s}`}
-              textAnchor="middle"
-              x={xFor(s)}
-              y={H - 10}
-            >
-              #{s}
-            </text>
-          ));
-        })()}
-
-        {usable.map((line, idx) => {
-          const color = TREND_COLORS[idx % TREND_COLORS.length];
-          const sorted = [...line.points].sort(
-            (a, b) => a.sequence_number - b.sequence_number
-          );
-          const path = sorted
-            .filter((p) => p.score_pct != null)
-            .map((p, i) => {
-              const x = xFor(p.sequence_number);
-              const y = yFor(p.score_pct ?? 0);
-              return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-            })
-            .join(" ");
-          return (
-            <g key={line.competency_id}>
-              <path
-                d={path}
-                fill="none"
-                stroke={color}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-              />
-              {sorted
-                .filter((p) => p.score_pct != null)
-                .map((p) => (
-                  <circle
-                    cx={xFor(p.sequence_number)}
-                    cy={yFor(p.score_pct ?? 0)}
-                    fill={color}
-                    key={`pt-${line.competency_id}-${p.sequence_number}`}
-                    r={3}
-                  />
-                ))}
-            </g>
-          );
-        })}
-      </svg>
-
-      <ul className="mt-2 flex flex-wrap gap-3 text-xs">
-        {usable.map((line, idx) => (
-          <li
-            className="inline-flex items-center gap-1.5"
-            key={`legend-${line.competency_id}`}
-          >
-            <span
-              aria-hidden="true"
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{
-                backgroundColor: TREND_COLORS[idx % TREND_COLORS.length],
-              }}
-            />
-            <span>{line.competency_id}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

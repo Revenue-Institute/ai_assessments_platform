@@ -25,4 +25,5 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  emptyStringAsUndefined: true,
 });

@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 
+// useFormStatus can't be used here: the form uses onSubmit (client handler) not a native server action.
 export interface PreflightIssue {
   message: string;
 }

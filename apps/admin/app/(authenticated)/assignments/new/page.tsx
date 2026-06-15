@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import { FormField, FormInput, FormSelect } from "@/components/form-fields";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AssignmentMagicLink,
@@ -7,8 +11,11 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { CopyButton } from "../../components/copy-button";
 import { Header } from "../../components/header";
+
+export const metadata: Metadata = { title: "New Assignment" };
 
 export const dynamic = "force-dynamic";
 
@@ -73,17 +80,22 @@ export default async function NewAssignmentPage({
     }
   }
 
-  const issuedLinks = decodeIssuedLinks(sp.links);
-  const failedRows = decodeFailedRows(sp.failed);
+  const issuedLinks = decodeJsonParam<{
+    assignment_id: string;
+    magic_link_url: string;
+  }>(sp.links);
+  const failedRows = decodeJsonParam<{ subject_id: string; detail: string }>(
+    sp.failed
+  );
 
   return (
     <>
       <Header page="New assignment" pages={["Assignments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="rounded-xl border border-border/50 bg-muted/30 p-4">
-          <h1 className="font-semibold text-xl">
+          <h2 className="font-semibold text-xl">
             Issue magic-link assignments
-          </h1>
+          </h2>
           <p className="text-muted-foreground text-sm">
             Pick one or more subjects and a published assessment. Each subject
             gets their own assignment + JWT. Invites are emailed via Resend when
@@ -91,14 +103,7 @@ export default async function NewAssignmentPage({
           </p>
         </section>
 
-        {(sp.error || loadError) && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {sp.error || loadError}
-          </p>
-        )}
+        <AlertBanner>{sp.error || loadError}</AlertBanner>
 
         {issuedLinks.length > 0 && (
           <output className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm">
@@ -152,14 +157,8 @@ export default async function NewAssignmentPage({
           action={action}
           className="grid max-w-3xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
         >
-          <label className="space-y-1">
-            <span className="text-sm">Assessment (published only)</span>
-            <select
-              className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
-              defaultValue=""
-              name="assessment_id"
-              required
-            >
+          <FormField label="Assessment (published only)">
+            <FormSelect defaultValue="" name="assessment_id" required>
               <option disabled value="">
                 {publishable.length === 0
                   ? "No published assessments, publish one first"
@@ -171,8 +170,8 @@ export default async function NewAssignmentPage({
                   min · {a.module_count} modules)
                 </option>
               ))}
-            </select>
-          </label>
+            </FormSelect>
+          </FormField>
 
           <fieldset className="space-y-2 rounded border border-border/40 bg-background/30 p-3">
             <legend className="px-1 text-sm">Candidates</legend>
@@ -207,10 +206,8 @@ export default async function NewAssignmentPage({
           </fieldset>
 
           <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1">
-              <span className="text-sm">Expires in (days)</span>
-              <input
-                className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm"
+            <FormField label="Expires in (days)">
+              <FormInput
                 defaultValue="7"
                 max="90"
                 min="1"
@@ -218,20 +215,20 @@ export default async function NewAssignmentPage({
                 required
                 type="number"
               />
-            </label>
+            </FormField>
             <label className="flex items-center gap-2 text-sm">
               <input defaultChecked name="send_email" type="checkbox" />
               <span>Send invite email via Resend</span>
             </label>
           </div>
 
-          <button
+          <SubmitButton
             className="btn-primary mt-1 text-sm"
             disabled={publishable.length === 0 || subjects.length === 0}
-            type="submit"
+            pendingLabel="Issuing..."
           >
             Issue magic links
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </>
@@ -245,22 +242,7 @@ function linkPair(link: AssignmentMagicLink) {
   };
 }
 
-function decodeIssuedLinks(
-  raw: string | undefined
-): Array<{ assignment_id: string; magic_link_url: string }> {
-  if (!raw) {
-    return [];
-  }
-  try {
-    return JSON.parse(decodeURIComponent(raw));
-  } catch {
-    return [];
-  }
-}
-
-function decodeFailedRows(
-  raw: string | undefined
-): Array<{ subject_id: string; detail: string }> {
+function decodeJsonParam<T>(raw: string | undefined): T[] {
   if (!raw) {
     return [];
   }

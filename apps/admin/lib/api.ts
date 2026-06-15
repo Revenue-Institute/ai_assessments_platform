@@ -880,7 +880,8 @@ export interface AdminUserRow {
   role: AdminRole;
 }
 
-export const listAdminUsers = () => callApi<AdminUserRow[]>("/api/users");
+export const listAdminUsers = () =>
+  callApi<{ users: AdminUserRow[] }>("/api/users").then((r) => r.users);
 
 export const patchAdminUser = (id: string, body: { role: AdminRole }) =>
   callApi<AdminUserRow>(`/api/users/${encodeURIComponent(id)}`, {

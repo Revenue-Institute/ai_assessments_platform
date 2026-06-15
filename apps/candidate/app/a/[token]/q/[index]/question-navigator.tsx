@@ -1,24 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Props {
   current: number;
-  token: string;
   total: number;
 }
 
-/** Collapsible side panel that lets the candidate jump back to any
- * already-viewed question. Default forward-only: only renders links for
- * indices <= current, per spec §13.3 ("only forward navigation allowed
- * unless module config says otherwise").
- *
- * Renders two surfaces driven off the same data:
- *   - mobile: a horizontal scroll strip pinned above the question.
- *   - md+   : a collapsible right-side rail.
- * Both use the visited/active gating so the forward-only contract holds
- * on every viewport. */
-export function QuestionNavigator({ token, current, total }: Props) {
+function useBlockBackNavigation() {
+  useEffect(() => {
+    const url = window.location.href;
+
+    history.pushState(null, "", url);
+
+    function onPopState() {
+      history.pushState(null, "", url);
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+}
+
+/** Collapsible side panel showing question progress. Previously answered
+ * questions are shown as non-clickable indicators; only the current question
+ * is active. Forward-only navigation per spec §13.3. */
+export function QuestionNavigator({ current, total }: Props) {
+  useBlockBackNavigation();
+
   const [open, setOpen] = useState(true);
   const numbers = questionNumbers(total);
 
@@ -31,22 +40,16 @@ export function QuestionNavigator({ token, current, total }: Props) {
         <ol className="flex gap-1.5">
           {numbers.map((number) => {
             const index = number - 1;
-            const visited = index <= current;
             const active = index === current;
             return (
               <li className="shrink-0" key={`q-mobile-${number}`}>
-                {visited ? (
-                  <a
-                    aria-current={active ? "step" : undefined}
-                    className={`block min-w-9 rounded px-2 py-1 text-center font-mono text-xs ${
-                      active
-                        ? "bg-primary font-medium text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground hover:bg-primary/30"
-                    }`}
-                    href={`/a/${token}/q/${index}`}
+                {active ? (
+                  <span
+                    aria-current="step"
+                    className="block min-w-9 rounded bg-primary px-2 py-1 text-center font-medium font-mono text-primary-foreground text-xs"
                   >
                     {number}
-                  </a>
+                  </span>
                 ) : (
                   <span
                     aria-disabled
@@ -82,22 +85,16 @@ export function QuestionNavigator({ token, current, total }: Props) {
             <ol className="grid grid-cols-5 gap-1.5">
               {numbers.map((number) => {
                 const index = number - 1;
-                const visited = index <= current;
                 const active = index === current;
                 return (
                   <li key={`q-rail-${number}`}>
-                    {visited ? (
-                      <a
-                        aria-current={active ? "step" : undefined}
-                        className={`block w-8 rounded px-2 py-1 text-center font-mono text-xs ${
-                          active
-                            ? "bg-primary font-medium text-primary-foreground"
-                            : "bg-secondary text-secondary-foreground hover:bg-primary/30"
-                        }`}
-                        href={`/a/${token}/q/${index}`}
+                    {active ? (
+                      <span
+                        aria-current="step"
+                        className="block w-8 rounded bg-primary px-2 py-1 text-center font-medium font-mono text-primary-foreground text-xs"
                       >
                         {number}
-                      </a>
+                      </span>
                     ) : (
                       <span
                         aria-disabled
@@ -118,9 +115,5 @@ export function QuestionNavigator({ token, current, total }: Props) {
 }
 
 function questionNumbers(total: number): number[] {
-  const numbers: number[] = [];
-  for (let number = 1; number <= total; number++) {
-    numbers.push(number);
-  }
-  return numbers;
+  return Array.from({ length: total }, (_, i) => i + 1);
 }

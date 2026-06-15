@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   type AssessmentDetail,
@@ -7,6 +10,7 @@ import {
   listModules,
   type ModuleSummary,
 } from "@/lib/api";
+
 import { Header } from "../../components/header";
 import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
 import { AssessmentMetaForm } from "./assessment-meta-form";
@@ -15,6 +19,20 @@ import { AssessmentModulesSection } from "./assessment-modules-section";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getAssessment(id);
+    return { title: detail.title };
+  } catch {
+    return { title: "Assessment" };
+  }
+}
 type SearchParams = Promise<{ error?: string; ok?: string }>;
 
 export default async function AssessmentDetailPage({
@@ -51,18 +69,9 @@ export default async function AssessmentDetailPage({
     <>
       <Header page={detail.title} pages={["Assessments"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {(error || ok) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error ? "alert" : "status"}
-          >
-            {error || ok}
-          </p>
-        )}
+        <AlertBanner variant={error ? "error" : "success"}>
+          {error || ok}
+        </AlertBanner>
 
         <section className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4 md:grid-cols-4">
           <Stat label="Status" value={detail.status} />
@@ -90,28 +99,28 @@ export default async function AssessmentDetailPage({
         <section className="flex flex-wrap items-center gap-2">
           {detail.status === "draft" && (
             <form action={publish}>
-              <button
-                className="btn-primary text-sm disabled:opacity-50"
+              <SubmitButton
+                className="btn-primary text-sm"
                 disabled={publishDisabled}
+                pendingLabel="Publishing..."
                 title={
                   publishDisabled
                     ? "Add at least one module before publishing."
                     : undefined
                 }
-                type="submit"
               >
                 Publish
-              </button>
+              </SubmitButton>
             </form>
           )}
           {detail.status === "published" && (
             <form action={archive}>
-              <button
+              <SubmitButton
                 className="rounded border border-border/50 bg-background px-3 py-2 text-sm hover:bg-muted"
-                type="submit"
+                pendingLabel="Archiving..."
               >
                 Archive
-              </button>
+              </SubmitButton>
             </form>
           )}
           <Link

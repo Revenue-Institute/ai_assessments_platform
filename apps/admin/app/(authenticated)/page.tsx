@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AlertBanner } from "@/components/alert-banner";
 import {
   type AssignmentSummary,
   listAssignments,
@@ -8,6 +9,7 @@ import {
   type ModuleSummary,
 } from "@/lib/api";
 import { loadOrApiError } from "@/lib/api-helpers";
+
 import { Header } from "./components/header";
 import { IntegrityScore } from "./components/integrity-score";
 
@@ -55,14 +57,7 @@ export default async function DashboardPage() {
     <>
       <Header page="Dashboard" pages={[]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
@@ -95,7 +90,7 @@ export default async function DashboardPage() {
           <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <h1 className="font-semibold text-lg">Recent assignments</h1>
+                <h2 className="font-semibold text-lg">Recent assignments</h2>
                 <p className="text-muted-foreground text-sm">
                   Latest candidate and employee assessment activity.
                 </p>
@@ -218,14 +213,12 @@ function MetricCard({
   value: number;
   tone: "primary" | "warning" | "destructive" | "neutral";
 }) {
-  let toneClass = "text-foreground";
-  if (tone === "primary") {
-    toneClass = "text-primary";
-  } else if (tone === "warning") {
-    toneClass = "text-warning";
-  } else if (tone === "destructive") {
-    toneClass = "text-destructive";
-  }
+  const toneClass = {
+    primary: "text-primary",
+    warning: "text-warning",
+    destructive: "text-destructive",
+    neutral: "text-foreground",
+  }[tone];
   return (
     <Link
       className="rounded-xl border border-border/50 bg-muted/20 p-4 transition hover:border-primary/40 hover:bg-muted/30"
@@ -303,14 +296,13 @@ function EmptyAction({
 }
 
 function StatusPill({ status }: { status: string }) {
-  let tone = "bg-secondary text-secondary-foreground";
-  if (status === "completed") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "in_progress") {
-    tone = "bg-warning/20 text-warning";
-  } else if (status === "cancelled" || status === "expired") {
-    tone = "bg-muted text-muted-foreground";
-  }
+  const tones: Record<string, string> = {
+    completed: "bg-primary/20 text-primary",
+    in_progress: "bg-warning/20 text-warning",
+    cancelled: "bg-muted text-muted-foreground",
+    expired: "bg-muted text-muted-foreground",
+  };
+  const tone = tones[status] ?? "bg-secondary text-secondary-foreground";
   return (
     <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
       {status}

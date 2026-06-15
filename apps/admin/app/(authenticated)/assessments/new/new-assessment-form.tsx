@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+
+import { FormField, FormInput, FormTextarea } from "@/components/form-fields";
 import type { ModuleSummary } from "@/lib/api";
+
 import { createAssessmentAction } from "../actions";
 
 function sluggify(input: string): string {
@@ -32,26 +35,15 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
     );
   }
 
-  function moveUp(id: string) {
+  function move(id: string, delta: -1 | 1) {
     setSelected((prev) => {
       const i = prev.indexOf(id);
-      if (i <= 0) {
+      const target = i + delta;
+      if (i < 0 || target < 0 || target >= prev.length) {
         return prev;
       }
       const next = prev.slice();
-      [next[i - 1], next[i]] = [next[i] as string, next[i - 1] as string];
-      return next;
-    });
-  }
-
-  function moveDown(id: string) {
-    setSelected((prev) => {
-      const i = prev.indexOf(id);
-      if (i < 0 || i >= prev.length - 1) {
-        return prev;
-      }
-      const next = prev.slice();
-      [next[i], next[i + 1]] = [next[i + 1] as string, next[i] as string];
+      [next[i], next[target]] = [next[target] as string, next[i] as string];
       return next;
     });
   }
@@ -83,22 +75,20 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
       className="grid max-w-2xl gap-3 rounded-xl border border-border/50 bg-muted/20 p-4"
       onSubmit={onSubmit}
     >
-      <label className="space-y-1">
-        <span className="text-sm">Title</span>
-        <input
-          className="block w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+      <FormField label="Title">
+        <FormInput
+          className="focus:border-primary focus:outline-none"
           name="title"
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Q2 Sales Operations Assessment"
           required
           value={title}
         />
-      </label>
+      </FormField>
 
-      <label className="space-y-1">
-        <span className="text-sm">Slug</span>
-        <input
-          className="block w-full rounded border border-border/60 bg-background px-3 py-2 font-mono text-sm focus:border-primary focus:outline-none"
+      <FormField label="Slug">
+        <FormInput
+          className="font-mono focus:border-primary focus:outline-none"
           name="slug"
           onChange={(e) => {
             setSlug(e.target.value);
@@ -117,18 +107,17 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
         <span className="text-muted-foreground text-xs">
           Auto-derived from the title until you edit it.
         </span>
-      </label>
+      </FormField>
 
-      <label className="space-y-1">
-        <span className="text-sm">Description (optional)</span>
-        <textarea
-          className="block h-24 w-full rounded border border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+      <FormField label="Description (optional)">
+        <FormTextarea
+          className="h-24 focus:border-primary focus:outline-none"
           name="description"
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What this assessment covers and who it is for."
           value={description}
         />
-      </label>
+      </FormField>
 
       <div className="space-y-2">
         <p className="text-sm">Modules</p>
@@ -172,21 +161,22 @@ export function NewAssessmentForm({ modules }: { modules: ModuleSummary[] }) {
                           aria-label="Move up"
                           className="rounded border border-border/40 px-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
                           disabled={i === 0}
-                          onClick={() => moveUp(id)}
+                          onClick={() => move(id, -1)}
                           type="button"
                         >
-                          {"↑"}
+                          ↑
                         </button>
                         <button
                           aria-label="Move down"
                           className="rounded border border-border/40 px-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
                           disabled={i === selected.length - 1}
-                          onClick={() => moveDown(id)}
+                          onClick={() => move(id, 1)}
                           type="button"
                         >
-                          {"↓"}
+                          ↓
                         </button>
                         <button
+                          aria-label={`Remove ${m.title}`}
                           className="rounded border border-destructive/40 px-1 text-destructive hover:bg-destructive/15"
                           onClick={() => toggleModule(id)}
                           type="button"

@@ -25,12 +25,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+
 import type { AttemptEvent } from "@/lib/api";
 
-/**
- * Severity map keyed by the canonical integrity event taxonomy in
- * packages/schemas/src/integrity.ts. Anything missing here defaults to info.
- */
+// Severity map keyed by integrity event taxonomy (packages/schemas/src/integrity.ts); unknown types default to info.
 const SEVERITY: Record<string, "info" | "warn" | "alert"> = {
   attempt_started: "info",
   question_served: "info",
@@ -68,6 +66,12 @@ const DOT_BY_SEVERITY: Record<"info" | "warn" | "alert", string> = {
   info: "bg-primary",
   warn: "bg-warning",
   alert: "bg-destructive",
+};
+
+const ICON_TONE_BY_SEVERITY: Record<"info" | "warn" | "alert", string> = {
+  info: "text-primary",
+  warn: "text-warning",
+  alert: "text-destructive",
 };
 
 const ICON_BY_TYPE: Record<string, LucideIcon> = {
@@ -148,6 +152,11 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
     });
   }
 
+  const chips = useMemo(
+    () => Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)),
+    [counts]
+  );
+
   if (events.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -155,8 +164,6 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
       </p>
     );
   }
-
-  const chips = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div className="space-y-3">
@@ -205,14 +212,7 @@ export function IntegrityEventTimeline({ events }: { events: AttemptEvent[] }) {
           const Icon = iconFor(ev.event_type);
           const attemptId = eventAttemptId(ev);
           const label = ev.event_type.replaceAll("_", " ");
-          let iconTone: string;
-          if (sev === "alert") {
-            iconTone = "text-destructive";
-          } else if (sev === "warn") {
-            iconTone = "text-warning";
-          } else {
-            iconTone = "text-primary";
-          }
+          const iconTone = ICON_TONE_BY_SEVERITY[sev];
           return (
             <li
               className="flex items-start gap-3 border-border/30 border-b px-3 py-2 last:border-b-0"

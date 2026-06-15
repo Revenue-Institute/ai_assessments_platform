@@ -1,21 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { ApiError, listModules, type ModuleSummary } from "@/lib/api";
+import { AlertBanner } from "@/components/alert-banner";
+import { StatusBadge } from "@/components/status-badge";
+import { listModules, type ModuleSummary } from "@/lib/api";
+import { loadOrApiError } from "@/lib/api-helpers";
+
 import { Header } from "../components/header";
+
+export const metadata: Metadata = { title: "Modules" };
 
 export const dynamic = "force-dynamic";
 
 export default async function ModulesPage() {
-  let modules: ModuleSummary[] = [];
-  let error: string | null = null;
-  try {
-    modules = await listModules();
-  } catch (e) {
-    if (e instanceof ApiError) {
-      error = e.message;
-    } else {
-      throw e;
-    }
-  }
+  const { data, error } = await loadOrApiError(listModules);
+  const modules: ModuleSummary[] = data ?? [];
 
   return (
     <>
@@ -23,7 +21,7 @@ export default async function ModulesPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <section className="flex items-start justify-between rounded-xl border border-border/50 bg-muted/30 p-4">
           <div>
-            <h1 className="font-semibold text-xl">Modules</h1>
+            <h2 className="font-semibold text-xl">Modules</h2>
             <p className="text-muted-foreground text-sm">
               Question modules. Drafts can be edited; published modules can be
               assigned.
@@ -34,16 +32,9 @@ export default async function ModulesPage() {
           </Link>
         </section>
 
-        {error && (
-          <p
-            className="rounded border border-destructive/50 bg-destructive/15 px-3 py-2 text-destructive text-sm"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <AlertBanner>{error}</AlertBanner>
 
-        {modules.length === 0 && !error ? (
+        {!error && modules.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 px-6 py-10 text-center">
             <p className="text-muted-foreground text-sm">No modules yet.</p>
             <Link className="btn-primary mt-3 text-sm" href="/modules/new">
@@ -77,19 +68,5 @@ export default async function ModulesPage() {
         )}
       </div>
     </>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  let tone = "bg-warning/20 text-warning";
-  if (status === "published") {
-    tone = "bg-primary/20 text-primary";
-  } else if (status === "archived") {
-    tone = "bg-muted text-muted-foreground";
-  }
-  return (
-    <span className={`rounded px-2 py-0.5 font-medium text-xs ${tone}`}>
-      {status}
-    </span>
   );
 }

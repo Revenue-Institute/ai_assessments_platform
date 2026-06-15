@@ -2,7 +2,9 @@
 
 import { ApiError } from "@repo/api-client";
 import { useState, useTransition } from "react";
+
 import type { AdminRole, AdminUserRow } from "@/lib/api";
+
 import { patchAdminUserAction } from "./users-table.actions";
 
 interface Props {
@@ -114,9 +116,7 @@ export function UsersTable({ currentUserId, users }: Props) {
               return null;
             }
             const isSelf = currentUserId === u.id;
-            // Match the server-side refuse rule: an admin can't demote
-            // themselves out of admin via this UI. Other edits to self (e.g.
-            // viewer to viewer, no change) just stay disabled until dirty.
+            // Mirrors the server-side rule: an admin can't demote themselves out of admin via this UI.
             const selfDemotion =
               isSelf &&
               state.savedRole === "admin" &&

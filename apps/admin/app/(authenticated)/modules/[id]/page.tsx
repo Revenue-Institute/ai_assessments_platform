@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AlertBanner } from "@/components/alert-banner";
+import { SubmitButton } from "@/components/submit-button";
 import {
   ApiError,
   archiveModule,
@@ -7,6 +10,7 @@ import {
   getModule,
   publishModule,
 } from "@/lib/api";
+
 import { Header } from "../../components/header";
 import { type PreflightIssue, PublishButton } from "./publish-button";
 import { QuestionActions } from "./question-actions";
@@ -14,6 +18,20 @@ import { QuestionActions } from "./question-actions";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const detail = await getModule(id);
+    return { title: detail.title };
+  } catch {
+    return { title: "Module" };
+  }
+}
 type SearchParams = Promise<{ error?: string; ok?: string }>;
 
 export default async function ModuleDetailPage({
@@ -71,7 +89,7 @@ export default async function ModuleDetailPage({
       );
     }
     try {
-      await deleteModuleQuestion(id, questionId as string);
+      await deleteModuleQuestion(id, questionId);
       redirect(`/modules/${id}?ok=${encodeURIComponent("Question removed.")}`);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -81,27 +99,29 @@ export default async function ModuleDetailPage({
     }
   }
 
-  // Spec §6.1 publish-button UX preflight. Server still re-checks via the
-  // fairness validator (spec §8.4); these are surface-level checks based on
-  // the fields the admin module API actually returns to the client.
+  // Spec §6.1 UX preflight; server re-validates via the fairness validator (§8.4).
   const preflight: PreflightIssue[] = [];
   if (detail.questions.length === 0) {
     preflight.push({ message: "Add at least one question before publishing." });
   }
-  const taglessQuestions = detail.questions.filter(
-    (q) => !q.competency_tags || q.competency_tags.length === 0
-  );
-  if (taglessQuestions.length > 0) {
+  let taglessCount = 0;
+  let pointlessCount = 0;
+  for (const q of detail.questions) {
+    if (!q.competency_tags || q.competency_tags.length === 0) {
+      taglessCount++;
+    }
+    if (!q.max_points || q.max_points <= 0) {
+      pointlessCount++;
+    }
+  }
+  if (taglessCount > 0) {
     preflight.push({
-      message: `${taglessQuestions.length} question(s) missing a competency tag.`,
+      message: `${taglessCount} question(s) missing a competency tag.`,
     });
   }
-  const pointlessQuestions = detail.questions.filter(
-    (q) => !q.max_points || q.max_points <= 0
-  );
-  if (pointlessQuestions.length > 0) {
+  if (pointlessCount > 0) {
     preflight.push({
-      message: `${pointlessQuestions.length} question(s) have no point value.`,
+      message: `${pointlessCount} question(s) have no point value.`,
     });
   }
 
@@ -109,18 +129,9 @@ export default async function ModuleDetailPage({
     <>
       <Header page={detail.title} pages={["Modules"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        {(error || ok) && (
-          <p
-            className={`rounded px-3 py-2 text-sm ${
-              error
-                ? "border border-destructive/50 bg-destructive/15 text-destructive"
-                : "border border-primary/50 bg-primary/15 text-primary"
-            }`}
-            role={error ? "alert" : "status"}
-          >
-            {error || ok}
-          </p>
-        )}
+        <AlertBanner variant={error ? "error" : "success"}>
+          {error || ok}
+        </AlertBanner>
 
         <section className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-muted/30 p-4">
           <Stat label="Status" value={detail.status} />
@@ -190,12 +201,12 @@ export default async function ModuleDetailPage({
                             type="hidden"
                             value={q.id}
                           />
-                          <button
+                          <SubmitButton
                             className="rounded border border-destructive/40 px-2 py-0.5 text-destructive text-xs hover:bg-destructive/15"
-                            type="submit"
+                            pendingLabel="Removing..."
                           >
                             Remove
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </div>
@@ -220,12 +231,12 @@ export default async function ModuleDetailPage({
           )}
           {detail.status !== "archived" && (
             <form action={archive}>
-              <button
+              <SubmitButton
                 className="rounded border border-border/50 bg-background px-3 py-2 text-sm hover:bg-muted"
-                type="submit"
+                pendingLabel="Archiving..."
               >
                 Archive
-              </button>
+              </SubmitButton>
             </form>
           )}
         </section>

@@ -1,2 +1,20 @@
 @import "tailwindcss";
 @import "@repo/design-system/styles/globals.css";
+
+@keyframes nav-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes nav-progress-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

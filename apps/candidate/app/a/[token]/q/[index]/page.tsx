@@ -1,5 +1,6 @@
 import { PromptMarkdown } from "@repo/design-system/components/prompt-markdown";
 import { notFound, redirect } from "next/navigation";
+import { ErrorView } from "@/app/components/error-view";
 import {
   ApiError,
   type CandidateQuestionView,
@@ -7,7 +8,9 @@ import {
   fetchQuestion,
   submitQuestion,
 } from "@/lib/api";
+
 import { CandidateMonitor } from "./candidate-monitor";
+import { parseSubmittedAnswer } from "./parse-answer";
 import { QuestionNavigator } from "./question-navigator";
 import { QuestionRenderer } from "./renderer";
 import { SubmitButton } from "./submit-button";
@@ -58,14 +61,11 @@ export default async function QuestionPage({
         redirect(`/a/${token}`);
       }
       return (
-        <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
-          <h1 className="font-semibold text-2xl">
-            {error.status === 404
-              ? "Question not found"
-              : "Something went wrong"}
-          </h1>
-          <p className="text-muted-foreground text-sm">{error.message}</p>
-        </main>
+        <ErrorView
+          headline={error.status === 404 ? "Question not found" : undefined}
+          message={error.message}
+          status={error.status}
+        />
       );
     }
     throw error;
@@ -100,9 +100,7 @@ export default async function QuestionPage({
   const shellClass = isInteractive
     ? "mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8"
     : "mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10";
-  const promptClass = isInteractive
-    ? "text-base leading-relaxed"
-    : "text-base leading-relaxed";
+  const promptClass = "text-base leading-relaxed";
   const formClass = isInteractive
     ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]"
     : "space-y-3";
@@ -120,7 +118,7 @@ export default async function QuestionPage({
         questionIndex={idx}
         token={token}
       />
-      <QuestionNavigator current={idx} token={token} total={question.total} />
+      <QuestionNavigator current={idx} total={question.total} />
 
       <header className="flex flex-wrap items-center justify-between gap-3">
         <p className="eyebrow-label">
@@ -180,81 +178,4 @@ export default async function QuestionPage({
       </form>
     </main>
   );
-}
-
-function parseSubmittedAnswer(formData: FormData, token: string, idx: number) {
-  return (
-    parseMultiSelectAnswer(formData, token, idx) ??
-    parseScenarioAnswer(formData, token, idx) ??
-    parseScalarAnswer(formData, token, idx)
-  );
-}
-
-function parseMultiSelectAnswer(
-  formData: FormData,
-  token: string,
-  idx: number
-) {
-  const checkedIndices = formData.getAll("answer_indices");
-  if (checkedIndices.length === 0) {
-    return null;
-  }
-  const ints = checkedIndices
-    .map((v) => Number.parseInt(String(v), 10))
-    .filter((n) => !Number.isNaN(n))
-    .sort((a, b) => a - b);
-  if (ints.length === 0) {
-    redirectWithSubmitError(token, idx, "Please select at least one answer.");
-  }
-  return { selected_indices: ints };
-}
-
-function parseScenarioAnswer(formData: FormData, token: string, idx: number) {
-  const responses: Record<string, string> = {};
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith("scenario_part:") && typeof value === "string") {
-      responses[key.slice("scenario_part:".length)] = value.trim();
-    }
-  }
-  if (Object.keys(responses).length === 0) {
-    return null;
-  }
-  if (Object.values(responses).every((value) => value.length === 0)) {
-    redirectWithSubmitError(token, idx, "Please provide an answer.");
-  }
-  return { responses };
-}
-
-function parseScalarAnswer(formData: FormData, token: string, idx: number) {
-  const raw = formData.get("answer");
-  if (typeof raw !== "string") {
-    return raw;
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    redirectWithSubmitError(token, idx, "Please provide an answer.");
-  }
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      return JSON.parse(trimmed) as unknown;
-    } catch {
-      return { text: trimmed };
-    }
-  }
-  return parseLegacySelectedAnswer(formData, trimmed);
-}
-
-function parseLegacySelectedAnswer(formData: FormData, selected: string) {
-  const selectedIndex = formData.get("answer_index");
-  if (typeof selectedIndex !== "string" || selectedIndex.length === 0) {
-    return { text: selected };
-  }
-  const parsedIndex = Number.parseInt(selectedIndex, 10);
-  return Number.isNaN(parsedIndex)
-    ? { selected }
-    : { selected_index: parsedIndex, selected };
-}
-
-function redirectWithSubmitError(token: string, idx: number, message: string) {
-  redirect(`/a/${token}/q/${idx}?error=${encodeURIComponent(message)}`);
 }
