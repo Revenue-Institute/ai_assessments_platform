@@ -63,6 +63,17 @@ COMPOSE=(docker compose -p "$PROJECT" -f docker-compose.yml -f docker-compose.pr
 
 echo "==> deploying tag: $TAG"
 
+# 0. Authenticate to GHCR. The VM keeps no persistent docker login, so private
+#    image pulls fail without this. Reuses the workflow GITHUB_TOKEN (read:packages)
+#    forwarded as GHCR_USER/GHCR_TOKEN.
+if [ -n "${GHCR_TOKEN:-}" ] && [ -n "${GHCR_USER:-}" ]; then
+  echo "[deploy] login to GHCR"
+  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+else
+  echo "WARNING: GHCR_USER/GHCR_TOKEN unset; private image pull will likely fail" >&2
+fi
+
 # 1. Pull new images. Build stage already pushed them to GHCR via Actions.
 if ! "${COMPOSE[@]}" pull; then
   echo "ERROR: image pull failed. Did the build job finish? Are the images public on GHCR?" >&2
