@@ -4,9 +4,9 @@
 # point at them via apps/api/.env.local.
 #
 # Usage:
-#   cp apps/api/.env.example apps/api/.env.local      # then fill in
-#   cp apps/admin/.env.example apps/admin/.env.local  # then fill in
-#   docker compose up --build
+#   cp .env.example .env.local          # fill in Supabase URL, keys, and secrets
+#   bash scripts/link-env.sh            # symlinks .env.local into each app dir
+#   docker compose --env-file .env.local up --build
 #
 # n8n's first boot prints a one-time signup URL in the n8n service logs.
 # Sign up to bootstrap an owner account, then issue an API key under
@@ -49,6 +49,11 @@ services:
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:3000}
+        NEXT_PUBLIC_CANDIDATE_URL: ${NEXT_PUBLIC_CANDIDATE_URL:-http://localhost:3001}
     env_file:
       - apps/admin/.env.local
     environment:
@@ -65,6 +70,11 @@ services:
     build:
       context: .
       dockerfile: apps/candidate/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_CANDIDATE_URL: ${NEXT_PUBLIC_CANDIDATE_URL:-http://localhost:3001}
+    env_file:
+      - apps/candidate/.env.local
     environment:
       INTERNAL_API_URL: http://api:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000

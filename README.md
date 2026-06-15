@@ -18,6 +18,54 @@ bash scripts/link-env.sh
 bun run dev:full
 ```
 
+## Running with Docker
+
+Docker brings up the full local stack: FastAPI, admin (Next.js :3000), candidate (Next.js :3001), n8n (:5678), and Redis. Supabase and all SaaS providers stay external.
+
+**1. Fill in environment variables**
+
+```sh
+cp .env.example .env.local
+```
+
+Open `.env.local` and set at minimum:
+
+| Variable | Where to find it |
+| :-- | :-- |
+| `SUPABASE_URL` | Supabase dashboard - Settings - API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard - Settings - API |
+| `NEXT_PUBLIC_SUPABASE_URL` | Same as `SUPABASE_URL` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard - Settings - API |
+| `JWT_SIGNING_SECRET` | Any 32+ char random string |
+| `SESSION_COOKIE_SECRET` | Any 32+ char random string |
+
+**2. Symlink the env file into each app**
+
+```sh
+bash scripts/link-env.sh
+```
+
+This creates `apps/admin/.env.local`, `apps/candidate/.env.local`, and `apps/api/.env.local` as symlinks pointing to the root file. One file, no duplication.
+
+**3. Build and start**
+
+```sh
+docker compose --env-file .env.local up -d --build
+```
+
+The `--env-file` flag is required so Docker Compose can pass the Supabase public keys as build args into the Next.js bundles at compile time.
+
+**4. Apply migrations and seed**
+
+```sh
+bun --filter api migrate
+bun --filter api seed     # prints a magic-link URL for the candidate app
+```
+
+**5. n8n first-run**
+
+On first boot, n8n prints a one-time signup URL in its log (`docker compose logs n8n`). Create an owner account, then go to Settings - API and generate a personal API key. Add it to `.env.local` as `N8N_ADMIN_API_KEY` and restart: `docker compose restart api`.
+
 ## Apps
 
 - `apps/admin` (Next.js, :3000) - internal dashboard. See [apps/admin/README.md](apps/admin/README.md).
