@@ -160,6 +160,9 @@ jobs:
     name: SSH deploy
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     environment:
       name: production
       url: https://assessments.revenueinstitute.com
@@ -175,6 +178,8 @@ jobs:
           # here so appleboy/ssh-action forwards it through SSH.
           envs: |
             GITHUB_SHA,
+            GHCR_USER,
+            GHCR_TOKEN,
             SUPABASE_URL,
             SUPABASE_ANON_KEY,
             SUPABASE_SERVICE_ROLE_KEY,
@@ -256,6 +261,8 @@ jobs:
             IMAGE_TAG="${GITHUB_SHA}" bash infra/deploy/deploy.sh
         env:
           GITHUB_SHA: ${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Non-sensitive: GitHub Variables (visible in plain text).
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           NEXT_PUBLIC_ADMIN_URL: ${{ vars.NEXT_PUBLIC_ADMIN_URL }}
