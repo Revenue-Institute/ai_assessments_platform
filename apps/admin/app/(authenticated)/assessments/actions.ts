@@ -52,13 +52,14 @@ export async function createAssessmentAction(input: {
   }
 }
 
-export function patchAssessmentAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function patchAssessmentAction(
   id: string,
   input: { title: string; description: string | null }
 ): Promise<ActionResult> {
   const title = input.title.trim();
   if (!title) {
-    return Promise.resolve({ ok: false, error: "Title is required." });
+    return { ok: false, error: "Title is required." };
   }
   return runApiAction(() =>
     patchAssessment(id, {
@@ -68,21 +69,24 @@ export function patchAssessmentAction(
   );
 }
 
-export function addAssessmentModuleAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function addAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
   return runApiAction(() => addAssessmentModule(id, { module_id: moduleId }));
 }
 
-export function removeAssessmentModuleAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function removeAssessmentModuleAction(
   id: string,
   moduleId: string
 ): Promise<ActionResult> {
   return runApiAction(() => removeAssessmentModule(id, moduleId));
 }
 
-export function reorderAssessmentAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function reorderAssessmentAction(
   id: string,
   moduleIds: string[]
 ): Promise<ActionResult> {
