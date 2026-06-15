@@ -136,6 +136,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_ADMIN_URL=${{ vars.NEXT_PUBLIC_ADMIN_URL }}
             NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
+            NEXT_PUBLIC_SENTRY_DSN_ADMIN=${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN }}
 
       - name: Build and push (candidate)
         if: matrix.service == 'candidate'
@@ -153,6 +154,7 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_CANDIDATE_URL=${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
             NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX=/a
+            NEXT_PUBLIC_SENTRY_DSN_CANDIDATE=${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE }}
 
   deploy:
     name: SSH deploy
@@ -193,7 +195,10 @@ jobs:
             OPENAI_API_KEY,
             NEXT_PUBLIC_ADMIN_URL,
             NEXT_PUBLIC_CANDIDATE_URL,
-            NEXT_PUBLIC_API_URL
+            NEXT_PUBLIC_API_URL,
+            SENTRY_DSN_API,
+            NEXT_PUBLIC_SENTRY_DSN_ADMIN,
+            NEXT_PUBLIC_SENTRY_DSN_CANDIDATE
           command_timeout: 10m
           script: |
             set -euo pipefail
@@ -241,6 +246,9 @@ jobs:
               printf 'NEXT_PUBLIC_API_URL=%s\n' "$NEXT_PUBLIC_API_URL"
               printf 'INTERNAL_API_URL=http://api:8000\n'
               printf 'TRUSTED_PROXY_IPS=127.0.0.1\n'
+              printf 'SENTRY_DSN_API=%s\n' "$SENTRY_DSN_API"
+              printf 'NEXT_PUBLIC_SENTRY_DSN_ADMIN=%s\n' "$NEXT_PUBLIC_SENTRY_DSN_ADMIN"
+              printf 'NEXT_PUBLIC_SENTRY_DSN_CANDIDATE=%s\n' "$NEXT_PUBLIC_SENTRY_DSN_CANDIDATE"
             } > .env.local
             chmod 0600 .env.local
             bash scripts/link-env.sh
@@ -254,6 +262,9 @@ jobs:
           NEXT_PUBLIC_CANDIDATE_URL: ${{ vars.NEXT_PUBLIC_CANDIDATE_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
+          SENTRY_DSN_API: ${{ vars.SENTRY_DSN_API }}
+          NEXT_PUBLIC_SENTRY_DSN_ADMIN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_ADMIN }}
+          NEXT_PUBLIC_SENTRY_DSN_CANDIDATE: ${{ vars.NEXT_PUBLIC_SENTRY_DSN_CANDIDATE }}
           # Sensitive: GitHub environment Secrets (masked in logs).
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
