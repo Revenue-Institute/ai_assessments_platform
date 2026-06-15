@@ -7,7 +7,8 @@ import {
   reviseQuestion,
 } from "@/lib/api";
 
-export function previewVariantsAction(body: {
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function previewVariantsAction(body: {
   variable_schema: Record<string, unknown>;
   prompt_template: string;
   seed_count?: number;
@@ -17,7 +18,8 @@ export function previewVariantsAction(body: {
 
 type RevisePreserve = Parameters<typeof reviseQuestion>[1]["preserve"];
 
-export function reviseQuestionAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function reviseQuestionAction(
   questionId: string,
   body: { instruction: string; preserve?: RevisePreserve }
 ): Promise<ReviseQuestionResponse> {

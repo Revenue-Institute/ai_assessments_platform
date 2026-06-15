@@ -2,7 +2,8 @@
 
 import { type AdminRole, type AdminUserRow, patchAdminUser } from "@/lib/api";
 
-export function patchAdminUserAction(
+// biome-ignore lint/suspicious/useAwait: Server Action -- Next.js requires async
+export async function patchAdminUserAction(
   userId: string,
   body: { role: AdminRole }
 ): Promise<AdminUserRow> {
