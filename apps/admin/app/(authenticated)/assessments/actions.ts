@@ -58,7 +58,7 @@ export function patchAssessmentAction(
 ): Promise<ActionResult> {
   const title = input.title.trim();
   if (!title) {
-    return { ok: false, error: "Title is required." };
+    return Promise.resolve({ ok: false, error: "Title is required." });
   }
   return runApiAction(() =>
     patchAssessment(id, {
