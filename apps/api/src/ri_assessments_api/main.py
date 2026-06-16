@@ -43,6 +43,7 @@ def _init_sentry() -> None:
         return
     try:
         import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
 
         sentry_sdk.init(
             dsn=settings.sentry_dsn_api,
@@ -50,6 +51,7 @@ def _init_sentry() -> None:
             traces_sample_rate=0.1 if settings.app_env == "production" else 1.0,
             send_default_pii=False,
             attach_stacktrace=True,
+            disabled_integrations=[FastApiIntegration()],
         )
         log.info("Sentry initialized (env=%s)", settings.app_env)
     except Exception:
