@@ -50,7 +50,12 @@ class Settings(BaseSettings):
 
     # Email
     resend_api_key: str = ""
-    resend_from_email: str = "assessments@revenueinstitute.com"
+    # Dedicated sending subdomain (go.revenueinstitute.com) verified in
+    # Resend, kept off the apex so transactional sends don't share the
+    # primary Google Workspace mail reputation. Override per env via
+    # RESEND_FROM_EMAIL; an optional display name is allowed, e.g.
+    # "Revenue Institute <assessments@go.revenueinstitute.com>".
+    resend_from_email: str = "assessments@go.revenueinstitute.com"
     resend_webhook_secret: str = ""
 
     # Embeddings (v1 uses OpenAI text-embedding-3-small @ 1024 dims via
