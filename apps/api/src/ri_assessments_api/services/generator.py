@@ -62,12 +62,23 @@ def _load_taxonomy_rows() -> list[dict[str, Any]]:
     global _CACHED_TAXONOMY_ROWS
     if _CACHED_TAXONOMY_ROWS is not None:
         return _CACHED_TAXONOMY_ROWS
-    # __file__ -> apps/api/src/ri_assessments_api/services/generator.py
-    # parents[0..4] climb to apps/, parents[5] is the repo root.
-    repo_root = Path(__file__).resolve().parents[5]
-    path = repo_root / "packages" / "competencies" / "src" / "taxonomy.json"
-    if not path.exists():
-        raise RuntimeError(f"Competency taxonomy not found at {path}")
+    # Resolve packages/competencies/src/taxonomy.json without hardcoding a
+    # parents[] depth. The monorepo checkout nests this file under
+    # apps/api/src/... (repo root is parents[5]), but the Docker image
+    # flattens apps/api to /app and mirrors shared data at /packages, so a
+    # fixed index overshoots and raises IndexError in the container. Walk up
+    # from this file and take the first ancestor that actually has the file.
+    rel = Path("packages") / "competencies" / "src" / "taxonomy.json"
+    path = next(
+        (
+            base / rel
+            for base in Path(__file__).resolve().parents
+            if (base / rel).exists()
+        ),
+        None,
+    )
+    if path is None:
+        raise RuntimeError(f"Competency taxonomy not found (looked for {rel})")
     _CACHED_TAXONOMY_ROWS = json.loads(path.read_text(encoding="utf-8"))
     return _CACHED_TAXONOMY_ROWS
 
