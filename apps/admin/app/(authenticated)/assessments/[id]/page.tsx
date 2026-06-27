@@ -7,14 +7,17 @@ import {
   ApiError,
   type AssessmentDetail,
   getAssessment,
+  getAssessmentPublicLink,
   listModules,
   type ModuleSummary,
+  type PublicLinkView,
 } from "@/lib/api";
 
 import { Header } from "../../components/header";
 import { archiveAssessmentAction, publishAssessmentAction } from "../actions";
 import { AssessmentMetaForm } from "./assessment-meta-form";
 import { AssessmentModulesSection } from "./assessment-modules-section";
+import { PublicLinkSection } from "./public-link-section";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +59,13 @@ export default async function AssessmentDetailPage({
     throw e;
   }
 
+  let publicLink: PublicLinkView | null = null;
+  try {
+    publicLink = await getAssessmentPublicLink(id);
+  } catch {
+    publicLink = null;
+  }
+
   const publishedModules = modules.filter((m) => m.status === "published");
   const usedIds = new Set(detail.modules.map((m) => m.module_id));
   const available = publishedModules.filter((m) => !usedIds.has(m.id));
@@ -95,6 +105,8 @@ export default async function AssessmentDetailPage({
           available={available}
           status={detail.status}
         />
+
+        <PublicLinkSection id={id} link={publicLink} status={detail.status} />
 
         <section className="flex flex-wrap items-center gap-2">
           {detail.status === "draft" && (

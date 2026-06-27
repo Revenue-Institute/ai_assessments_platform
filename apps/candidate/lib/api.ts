@@ -96,5 +96,38 @@ export function completeAssignment(token: string) {
   });
 }
 
+export interface PublicAssessmentView {
+  description: string | null;
+  module_count: number;
+  question_count: number;
+  title: string;
+  total_duration_minutes: number;
+}
+
+export interface PublicRegisterResponse {
+  redirect_path: string;
+  resumed: boolean;
+  token: string;
+}
+
+export function fetchPublicAssessment(link: string) {
+  return callApi<PublicAssessmentView>(`/p/${encodeURIComponent(link)}`);
+}
+
+export function registerPublic(
+  link: string,
+  body: { full_name: string; email: string; consent: boolean },
+  forwardedIp?: string
+) {
+  return callApi<PublicRegisterResponse>(
+    `/p/${encodeURIComponent(link)}/register`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: forwardedIp ? { "x-forwarded-for": forwardedIp } : undefined,
+    }
+  );
+}
+
 export type { CodeRunFrame, RunCodeStreamOptions } from "./code-stream-api";
 export { runCodeStream } from "./code-stream-api";

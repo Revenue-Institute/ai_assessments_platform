@@ -25,6 +25,7 @@ from .routers import (
     debug,
     generator,
     health,
+    public,
     references,
     webhooks,
 )
@@ -245,6 +246,11 @@ def create_app() -> FastAPI:
     app.include_router(references.router, prefix="/api")
     app.include_router(benchmarks.router)
     app.include_router(candidate.router, prefix="/a")
+    # Unauthenticated public enrollment (shareable assessment links). The
+    # candidate Next app calls these server-side via INTERNAL_API_URL; the
+    # enrollment page itself lives under /a/enroll/* so prod nginx routes
+    # it to the candidate app without a new location block.
+    app.include_router(public.router, prefix="/p")
     app.include_router(webhooks.router)
 
     return app

@@ -342,6 +342,50 @@ export const archiveAssessment = (id: string) =>
     { method: "POST", body: JSON.stringify({}) }
   );
 
+// Public enrollment links
+export interface PublicLinkView {
+  assessment_id: string;
+  assignment_expires_in_days: number;
+  created_at: string;
+  enabled: boolean;
+  expires_at: string | null;
+  id: string;
+  max_uses: number | null;
+  token: string;
+  url: string;
+  uses_count: number;
+}
+export interface PublicLinkOptions {
+  assignment_expires_in_days?: number;
+  expires_at?: string | null;
+  max_uses?: number | null;
+}
+export const getAssessmentPublicLink = (id: string) =>
+  callApi<PublicLinkView | null>(
+    `/api/assessments/${encodeURIComponent(id)}/public-link`
+  );
+export const createAssessmentPublicLink = (
+  id: string,
+  body: PublicLinkOptions = {}
+) =>
+  callApi<PublicLinkView>(
+    `/api/assessments/${encodeURIComponent(id)}/public-link`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+export const disableAssessmentPublicLink = (id: string) =>
+  callApi<{ ok: boolean }>(
+    `/api/assessments/${encodeURIComponent(id)}/public-link/disable`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+export const rotateAssessmentPublicLink = (
+  id: string,
+  body: PublicLinkOptions = {}
+) =>
+  callApi<PublicLinkView>(
+    `/api/assessments/${encodeURIComponent(id)}/public-link/rotate`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+
 // Subjects
 export const listSubjects = () => callApi<SubjectSummary[]>("/api/subjects");
 export const createSubject = (body: {

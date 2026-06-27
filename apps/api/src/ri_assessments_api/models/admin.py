@@ -306,3 +306,28 @@ class UserListResponse(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: UserRole
+
+
+class PublicLinkCreateRequest(BaseModel):
+    """Admin knobs when minting/rotating an assessment's public enrollment
+    link. All optional: a bare POST creates an open, never-expiring link
+    whose assignments inherit the default 7-day deadline."""
+
+    expires_at: datetime | None = None
+    assignment_expires_in_days: int = Field(default=7, ge=1, le=365)
+    max_uses: int | None = Field(default=None, gt=0)
+
+
+class PublicLinkView(BaseModel):
+    """Admin-facing view of an assessment's public enrollment link."""
+
+    id: str
+    assessment_id: str
+    token: str
+    enabled: bool
+    url: str
+    expires_at: datetime | None = None
+    assignment_expires_in_days: int
+    max_uses: int | None = None
+    uses_count: int
+    created_at: datetime

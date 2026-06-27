@@ -31,6 +31,8 @@ from ..models.admin import (
     ModuleDetail,
     ModulePatchRequest,
     ModuleSummary,
+    PublicLinkCreateRequest,
+    PublicLinkView,
     SubjectCreateRequest,
     SubjectSummary,
     UserListItem,
@@ -52,6 +54,7 @@ except ImportError:  # pragma: no cover, defensive
     QuestionTemplatePatch = dict  # type: ignore[assignment,misc]
     _QUESTION_MODELS_AVAILABLE = False
 from ..services import admin as admin_service
+from ..services import public_links as public_links_service
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin_jwt)])
 
@@ -327,6 +330,61 @@ def archive_assessment(
     supabase: Annotated[Client, Depends(get_supabase)],
 ) -> AssessmentSummary:
     return admin_service.archive_assessment(supabase, principal, assessment_id)
+
+
+# Public enrollment links ----------------------------------------------------
+
+
+@router.get(
+    "/assessments/{assessment_id}/public-link",
+    response_model=PublicLinkView | None,
+)
+def get_assessment_public_link(
+    assessment_id: str,
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> PublicLinkView | None:
+    return public_links_service.get_public_link(supabase, assessment_id)
+
+
+@router.post(
+    "/assessments/{assessment_id}/public-link",
+    response_model=PublicLinkView,
+    status_code=201,
+)
+def create_assessment_public_link(
+    assessment_id: str,
+    payload: PublicLinkCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> PublicLinkView:
+    return public_links_service.create_public_link(
+        supabase, principal, assessment_id, payload
+    )
+
+
+@router.post("/assessments/{assessment_id}/public-link/disable")
+def disable_assessment_public_link(
+    assessment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> dict[str, bool]:
+    public_links_service.disable_public_link(supabase, principal, assessment_id)
+    return {"ok": True}
+
+
+@router.post(
+    "/assessments/{assessment_id}/public-link/rotate",
+    response_model=PublicLinkView,
+)
+def rotate_assessment_public_link(
+    assessment_id: str,
+    payload: PublicLinkCreateRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> PublicLinkView:
+    return public_links_service.rotate_public_link(
+        supabase, principal, assessment_id, payload
+    )
 
 
 # Subjects -------------------------------------------------------------------

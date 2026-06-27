@@ -7,10 +7,13 @@ import {
   addAssessmentModule,
   archiveAssessment,
   createAssessment,
+  createAssessmentPublicLink,
+  disableAssessmentPublicLink,
   patchAssessment,
   publishAssessment,
   removeAssessmentModule,
   reorderAssessment,
+  rotateAssessmentPublicLink,
 } from "@/lib/api";
 import {
   type ActionResult,
@@ -106,5 +109,29 @@ export async function archiveAssessmentAction(id: string): Promise<void> {
     () => archiveAssessment(id),
     `/assessments/${id}`,
     "Archived."
+  );
+}
+
+export async function enablePublicLinkAction(id: string): Promise<void> {
+  await redirectOnApi(
+    () => createAssessmentPublicLink(id),
+    `/assessments/${id}`,
+    "Public enrollment link enabled."
+  );
+}
+
+export async function disablePublicLinkAction(id: string): Promise<void> {
+  await redirectOnApi(
+    () => disableAssessmentPublicLink(id),
+    `/assessments/${id}`,
+    "Public enrollment link disabled."
+  );
+}
+
+export async function rotatePublicLinkAction(id: string): Promise<void> {
+  await redirectOnApi(
+    () => rotateAssessmentPublicLink(id),
+    `/assessments/${id}`,
+    "Public enrollment link rotated. The old URL no longer works."
   );
 }

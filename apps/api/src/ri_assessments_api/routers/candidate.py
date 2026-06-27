@@ -78,9 +78,23 @@ try:  # pragma: no cover - environment-dependent import
         of work we want to bound. Falls back to remote_address (admin
         clients hitting these via curl in dev) so the limiter never
         crashes when the path param isn't a candidate token."""
-        token = request.path_params.get("token") if hasattr(request, "path_params") else None
+        params = request.path_params if hasattr(request, "path_params") else {}
+        token = params.get("token")
         if token:
             return f"candidate:{token}"
+        link = params.get("link_token")
+        if link:
+            # Public enrollment (/p/{link_token}/register) is internal-only:
+            # the candidate Next server is the sole caller and forwards the
+            # real client IP in x-forwarded-for. Key per (link, client) so a
+            # single peer doesn't collapse every candidate into one bucket.
+            forwarded = request.headers.get("x-forwarded-for")
+            client = (
+                forwarded.split(",")[0].strip()
+                if forwarded
+                else get_remote_address(request)
+            )
+            return f"enroll:{link}:{client}"
         return get_remote_address(request)
 
     _limiter: Limiter | None = Limiter(key_func=_rate_limit_key)
