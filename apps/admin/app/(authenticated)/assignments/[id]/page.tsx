@@ -313,7 +313,7 @@ function EvaluationReportSection({
   scoredAt,
 }: {
   report: AssignmentDetail["evaluation_report"];
-  scoredAt: string | null;
+  scoredAt: string | null | undefined;
 }) {
   if (!report) {
     return null;
