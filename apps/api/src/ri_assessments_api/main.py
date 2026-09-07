@@ -33,39 +33,13 @@ from .routers import (
 log = logging.getLogger(__name__)
 
 
-def _init_sentry() -> None:
-    """Initialize Sentry once when SENTRY_DSN_API is set. Spec §11.3
-    says we send breadcrumbs to Sentry and structured logs to Axiom; the
-    Axiom side is just stdout JSON in v1 (the docker host runs vector or
-    similar to ship it on)."""
-
-    settings = get_settings()
-    if not settings.sentry_dsn_api:
-        return
-    try:
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn_api,
-            environment=settings.app_env,
-            traces_sample_rate=0.1 if settings.app_env == "production" else 1.0,
-            send_default_pii=False,
-            attach_stacktrace=True,
-            disabled_integrations=[FastApiIntegration()],
-        )
-        log.info("Sentry initialized (env=%s)", settings.app_env)
-    except Exception:
-        log.exception("Sentry init failed; continuing without it")
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Application-wide lifecycle hooks.
 
-    Startup: nothing dynamic; settings, Sentry, and logging are wired
-    inside create_app() so the module-level `app` object is fully
-    configured at import time (uvicorn `--factory` is not required).
+    Startup: nothing dynamic; settings and logging are wired inside
+    create_app() so the module-level `app` object is fully configured at
+    import time (uvicorn `--factory` is not required).
 
     Shutdown: close the Redis client used by the scoring queue so pooled
     connections release cleanly. In-flight requests are drained by
@@ -115,7 +89,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     The contextvar survives `await` boundaries inside the same asyncio
     task, so handlers don't need to thread the id around manually. The
     middleware also publishes the id to `request.state.request_id` for
-    code paths (Sentry scope, exception handlers) that prefer reading
+    code paths (exception handlers, structured logs) that prefer reading
     from request state instead of the contextvar."""
 
     async def dispatch(self, request: Request, call_next):
@@ -131,74 +105,6 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class SentryContextMiddleware(BaseHTTPMiddleware):
-    """Best-effort: stamp Sentry scope tags so an event captured during
-    the request carries enough breadcrumbs to find it.
-
-    * `request_id`: always set from request.state.
-    * `assignment_id`: decoded (without signature verification) from the
-      candidate token when the path matches /a/{token}/*. The token is
-      already untrusted input at this point in the request flow; we are
-      only borrowing the payload claim for breadcrumbs, never for
-      authorization, so unverified decode is acceptable here.
-    * `principal.role`: read from request.state if the auth dependency
-      already populated it (admin routes set this after JWT validation).
-
-    Every operation is wrapped so a failure to set a tag never breaks
-    the request itself. Tagging is observability, not control flow."""
-
-    async def dispatch(self, request: Request, call_next):
-        try:
-            import sentry_sdk
-
-            # sentry-sdk 2.x uses the global scope API; configure_scope
-            # is deprecated. `set_tag` on the module is the supported way
-            # to attach metadata to whatever scope the SDK currently
-            # considers active (which is per-request when the FastAPI
-            # integration is enabled).
-            with contextlib.suppress(Exception):
-                sentry_sdk.set_tag(
-                    "request_id", getattr(request.state, "request_id", "-")
-                )
-            with contextlib.suppress(Exception):
-                token = request.path_params.get("token") if hasattr(request, "path_params") else None
-                if token and request.url.path.startswith("/a/"):
-                    assignment_id = _maybe_decode_assignment_id(token)
-                    if assignment_id:
-                        sentry_sdk.set_tag("assignment_id", assignment_id)
-            with contextlib.suppress(Exception):
-                principal = getattr(request.state, "principal", None)
-                role = getattr(principal, "role", None) if principal else None
-                if role:
-                    sentry_sdk.set_tag("principal.role", role)
-        except Exception:
-            # Sentry SDK not installed or not initialized: skip silently.
-            pass
-        return await call_next(request)
-
-
-def _maybe_decode_assignment_id(token: str) -> str | None:
-    """Pull the `assignment_id` claim out of a candidate JWT without
-    verifying the signature. We never use this for auth; it exists only
-    so a Sentry breadcrumb can carry the assignment id for a request
-    that ultimately failed signature verification or expired. Returns
-    None on any failure."""
-
-    try:
-        import jwt
-
-        # Sentry breadcrumb only; never used for auth. PyJWT does not
-        # expose a `get_unverified_claims` helper, so we decode with
-        # signature verification disabled instead.
-        claims = jwt.decode(
-            token, options={"verify_signature": False, "verify_aud": False}
-        )
-        value = claims.get("assignment_id") or claims.get("sub")
-        return str(value) if value else None
-    except Exception:
-        return None
-
-
 def create_app() -> FastAPI:
     install_pii_filter()
     install_request_id_filter()
@@ -208,7 +114,6 @@ def create_app() -> FastAPI:
         dataset=settings.axiom_dataset,
         env=settings.app_env,
     )
-    _init_sentry()
     app = FastAPI(
         title="RI Assessments API",
         version="0.1.0",
@@ -227,7 +132,6 @@ def create_app() -> FastAPI:
         app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
         app.add_middleware(SlowAPIMiddleware)
 
-    app.add_middleware(SentryContextMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
     app.add_middleware(
