@@ -277,12 +277,36 @@ class AttemptSummary(BaseModel):
     scorer_confidence: float | None = None
     needs_review: bool = False
     active_time_seconds: int | None = None
+    # Partial-evaluation enrichments (migration 0022). Null until evaluate
+    # / completed scoring has run for this attempt.
+    quality_score: float | None = None
+    evaluation_report: dict[str, Any] | None = None
 
 
 class AssignmentDetail(AssignmentSummary):
     consent_at: datetime | None = None
     total_time_seconds: int | None = None
     attempts: list[AttemptSummary] = Field(default_factory=list)
+    # Assignment-level partial evaluation payload: gaming_risk, strengths,
+    # weaknesses, answered_count / total_questions (migration 0022).
+    evaluation_report: dict[str, Any] | None = None
+    scored_at: datetime | None = None
+
+
+class PartialBackfillRequest(BaseModel):
+    """Admin backfill knobs for evaluating existing partial assignments."""
+
+    limit: int = Field(default=25, ge=1, le=200)
+    # When True, enqueue Redis jobs instead of scoring inline. Prefer
+    # queue in production so Anthropic calls are rate-limited by the worker.
+    enqueue: bool = True
+
+
+class PartialBackfillResult(BaseModel):
+    queued: list[str] = Field(default_factory=list)
+    scored_inline: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    errors: list[dict[str, str]] = Field(default_factory=list)
 
 
 # Settings / users management (spec §12.1 /settings/users) -------------------
