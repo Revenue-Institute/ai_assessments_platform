@@ -90,10 +90,13 @@ def test_tampered_signature_rejected(valid_token, assignment_id):
     mock = MockSupabase()
     _seed_assignment(mock, valid_token, assignment_id)
 
-    # Flip the last character of the signature segment; this corrupts the
-    # MAC without altering the visible payload.
+    # Corrupt a middle signature character. Flipping only the final
+    # base64url char is flaky for HS256 (32-byte MAC → 43 chars; the last
+    # char carries 2 payload bits + 4 padding bits), so A↔B can leave the
+    # decoded MAC unchanged and the token still verifies.
     header, payload, sig = valid_token.split(".")
-    flipped = sig[:-1] + ("A" if sig[-1] != "A" else "B")
+    mid = len(sig) // 2
+    flipped = sig[:mid] + ("A" if sig[mid] != "A" else "B") + sig[mid + 1 :]
     tampered = ".".join([header, payload, flipped])
 
     with pytest.raises(HTTPException) as exc:
