@@ -28,7 +28,7 @@ from typing import Any
 from .db import get_supabase
 from .logging_config import install_pii_filter
 from .services import queue as queue_service
-from .services.scoring import score_assignment
+from .services.scoring import evaluate_assignment, score_assignment
 
 log = logging.getLogger("ri_assessments_api.worker")
 
@@ -62,9 +62,13 @@ def _process(payload: dict[str, Any], raw_envelope: str) -> None:
         queue_service.ack_job(raw_envelope)
         return
 
+    allow_partial = bool(payload.get("allow_partial"))
     started = time.monotonic()
     try:
-        score_assignment(get_supabase(), assignment_id)
+        if allow_partial:
+            evaluate_assignment(get_supabase(), assignment_id)
+        else:
+            score_assignment(get_supabase(), assignment_id)
     except Exception as exc:
         log.exception("scoring job failed for %s", assignment_id)
         outcome = queue_service.nack_job(raw_envelope, payload, str(exc))

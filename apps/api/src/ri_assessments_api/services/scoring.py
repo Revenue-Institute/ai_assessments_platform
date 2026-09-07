@@ -6,6 +6,14 @@ just persists raw_answer and returns. Scoring is queued (services.queue,
 worker.py) when the assignment flips to completed, with an inline
 fallback when Redis is unavailable.
 
+Partial evaluation: admins can also score assignments that still have
+status in_progress / expired / cancelled whenever at least one attempt
+has a submitted `raw_answer`. That path reuses the same modes, then
+normalizes each answered attempt to a 1-10 quality_score, stamps a
+per-attempt evaluation_report (analysis + timing), and writes an
+assignment-level evaluation_report (gaming-risk summary, strengths /
+weaknesses, partial progress).
+
 Modes:
 - exact_match: mcq correct_index, multi_select correct_indices, or
   text/number equality against attempts.expected_answer.
@@ -75,6 +83,124 @@ def _value(answer: Any) -> Any:
 
 def _normalize_text(s: str) -> str:
     return s.strip().lower()
+
+
+def _has_submitted_answer(attempt: dict[str, Any]) -> bool:
+    """True when the attempt carries a real submitted raw_answer.
+
+    Attempts are created lazily on question view, so many rows exist with
+    raw_answer IS NULL. Empty wrappers ({}, {"value": null}, {"value": ""})
+    also count as unanswered so partial evaluate does not invent scores.
+    """
+
+    raw = attempt.get("raw_answer")
+    if raw is None:
+        return False
+    value = _value(raw)
+    if value is None or value == "":
+        return False
+    return not (isinstance(value, (dict, list)) and len(value) == 0)
+
+
+def normalize_quality_score(
+    score: float | None, max_score: float | None
+) -> float | None:
+    """Map a raw points score onto a closed 1.0-10.0 quality scale.
+
+    0% -> 1.0, 100% -> 10.0, linear in between. Returns None when the
+    attempt has no numeric score or max_score is missing/zero so callers
+    can leave quality_score null for unanswered / unscored rows.
+    """
+
+    if score is None or max_score is None:
+        return None
+    try:
+        max_f = float(max_score)
+        score_f = float(score)
+    except (TypeError, ValueError):
+        return None
+    if max_f <= 0:
+        return None
+    fraction = max(0.0, min(1.0, score_f / max_f))
+    return round(1.0 + fraction * 9.0, 1)
+
+
+# Timing bands relative to the question's time_limit_seconds (snapshot).
+# Rushed: finished in under 25% of the allotted window. Slow: used more
+# than 90%. Everything else is normal. Unknown when either side is missing.
+TIMING_RUSHED_RATIO = 0.25
+TIMING_SLOW_RATIO = 0.90
+
+
+def classify_timing(
+    *,
+    active_time_seconds: int | None,
+    time_limit_seconds: int | None,
+) -> dict[str, Any]:
+    """Return {flag, ratio, active_time_seconds, time_limit_seconds}."""
+
+    payload: dict[str, Any] = {
+        "flag": "unknown",
+        "ratio": None,
+        "active_time_seconds": active_time_seconds,
+        "time_limit_seconds": time_limit_seconds,
+    }
+    if (
+        active_time_seconds is None
+        or time_limit_seconds is None
+        or time_limit_seconds <= 0
+    ):
+        return payload
+    ratio = float(active_time_seconds) / float(time_limit_seconds)
+    payload["ratio"] = round(ratio, 3)
+    if ratio < TIMING_RUSHED_RATIO:
+        payload["flag"] = "rushed"
+    elif ratio > TIMING_SLOW_RATIO:
+        payload["flag"] = "slow"
+    else:
+        payload["flag"] = "normal"
+    return payload
+
+
+def _question_time_limit(question: dict[str, Any] | None) -> int | None:
+    if not question:
+        return None
+    raw = question.get("time_limit_seconds")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _enrich_attempt_evaluation(
+    *,
+    attempt: dict[str, Any],
+    question: dict[str, Any] | None,
+    score: float | None,
+    max_score: float | None,
+    rationale: str | None,
+) -> dict[str, Any]:
+    """Build quality_score + evaluation_report fields for an attempt update."""
+
+    quality = normalize_quality_score(score, max_score)
+    timing = classify_timing(
+        active_time_seconds=attempt.get("active_time_seconds"),
+        time_limit_seconds=_question_time_limit(question),
+    )
+    analysis = (rationale or "").strip()
+    if not analysis and quality is not None:
+        analysis = f"Quality score {quality}/10 from existing scoring mode."
+    report = {
+        "analysis": analysis[:600] if analysis else None,
+        "quality_score": quality,
+        "timing": timing,
+    }
+    out: dict[str, Any] = {"evaluation_report": report}
+    if quality is not None:
+        out["quality_score"] = quality
+    return out
 
 
 # -- Scoring modes ----------------------------------------------------------
@@ -382,6 +508,23 @@ def score_attempt(
         update["needs_review"] = True
         update["score_rationale"] = f"Unknown scoring_mode: {mode!r}"
 
+    # Attach 1-10 quality + short analysis/timing whenever we produced a
+    # numeric score. Reuses score_rationale as the analysis text so we do
+    # not invent a second model call per answer.
+    if "score" in update and update.get("score") is not None:
+        max_for_quality = float(
+            attempt.get("max_score") or question.get("max_points") or 0
+        )
+        update.update(
+            _enrich_attempt_evaluation(
+                attempt=attempt,
+                question=question,
+                score=float(update["score"]),
+                max_score=max_for_quality,
+                rationale=update.get("score_rationale"),
+            )
+        )
+
     update["updated_at"] = datetime.now(UTC).isoformat()
     supabase.table("attempts").update(update).eq("id", attempt["id"]).execute()
 
@@ -420,7 +563,8 @@ def _attempts_for_assignment(
             "id, assignment_id, question_template_id, raw_answer, "
             "expected_answer, rendered_prompt, score, max_score, "
             "score_rationale, scorer_model, scorer_version, "
-            "scorer_confidence, needs_review, active_time_seconds"
+            "scorer_confidence, needs_review, active_time_seconds, "
+            "quality_score, evaluation_report"
         )
         .eq("assignment_id", assignment_id)
         .execute()
@@ -434,7 +578,7 @@ def _assignment_row(supabase: Client, assignment_id: str) -> dict[str, Any]:
         .select(
             "id, subject_id, module_snapshot, assessment_snapshot, "
             "started_at, completed_at, expires_at, status, "
-            "total_time_seconds"
+            "total_time_seconds, evaluation_report, scored_at"
         )
         .eq("id", assignment_id)
         .limit(1)
@@ -554,6 +698,218 @@ def _compute_integrity_score(
     ):
         score -= INACTIVE_TIME_PENALTY
     return max(0.0, round(score, 2))
+
+
+def build_gaming_risk_summary(
+    *,
+    events: list[dict[str, Any]],
+    active_time_seconds: int | None,
+    total_time_seconds: int | None,
+    integrity_score: float | None = None,
+) -> dict[str, Any]:
+    """Human-readable gaming / trust summary derived from attempt_events
+    and the §10.4 integrity formula inputs. Surfaces concrete flags rather
+    than a single opaque number (the number is still included)."""
+
+    counts: dict[str, int] = {}
+    paste_disallowed = 0
+    for ev in events:
+        evt = ev.get("event_type", "")
+        counts[evt] = counts.get(evt, 0) + 1
+        if evt == "paste_attempted":
+            payload = ev.get("payload") or {}
+            if payload.get("allowed") is False:
+                paste_disallowed += 1
+
+    visibility_hidden = counts.get("visibility_hidden", 0)
+    focus_lost = counts.get("focus_lost", 0)
+    fullscreen_exited = counts.get("fullscreen_exited", 0)
+    copy_attempted = counts.get("copy_attempted", 0)
+    devtools_opened = counts.get("devtools_opened", 0)
+    window_resized = counts.get("window_resized", 0)
+
+    active_ratio: float | None = None
+    low_active_time = False
+    if (
+        total_time_seconds
+        and total_time_seconds > 0
+        and active_time_seconds is not None
+    ):
+        active_ratio = round(
+            float(active_time_seconds) / float(total_time_seconds), 3
+        )
+        low_active_time = active_ratio < ACTIVE_TIME_FLOOR
+
+    flags: list[dict[str, Any]] = []
+    if paste_disallowed > 0:
+        flags.append(
+            {
+                "code": "paste_disallowed",
+                "severity": "medium",
+                "count": paste_disallowed,
+                "detail": (
+                    f"{paste_disallowed} paste attempt(s) blocked outside "
+                    "allowed editors."
+                ),
+            }
+        )
+    if copy_attempted > 0:
+        flags.append(
+            {
+                "code": "copy_attempted",
+                "severity": "low",
+                "count": copy_attempted,
+                "detail": f"{copy_attempted} copy attempt(s) recorded.",
+            }
+        )
+    if visibility_hidden > VISIBILITY_HIDDEN_GRACE:
+        flags.append(
+            {
+                "code": "visibility_hidden",
+                "severity": "medium",
+                "count": visibility_hidden,
+                "detail": (
+                    f"Tab hidden {visibility_hidden} time(s) "
+                    f"(grace {VISIBILITY_HIDDEN_GRACE})."
+                ),
+            }
+        )
+    if focus_lost > FOCUS_LOST_GRACE:
+        flags.append(
+            {
+                "code": "focus_lost",
+                "severity": "medium",
+                "count": focus_lost,
+                "detail": (
+                    f"Window focus lost {focus_lost} time(s) "
+                    f"(grace {FOCUS_LOST_GRACE})."
+                ),
+            }
+        )
+    if fullscreen_exited > 0:
+        flags.append(
+            {
+                "code": "fullscreen_exited",
+                "severity": "high",
+                "count": fullscreen_exited,
+                "detail": f"Fullscreen exited {fullscreen_exited} time(s).",
+            }
+        )
+    if devtools_opened > 0:
+        flags.append(
+            {
+                "code": "devtools_opened",
+                "severity": "high",
+                "count": devtools_opened,
+                "detail": "Developer tools open event detected.",
+            }
+        )
+    if window_resized > 0:
+        flags.append(
+            {
+                "code": "window_resized",
+                "severity": "low",
+                "count": window_resized,
+                "detail": f"{window_resized} shrink resize event(s).",
+            }
+        )
+    if low_active_time:
+        flags.append(
+            {
+                "code": "low_active_time_ratio",
+                "severity": "high",
+                "count": 1,
+                "detail": (
+                    f"Active/total time ratio {active_ratio} is below "
+                    f"floor {ACTIVE_TIME_FLOOR}."
+                ),
+            }
+        )
+
+    severity_rank = {"low": 1, "medium": 2, "high": 3}
+    max_sev = max((severity_rank[f["severity"]] for f in flags), default=0)
+    if max_sev >= 3 or len(flags) >= 3:
+        risk_level = "high"
+    elif max_sev >= 2 or len(flags) >= 1:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    return {
+        "integrity_score": integrity_score,
+        "risk_level": risk_level,
+        "flags": flags,
+        "counts": {
+            "visibility_hidden": visibility_hidden,
+            "focus_lost": focus_lost,
+            "fullscreen_exited": fullscreen_exited,
+            "paste_disallowed": paste_disallowed,
+            "copy_attempted": copy_attempted,
+            "devtools_opened": devtools_opened,
+            "window_resized": window_resized,
+        },
+        "active_time_seconds": active_time_seconds,
+        "total_time_seconds": total_time_seconds,
+        "active_time_ratio": active_ratio,
+    }
+
+
+def build_strengths_weaknesses(
+    *,
+    attempts: list[dict[str, Any]],
+    snapshot: dict[str, Any],
+    rollups: list[dict[str, Any]],
+) -> dict[str, list[str]]:
+    """Assignment-level strengths / weaknesses from scored answers +
+    competency tags. Deterministic (no extra model call): high-scoring
+    competency buckets and rationales become strengths; low-scoring
+    buckets and needs_review rationales become weaknesses."""
+
+    questions_by_id = {
+        q["id"]: q for q in (snapshot or {}).get("questions") or []
+    }
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+
+    for r in sorted(
+        rollups, key=lambda x: float(x.get("score_pct") or 0), reverse=True
+    ):
+        pct = float(r.get("score_pct") or 0)
+        cid = r.get("competency_id") or "unknown"
+        if pct >= 75:
+            strengths.append(
+                f"Strong on {cid} ({pct:.0f}% of available points)."
+            )
+        elif pct < 50:
+            weaknesses.append(
+                f"Needs work on {cid} ({pct:.0f}% of available points)."
+            )
+
+    for a in attempts:
+        if a.get("score") is None:
+            continue
+        q = questions_by_id.get(a.get("question_template_id") or "")
+        max_score = float(
+            a.get("max_score") or (q or {}).get("max_points") or 0
+        )
+        score = float(a.get("score") or 0)
+        rationale = (a.get("score_rationale") or "").strip()
+        label = (
+            (q or {}).get("type")
+            or a.get("question_template_id")
+            or "question"
+        )
+        if max_score > 0 and score / max_score >= 0.85 and rationale:
+            strengths.append(f"{label}: {rationale[:180]}")
+        elif (
+            (max_score > 0 and score / max_score < 0.4) or a.get("needs_review")
+        ) and rationale:
+            weaknesses.append(f"{label}: {rationale[:180]}")
+
+    return {
+        "strengths": strengths[:8],
+        "weaknesses": weaknesses[:8],
+    }
 
 
 def _replace_competency_scores(
@@ -682,15 +1038,6 @@ def _recompute_assignment_aggregates(
         total_time_seconds=assignment.get("total_time_seconds"),
     )
 
-    supabase.table("assignments").update(
-        {
-            "final_score": final_score,
-            "max_possible_score": max_possible_score,
-            "integrity_score": integrity,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-    ).eq("id", assignment_id).execute()
-
     rollups = _compute_competency_rollups(
         attempts=attempts, snapshot=snapshot
     )
@@ -708,21 +1055,96 @@ def _recompute_assignment_aggregates(
         supabase, subject_id=assignment["subject_id"], rollups=rollups
     )
 
+    answered = [a for a in attempts if _has_submitted_answer(a)]
+    total_questions = len((snapshot or {}).get("questions") or [])
+    gaming = build_gaming_risk_summary(
+        events=events,
+        active_time_seconds=active_time,
+        total_time_seconds=assignment.get("total_time_seconds"),
+        integrity_score=integrity,
+    )
+    narrative = build_strengths_weaknesses(
+        attempts=attempts, snapshot=snapshot, rollups=rollups
+    )
+    evaluation_report = {
+        "partial": assignment.get("status") != "completed"
+        or len(answered) < total_questions,
+        "answered_count": len(answered),
+        "total_questions": total_questions,
+        "scored_count": sum(1 for a in attempts if a.get("score") is not None),
+        "gaming_risk": gaming,
+        "strengths": narrative["strengths"],
+        "weaknesses": narrative["weaknesses"],
+        "evaluated_at": datetime.now(UTC).isoformat(),
+    }
+
+    supabase.table("assignments").update(
+        {
+            "final_score": final_score,
+            "max_possible_score": max_possible_score,
+            "integrity_score": integrity,
+            "evaluation_report": evaluation_report,
+            "scored_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", assignment_id).execute()
+
     return {
         "assignment_id": assignment_id,
         "final_score": final_score,
         "max_possible_score": max_possible_score,
         "integrity_score": integrity,
         "competency_rollups": rollups,
+        "evaluation_report": evaluation_report,
     }
 
 
+def _assert_can_evaluate(
+    *,
+    assignment: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    allow_partial: bool,
+) -> list[dict[str, Any]]:
+    """Return the attempts that should be scored for this run.
+
+    Completed-flow (allow_partial=False): score every attempt row, same
+    as before (unanswered rows still flow through deterministic scorers
+    and land as 0). Partial-flow: require >=1 submitted answer and only
+    score those answered rows, regardless of assignment status.
+    """
+
+    answered = [a for a in attempts if _has_submitted_answer(a)]
+    if allow_partial:
+        if not answered:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "No submitted answers to evaluate. At least one attempt "
+                    "must have a raw_answer."
+                ),
+            )
+        return answered
+
+    # Legacy completed-path callers may still invoke this on non-completed
+    # rows (inline fallback / rescore). Keep scoring every row so behavior
+    # stays identical to pre-partial releases.
+    return attempts
+
+
 def score_assignment(
-    supabase: Client, assignment_id: str
+    supabase: Client,
+    assignment_id: str,
+    *,
+    allow_partial: bool = False,
 ) -> dict[str, Any]:
-    """Scores every unscored attempt, writes assignment-level rollups,
-    computes integrity score from attempt_events, and upserts
-    competency_scores. Returns the aggregate payload."""
+    """Scores attempts, writes assignment-level rollups, computes integrity
+    score from attempt_events, upserts competency_scores, and persists
+    evaluation_report (gaming + strengths/weaknesses). Returns aggregates.
+
+    When allow_partial=True, only attempts with a submitted raw_answer are
+    scored and the assignment may be in_progress / expired / cancelled.
+    Completed-flow callers leave allow_partial=False (default).
+    """
 
     assignment = _assignment_row(supabase, assignment_id)
     from .attempts import resolve_snapshot
@@ -730,11 +1152,86 @@ def score_assignment(
     snapshot = resolve_snapshot(assignment)
 
     attempts = _attempts_for_assignment(supabase, assignment_id)
-    for a in attempts:
+    to_score = _assert_can_evaluate(
+        assignment=assignment,
+        attempts=attempts,
+        allow_partial=allow_partial,
+    )
+    for a in to_score:
         # Re-fetch isn't needed; we score from the in-memory attempt.
         score_attempt(supabase, attempt=a, snapshot=snapshot)
 
     return _recompute_assignment_aggregates(supabase, assignment_id)
+
+
+def evaluate_assignment(
+    supabase: Client,
+    assignment_id: str,
+    *,
+    recorded_by: str | None = None,
+) -> dict[str, Any]:
+    """Admin "Evaluate now" entrypoint for partial or completed work.
+
+    Idempotent: re-running overwrites quality_score / evaluation_report
+    and re-derives rollups. Does not change assignment.status.
+    """
+
+    aggregate = score_assignment(
+        supabase, assignment_id, allow_partial=True
+    )
+    if recorded_by:
+        attempts = _attempts_for_assignment(supabase, assignment_id)
+        for a in attempts:
+            if a.get("score") is not None:
+                _stamp_history_recorded_by(supabase, a["id"], recorded_by)
+    return aggregate
+
+
+def list_partial_assignments_for_backfill(
+    supabase: Client,
+    *,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Assignments that have submitted answers but are not completed, or
+    completed rows that somehow never received an evaluation_report.
+    Used by the admin backfill endpoint / script."""
+
+    statuses = ["in_progress", "expired", "cancelled", "completed"]
+    res = (
+        supabase.table("assignments")
+        .select(
+            "id, status, evaluation_report, "
+            "attempts(id, raw_answer, score)"
+        )
+        .in_("status", statuses)
+        .order("updated_at", desc=True)
+        .limit(max(1, min(limit * 5, 500)))
+        .execute()
+    )
+    out: list[dict[str, Any]] = []
+    for row in res.data or []:
+        attempts = row.get("attempts") or []
+        answered = [a for a in attempts if _has_submitted_answer(a)]
+        if not answered:
+            continue
+        report = row.get("evaluation_report")
+        needs = report is None or row.get("status") != "completed"
+        # Also pick completed rows that still have unanswered scoring gaps.
+        unscored_answered = [
+            a for a in answered if a.get("score") is None
+        ]
+        if needs or unscored_answered:
+            out.append(
+                {
+                    "id": row["id"],
+                    "status": row["status"],
+                    "answered_count": len(answered),
+                    "unscored_answered_count": len(unscored_answered),
+                }
+            )
+        if len(out) >= limit:
+            break
+    return out
 
 
 # -- Rescore + audit -------------------------------------------------------
@@ -761,7 +1258,7 @@ def rescore_attempt(
             "expected_answer, rendered_prompt, score, max_score, "
             "score_rationale, scorer_model, scorer_version, "
             "scorer_confidence, rubric_version, needs_review, "
-            "active_time_seconds"
+            "active_time_seconds, quality_score, evaluation_report"
         )
         .eq("id", attempt_id)
         .limit(1)
