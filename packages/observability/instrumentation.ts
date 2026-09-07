@@ -8,5 +8,5 @@ export const onRequestError = (
 };
 
 export const initializeObservability = async (): Promise<void> => {
-  // intentionally empty — Axiom ships from the API; Better Stack is pull-based
+  // intentionally empty - Axiom ships from the API; Better Stack is pull-based
 };
