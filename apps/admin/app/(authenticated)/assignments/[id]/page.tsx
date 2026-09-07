@@ -9,6 +9,7 @@ import {
   type CompetencyDistributionResponse,
   cancelAssignment,
   competencyDistribution,
+  evaluateAssignment,
   getAssignment,
   listAssignmentEvents,
   rescoreAssignment,
@@ -137,6 +138,18 @@ export default async function AssignmentDetailPage({
     redirect(`/assignments/${id}`);
   }
 
+  async function evaluateNow(): Promise<void> {
+    "use server";
+    try {
+      await evaluateAssignment(id);
+    } catch (e) {
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
+    }
+    redirect(`/assignments/${id}`);
+  }
+
   async function resendEmail(): Promise<void> {
     "use server";
     try {
@@ -225,6 +238,94 @@ export default async function AssignmentDetailPage({
           />
         </section>
 
+        {detail.evaluation_report && (
+          <section className="grid grid-cols-1 gap-4 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">
+            <div>
+              <h2 className="mb-2 font-medium text-sm">Partial progress</h2>
+              <p className="text-muted-foreground text-sm">
+                {detail.evaluation_report.answered_count ?? 0} of{" "}
+                {detail.evaluation_report.total_questions ?? "?"} questions
+                answered
+                {detail.evaluation_report.partial ? " (partial)" : ""}.
+                {detail.scored_at
+                  ? ` Last evaluated ${new Date(detail.scored_at).toLocaleString()}.`
+                  : ""}
+              </p>
+              {!!detail.evaluation_report.strengths?.length && (
+                <div className="mt-3">
+                  <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+                    Strengths
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-sm">
+                    {detail.evaluation_report.strengths.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!!detail.evaluation_report.weaknesses?.length && (
+                <div className="mt-3">
+                  <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+                    Weaknesses
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-sm">
+                    {detail.evaluation_report.weaknesses.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="mb-2 font-medium text-sm">Gaming / trust</h2>
+              {detail.evaluation_report.gaming_risk ? (
+                <div className="space-y-2 text-sm">
+                  <p>
+                    Risk:{" "}
+                    <span className="font-medium capitalize">
+                      {detail.evaluation_report.gaming_risk.risk_level ?? "low"}
+                    </span>
+                    {detail.evaluation_report.gaming_risk.integrity_score !=
+                      null && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        (integrity{" "}
+                        {detail.evaluation_report.gaming_risk.integrity_score})
+                      </span>
+                    )}
+                  </p>
+                  {(detail.evaluation_report.gaming_risk.flags ?? []).length ===
+                  0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      No gaming flags from attempt events.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {(detail.evaluation_report.gaming_risk.flags ?? []).map(
+                        (f) => (
+                          <li
+                            className="rounded border border-border/40 bg-background/40 p-2 text-xs"
+                            key={`${f.code}-${f.detail}`}
+                          >
+                            <span className="font-medium uppercase tracking-wide">
+                              {f.severity}
+                            </span>
+                            : {f.detail}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Run Evaluate to generate a gaming-risk summary.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
         <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
           <h2 className="mb-3 font-medium text-sm">Attempts</h2>
           {detail.attempts.length === 0 ? (
@@ -271,6 +372,12 @@ export default async function AssignmentDetailPage({
                       {a.score_rationale}
                     </p>
                   )}
+                  {a.evaluation_report?.analysis &&
+                    a.evaluation_report.analysis !== a.score_rationale && (
+                      <p className="mt-2 rounded border border-border/40 bg-muted/20 p-2 text-muted-foreground text-xs">
+                        Analysis: {a.evaluation_report.analysis}
+                      </p>
+                    )}
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-muted-foreground text-xs">
                     <span>
                       Score:{" "}
@@ -278,6 +385,20 @@ export default async function AssignmentDetailPage({
                         ? `${a.score} / ${a.max_score}`
                         : `- / ${a.max_score}`}
                     </span>
+                    {a.quality_score != null && (
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                        Quality {a.quality_score}/10
+                      </span>
+                    )}
+                    {a.evaluation_report?.timing?.flag &&
+                      a.evaluation_report.timing.flag !== "unknown" && (
+                        <span className="capitalize">
+                          Timing: {a.evaluation_report.timing.flag}
+                          {a.evaluation_report.timing.ratio != null
+                            ? ` (${Math.round(a.evaluation_report.timing.ratio * 100)}% of limit)`
+                            : ""}
+                        </span>
+                      )}
                     {a.scorer_model && (
                       <span>
                         Scorer: <code>{a.scorer_model}</code>
@@ -346,6 +467,8 @@ export default async function AssignmentDetailPage({
 
         <AssignmentActions
           cancel={cancel}
+          evaluateNow={evaluateNow}
+          hasAnswers={detail.attempts.some((a) => a.raw_answer != null)}
           rescoreAll={rescoreAll}
           resendEmail={resendEmail}
           status={detail.status}
@@ -397,11 +520,15 @@ function RelatedEntities({
 
 function AssignmentActions({
   cancel,
+  evaluateNow,
+  hasAnswers,
   rescoreAll,
   resendEmail,
   status,
 }: {
   cancel: () => Promise<void>;
+  evaluateNow: () => Promise<void>;
+  hasAnswers: boolean;
   rescoreAll: () => Promise<void>;
   resendEmail: () => Promise<void>;
   status: string;
@@ -411,6 +538,16 @@ function AssignmentActions({
 
   return (
     <div className="flex flex-wrap gap-2">
+      {hasAnswers && (
+        <form action={evaluateNow}>
+          <SubmitButton
+            className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
+            pendingLabel="Evaluating..."
+          >
+            Evaluate now
+          </SubmitButton>
+        </form>
+      )}
       {status === "completed" && (
         <form action={rescoreAll}>
           <SubmitButton
