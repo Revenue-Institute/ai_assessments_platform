@@ -28,28 +28,15 @@ def _require_non_production() -> None:
         )
 
 
-@router.get("/debug/sentry")
-def sentry_smoke() -> dict[str, str]:
-    """Raises a controlled error so the operator can confirm SENTRY_DSN_API
-    is wired and breadcrumbs land in the project. Disabled in production."""
-
-    _require_non_production()
-    raise RuntimeError(
-        "Intentional error from /debug/sentry to verify the Sentry integration."
-    )
-
-
 @router.get("/debug/observability")
 def observability_status() -> dict[str, object]:
-    """Reports which observability env vars are populated. Helps spot a
-    missing DSN before chasing a non-event. Returns booleans only; never
-    leaks the secret values themselves."""
+    """Reports which observability env vars are populated. Returns
+    booleans only; never leaks the secret values themselves."""
 
     _require_non_production()
     settings = get_settings()
     return {
         "app_env": settings.app_env,
-        "sentry_dsn_api_set": bool(settings.sentry_dsn_api),
         "axiom_token_set": bool(settings.axiom_token),
         "axiom_dataset_set": bool(settings.axiom_dataset),
         "supabase_url_set": bool(settings.supabase_url),
