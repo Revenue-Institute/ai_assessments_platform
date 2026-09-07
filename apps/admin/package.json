@@ -19,7 +19,6 @@
     "@repo/next-config": "workspace:*",
     "@repo/observability": "workspace:*",
     "@repo/schemas": "workspace:*",
-    "@sentry/nextjs": "^10.42.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@t3-oss/env-nextjs": "^0.13.10",

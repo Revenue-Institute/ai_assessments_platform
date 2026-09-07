@@ -1,4 +1,3 @@
-import { withSentry } from "@repo/observability/next-config";
 import type { NextConfig } from "next";
 
 // Single-host prod (single VM behind nginx): admin owns `/`, candidate
@@ -14,7 +13,7 @@ const assetPrefix = process.env.NEXT_PUBLIC_CANDIDATE_ASSET_PREFIX?.replace(
   ""
 );
 
-let nextConfig: NextConfig = {
+const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: "standalone",
@@ -29,12 +28,5 @@ let nextConfig: NextConfig = {
   transpilePackages: ["@repo/schemas", "@repo/design-system"],
   ...(assetPrefix ? { assetPrefix } : {}),
 };
-
-// Source-map upload gate keyed on SENTRY_AUTH_TOKEN, not VERCEL: any
-// build platform (Vercel, Cloud Run, GitHub Actions, local) ships
-// source maps when the token is present. Spec §15/§16.
-if (process.env.SENTRY_AUTH_TOKEN) {
-  nextConfig = withSentry(nextConfig, "candidate");
-}
 
 export default nextConfig;

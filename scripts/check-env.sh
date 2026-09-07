@@ -39,7 +39,7 @@ recommended_for_api=(
   UPSTASH_REDIS_URL UPSTASH_REDIS_TOKEN
   RESEND_WEBHOOK_SECRET
   SUPABASE_STORAGE_BUCKET_ARTIFACTS
-  SENTRY_DSN_API AXIOM_TOKEN AXIOM_DATASET
+  AXIOM_TOKEN AXIOM_DATASET
 )
 
 required_for_admin=(
@@ -57,7 +57,7 @@ warnings=0
 
 check_set() {
   local label="$1"; shift
-  local kind="$1"; shift  # required | recommended
+  local kind="$1"; shift # required | recommended
   for var in "$@"; do
     if [[ -z "${!var:-}" ]]; then
       if [[ "$kind" == "required" ]]; then

@@ -112,7 +112,6 @@ without spinning up an attempt.
 These are not v1-blocking but should land before the first external candidate uses the production deployment:
 
 - Rotate every secret listed in `DEPLOYMENT.md > Secrets to rotate and set`. Current `.env.local` values are dev-only and must not appear in any Vercel / Cloud Run env block.
-- Provision the three Sentry projects (`ri-admin`, `ri-candidate`, `ri-api`) and a single `SENTRY_AUTH_TOKEN` with `project:releases` scope. Source-map upload is gated on the token, not on a hosting-provider sentinel.
 - Configure DKIM, SPF, and DMARC DNS records on `assessments.revenueinstitute.com` per Resend's domain-verification wizard before enabling magic-link sends.
 - Set `TRUSTED_PROXY_IPS` on the Cloud Run API service to the load balancer's egress CIDRs so `attempt_events.ip_hash` is computed from the real client IP, not the proxy.
 
@@ -125,7 +124,7 @@ These are deliberate departures from `specs/requirements.md` recorded for review
 - **No `infra/docker/` tree.** Each app owns its own Dockerfile under `apps/*/Dockerfile`; the only top-level Docker artifact is `docker-compose.yml` for local dev. Collapses the spec's `infra/docker/` directory.
 - **No `infra/terraform/`.** Spec §3 marks it optional; deferred until we need IaC for the FastAPI + n8n Cloud Run services.
 - **No `apps/email` preview app.** The next-forge React Email scaffold (`apps/email`, `packages/email`) has no callers in the runtime code path, so both were removed. Re-introduce a transactional template package only when an actual sender lands.
-- **Observability stack: Better Stack + Logtail alongside Axiom + Sentry.** Spec §15 only lists Sentry + Axiom; we wire Better Stack uptime and Logtail log ingestion via `@repo/observability` because the team already runs them.
+- **Observability stack: Better Stack + Axiom.** Spec §15 originally also listed a third error-tracking vendor; that integration is gone. We keep Axiom log shipping and Better Stack uptime via `@repo/observability`.
 - **`assessments` extension over base data model.** See migration `0007_assessments.sql`; recorded earlier in this file.
 - **Embedding provider: OpenAI, not Voyage.** Spec §19 defaults to Voyage-3; we picked OpenAI `text-embedding-3-small` for ops familiarity. Migration column dimension and `EMBEDDING_DIMS` are aligned at 1024.
 - **Code-run SSE streaming added (Phase-5 hardening).** Spec §14.3 names a generic `POST /a/{token}/code/run` that streams stdout via SSE. The candidate UI uses the streaming `fetch` API (not `EventSource`, because the request body must be a POST with the code buffer). The backend bridges E2B's blocking `sandbox.process.start_and_wait` to async via `code_runner.run_user_code_streaming`, which spawns the execution on a worker thread and pushes stdout/stderr chunks onto an asyncio queue. Non-streaming callers (`POST /a/{token}/code/test`, the scoring grader) still use the synchronous `run_user_code` entry point.

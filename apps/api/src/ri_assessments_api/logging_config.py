@@ -32,7 +32,7 @@ local tailing and Vercel logs continue to work.
 
 `install_request_id_filter()` attaches a contextvar-driven filter so
 every log record emitted inside a request carries the same `request_id`,
-which lets Axiom and Sentry correlate across services per request. The
+which lets Axiom correlate across services per request. The
 contextvar is set by a middleware in main.py at request start.
 """
 
@@ -197,8 +197,7 @@ class AxiomBatchHandler(logging.Handler):
     daemon thread. Drops to stderr on transport failure; never blocks the
     request thread.
 
-    Spec §17: structured logs go to Axiom, breadcrumbs go to Sentry. Sentry
-    is wired separately in main.py:_init_sentry."""
+    Spec §17: structured logs go to Axiom."""
 
     def __init__(
         self,
