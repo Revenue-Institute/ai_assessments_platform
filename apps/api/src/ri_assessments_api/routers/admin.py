@@ -31,6 +31,8 @@ from ..models.admin import (
     ModuleDetail,
     ModulePatchRequest,
     ModuleSummary,
+    PartialBackfillRequest,
+    PartialBackfillResult,
     PublicLinkCreateRequest,
     PublicLinkView,
     SubjectCreateRequest,
@@ -472,6 +474,65 @@ def bulk_create_assignments(
     return AssignmentBulkCreateResult(**result)
 
 
+@router.post(
+    "/assignments/backfill-partial-evaluations",
+    response_model=PartialBackfillResult,
+)
+def backfill_partial_evaluations(
+    payload: PartialBackfillRequest,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> PartialBackfillResult:
+    """Queue (or inline) evaluation for existing partial assignments.
+
+    Rate-limits Anthropic usage by enqueueing Redis scoring jobs when
+    available. Falls back to inline evaluate when Redis is down.
+    """
+
+    ensure_role(principal, "admin")
+
+    from ..services import queue as queue_service
+    from ..services import scoring as scoring_service
+
+    candidates = scoring_service.list_partial_assignments_for_backfill(
+        supabase, limit=payload.limit
+    )
+    queued: list[str] = []
+    scored_inline: list[str] = []
+    skipped: list[str] = []
+    errors: list[dict[str, str]] = []
+
+    for row in candidates:
+        assignment_id = row["id"]
+        if payload.enqueue:
+            ok = queue_service.enqueue_score_assignment(
+                assignment_id, allow_partial=True
+            )
+            if ok:
+                queued.append(assignment_id)
+                continue
+            # Redis unavailable: fall through to inline.
+        try:
+            scoring_service.evaluate_assignment(
+                supabase,
+                assignment_id,
+                recorded_by=principal.user_id,
+            )
+            scored_inline.append(assignment_id)
+        except Exception as exc:  # pragma: no cover, defensive
+            errors.append({"assignment_id": assignment_id, "error": str(exc)})
+
+    if not candidates:
+        skipped.append("none_found")
+
+    return PartialBackfillResult(
+        queued=queued,
+        scored_inline=scored_inline,
+        skipped=skipped,
+        errors=errors,
+    )
+
+
 @router.get(
     "/assignments/{assignment_id}", response_model=AssignmentDetail
 )
@@ -677,6 +738,33 @@ def rescore_attempt(
         supabase, attempt_id=attempt_id, recorded_by=principal.user_id
     )
     return admin_service.get_assignment_detail(supabase, aggregate["assignment_id"])
+
+
+@router.post(
+    "/assignments/{assignment_id}/evaluate", response_model=AssignmentDetail
+)
+def evaluate_assignment(
+    assignment_id: str,
+    principal: Annotated[AdminPrincipal, Depends(require_admin_jwt)],
+    supabase: Annotated[Client, Depends(get_supabase)],
+) -> AssignmentDetail:
+    """Score submitted answers even when the assignment is still
+    in_progress / expired / cancelled. Idempotent; does not flip status.
+
+    Prefer this over /rescore for partial work. Completed assignments may
+    also use it; /rescore remains the completed-flow "Rescore all" action.
+    """
+
+    ensure_role(principal, "admin")
+
+    from ..services import scoring as scoring_service
+
+    scoring_service.evaluate_assignment(
+        supabase,
+        assignment_id,
+        recorded_by=principal.user_id,
+    )
+    return admin_service.get_assignment_detail(supabase, assignment_id)
 
 
 # Settings / users (spec §12.1 /settings/users) ------------------------------

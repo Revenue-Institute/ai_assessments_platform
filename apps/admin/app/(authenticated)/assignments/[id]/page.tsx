@@ -9,6 +9,7 @@ import {
   type CompetencyDistributionResponse,
   cancelAssignment,
   competencyDistribution,
+  evaluateAssignment,
   getAssignment,
   listAssignmentEvents,
   rescoreAssignment,
@@ -68,50 +69,8 @@ export default async function AssignmentDetailPage({
   const events: AttemptEvent[] =
     eventsResult.status === "fulfilled" ? eventsResult.value : [];
 
-  // §11.3: pull subject competency scores, match to this assignment, fetch team distribution per competency. Soft-fails.
-  const distributionRows: Array<{
-    candidate_score_pct: number;
-    competency_id: string;
-    stats: CompetencyDistributionResponse;
-  }> = [];
-  try {
-    const subjectScores = await subjectCompetencyScores(detail.subject_id);
-    const candidateForAssignment = subjectScores.trends
-      .map((trend) => {
-        const point = trend.points.find((p) => p.assignment_id === id);
-        if (!point) {
-          return null;
-        }
-        return {
-          competency_id: trend.competency_id,
-          score_pct: point.score_pct,
-        };
-      })
-      .filter(
-        (row): row is { competency_id: string; score_pct: number } =>
-          row != null
-      );
-
-    const distributions = await Promise.all(
-      candidateForAssignment.map((row) =>
-        competencyDistribution({
-          competency_id: row.competency_id,
-          subject_id: detail.subject_id,
-          assignment_id: id,
-          exclude_subject_id: detail.subject_id,
-        })
-          .then((stats) => ({
-            candidate_score_pct: row.score_pct,
-            competency_id: row.competency_id,
-            stats,
-          }))
-          .catch(() => null)
-      )
-    );
-    distributionRows.push(...distributions.filter((d) => d != null));
-  } catch {
-    // Distributions are best-effort; assignment detail must still load.
-  }
+  // §11.3: soft-fail team distribution vs this assignment's competency scores.
+  const distributionRows = await loadDistributionRows(id, detail.subject_id);
 
   async function cancel(): Promise<void> {
     "use server";
@@ -129,6 +88,18 @@ export default async function AssignmentDetailPage({
     "use server";
     try {
       await rescoreAssignment(id);
+    } catch (e) {
+      if (!(e instanceof ApiError)) {
+        throw e;
+      }
+    }
+    redirect(`/assignments/${id}`);
+  }
+
+  async function evaluateNow(): Promise<void> {
+    "use server";
+    try {
+      await evaluateAssignment(id);
     } catch (e) {
       if (!(e instanceof ApiError)) {
         throw e;
@@ -225,87 +196,12 @@ export default async function AssignmentDetailPage({
           />
         </section>
 
-        <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
-          <h2 className="mb-3 font-medium text-sm">Attempts</h2>
-          {detail.attempts.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No attempts yet. Attempts are created lazily when the candidate
-              views each question.
-            </p>
-          ) : (
-            <ol className="space-y-3 text-sm">
-              {detail.attempts.map((a, i) => (
-                <li
-                  className="scroll-mt-20 rounded border border-border/40 bg-background/30 p-3 target:ring-2 target:ring-primary/60"
-                  id={`attempt-${a.id}`}
-                  key={a.id}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">
-                      Question {i + 1}
-                      {a.needs_review && (
-                        <span className="ml-2 rounded bg-warning/20 px-2 py-0.5 font-medium text-[10px] text-warning uppercase tracking-wide">
-                          Needs review
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {a.submitted_at ? "submitted" : "in progress"}
-                    </p>
-                  </div>
-                  <div className="prompt-markdown-condensed mt-1 line-clamp-3 text-muted-foreground text-xs">
-                    <PromptMarkdown source={a.rendered_prompt} />
-                  </div>
-                  {a.raw_answer && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-muted-foreground text-xs hover:text-primary">
-                        View raw answer
-                      </summary>
-                      <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted/40 p-2 text-xs">
-                        {JSON.stringify(a.raw_answer, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                  {a.score_rationale && (
-                    <p className="mt-2 rounded border border-border/40 bg-muted/30 p-2 text-muted-foreground text-xs">
-                      {a.score_rationale}
-                    </p>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center gap-3 text-muted-foreground text-xs">
-                    <span>
-                      Score:{" "}
-                      {a.score != null
-                        ? `${a.score} / ${a.max_score}`
-                        : `- / ${a.max_score}`}
-                    </span>
-                    {a.scorer_model && (
-                      <span>
-                        Scorer: <code>{a.scorer_model}</code>
-                      </span>
-                    )}
-                    {a.scorer_confidence != null && (
-                      <span>Confidence: {a.scorer_confidence}</span>
-                    )}
-                    {a.active_time_seconds != null && (
-                      <span>Active: {a.active_time_seconds}s</span>
-                    )}
-                    {a.submitted_at && (
-                      <form action={rescoreOne} className="ml-auto">
-                        <input name="attempt_id" type="hidden" value={a.id} />
-                        <SubmitButton
-                          className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
-                          pendingLabel="Rescoring..."
-                        >
-                          Rescore
-                        </SubmitButton>
-                      </form>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+        <EvaluationReportSection
+          report={detail.evaluation_report}
+          scoredAt={detail.scored_at}
+        />
+
+        <AttemptsSection attempts={detail.attempts} rescoreOne={rescoreOne} />
 
         <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
           <h2 className="mb-3 font-medium text-sm">
@@ -346,12 +242,299 @@ export default async function AssignmentDetailPage({
 
         <AssignmentActions
           cancel={cancel}
+          evaluateNow={evaluateNow}
+          hasAnswers={detail.attempts.some((a) => a.raw_answer != null)}
           rescoreAll={rescoreAll}
           resendEmail={resendEmail}
           status={detail.status}
         />
       </div>
     </>
+  );
+}
+
+type AssignmentDetail = Awaited<ReturnType<typeof getAssignment>>;
+
+interface DistributionRow {
+  candidate_score_pct: number;
+  competency_id: string;
+  stats: CompetencyDistributionResponse;
+}
+
+async function loadDistributionRows(
+  assignmentId: string,
+  subjectId: string
+): Promise<DistributionRow[]> {
+  try {
+    const subjectScores = await subjectCompetencyScores(subjectId);
+    const candidateForAssignment = subjectScores.trends
+      .map((trend) => {
+        const point = trend.points.find(
+          (p) => p.assignment_id === assignmentId
+        );
+        if (!point) {
+          return null;
+        }
+        return {
+          competency_id: trend.competency_id,
+          score_pct: point.score_pct,
+        };
+      })
+      .filter(
+        (row): row is { competency_id: string; score_pct: number } =>
+          row != null
+      );
+
+    const distributions = await Promise.all(
+      candidateForAssignment.map((row) =>
+        competencyDistribution({
+          assignment_id: assignmentId,
+          competency_id: row.competency_id,
+          exclude_subject_id: subjectId,
+          subject_id: subjectId,
+        })
+          .then((stats) => ({
+            candidate_score_pct: row.score_pct,
+            competency_id: row.competency_id,
+            stats,
+          }))
+          .catch(() => null)
+      )
+    );
+    return distributions.filter((d): d is DistributionRow => d != null);
+  } catch {
+    // Distributions are best-effort; assignment detail must still load.
+    return [];
+  }
+}
+
+function EvaluationReportSection({
+  report,
+  scoredAt,
+}: {
+  report: AssignmentDetail["evaluation_report"];
+  scoredAt: string | null | undefined;
+}) {
+  if (!report) {
+    return null;
+  }
+
+  const strengths = report.strengths ?? [];
+  const weaknesses = report.weaknesses ?? [];
+  const gaming = report.gaming_risk;
+  const flags = gaming?.flags ?? [];
+
+  return (
+    <section className="grid grid-cols-1 gap-4 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-2">
+      <div>
+        <h2 className="mb-2 font-medium text-sm">Partial progress</h2>
+        <p className="text-muted-foreground text-sm">
+          {report.answered_count ?? 0} of {report.total_questions ?? "?"}{" "}
+          questions answered
+          {report.partial ? " (partial)" : ""}.
+          {scoredAt
+            ? ` Last evaluated ${new Date(scoredAt).toLocaleString()}.`
+            : ""}
+        </p>
+        {strengths.length > 0 && (
+          <div className="mt-3">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              Strengths
+            </p>
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-sm">
+              {strengths.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {weaknesses.length > 0 && (
+          <div className="mt-3">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              Weaknesses
+            </p>
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-sm">
+              {weaknesses.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <div>
+        <h2 className="mb-2 font-medium text-sm">Gaming / trust</h2>
+        {gaming ? (
+          <div className="space-y-2 text-sm">
+            <p>
+              Risk:{" "}
+              <span className="font-medium capitalize">
+                {gaming.risk_level ?? "low"}
+              </span>
+              {gaming.integrity_score != null && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  (integrity {gaming.integrity_score})
+                </span>
+              )}
+            </p>
+            {flags.length === 0 ? (
+              <p className="text-muted-foreground text-xs">
+                No gaming flags from attempt events.
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {flags.map((f) => (
+                  <li
+                    className="rounded border border-border/40 bg-background/40 p-2 text-xs"
+                    key={`${f.code}-${f.detail}`}
+                  >
+                    <span className="font-medium uppercase tracking-wide">
+                      {f.severity}
+                    </span>
+                    : {f.detail}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Run Evaluate to generate a gaming-risk summary.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AttemptsSection({
+  attempts,
+  rescoreOne,
+}: {
+  attempts: AssignmentDetail["attempts"];
+  rescoreOne: (formData: FormData) => Promise<void>;
+}) {
+  return (
+    <section className="rounded-xl border border-border/50 bg-muted/20 p-4">
+      <h2 className="mb-3 font-medium text-sm">Attempts</h2>
+      {attempts.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          No attempts yet. Attempts are created lazily when the candidate views
+          each question.
+        </p>
+      ) : (
+        <ol className="space-y-3 text-sm">
+          {attempts.map((a, i) => (
+            <AttemptRow
+              attempt={a}
+              index={i}
+              key={a.id}
+              rescoreOne={rescoreOne}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function AttemptRow({
+  attempt: a,
+  index: i,
+  rescoreOne,
+}: {
+  attempt: AssignmentDetail["attempts"][number];
+  index: number;
+  rescoreOne: (formData: FormData) => Promise<void>;
+}) {
+  const timing = a.evaluation_report?.timing;
+  const analysis = a.evaluation_report?.analysis;
+
+  return (
+    <li
+      className="scroll-mt-20 rounded border border-border/40 bg-background/30 p-3 target:ring-2 target:ring-primary/60"
+      id={`attempt-${a.id}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium">
+          Question {i + 1}
+          {a.needs_review && (
+            <span className="ml-2 rounded bg-warning/20 px-2 py-0.5 font-medium text-[10px] text-warning uppercase tracking-wide">
+              Needs review
+            </span>
+          )}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          {a.submitted_at ? "submitted" : "in progress"}
+        </p>
+      </div>
+      <div className="prompt-markdown-condensed mt-1 line-clamp-3 text-muted-foreground text-xs">
+        <PromptMarkdown source={a.rendered_prompt} />
+      </div>
+      {a.raw_answer && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-muted-foreground text-xs hover:text-primary">
+            View raw answer
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted/40 p-2 text-xs">
+            {JSON.stringify(a.raw_answer, null, 2)}
+          </pre>
+        </details>
+      )}
+      {a.score_rationale && (
+        <p className="mt-2 rounded border border-border/40 bg-muted/30 p-2 text-muted-foreground text-xs">
+          {a.score_rationale}
+        </p>
+      )}
+      {analysis && analysis !== a.score_rationale && (
+        <p className="mt-2 rounded border border-border/40 bg-muted/20 p-2 text-muted-foreground text-xs">
+          Analysis: {analysis}
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-muted-foreground text-xs">
+        <span>
+          Score:{" "}
+          {a.score != null
+            ? `${a.score} / ${a.max_score}`
+            : `- / ${a.max_score}`}
+        </span>
+        {a.quality_score != null && (
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+            Quality {a.quality_score}/10
+          </span>
+        )}
+        {timing?.flag && timing.flag !== "unknown" && (
+          <span className="capitalize">
+            Timing: {timing.flag}
+            {timing.ratio != null
+              ? ` (${Math.round(timing.ratio * 100)}% of limit)`
+              : ""}
+          </span>
+        )}
+        {a.scorer_model && (
+          <span>
+            Scorer: <code>{a.scorer_model}</code>
+          </span>
+        )}
+        {a.scorer_confidence != null && (
+          <span>Confidence: {a.scorer_confidence}</span>
+        )}
+        {a.active_time_seconds != null && (
+          <span>Active: {a.active_time_seconds}s</span>
+        )}
+        {a.submitted_at && (
+          <form action={rescoreOne} className="ml-auto">
+            <input name="attempt_id" type="hidden" value={a.id} />
+            <SubmitButton
+              className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-primary text-xs hover:bg-primary/20"
+              pendingLabel="Rescoring..."
+            >
+              Rescore
+            </SubmitButton>
+          </form>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -397,11 +580,15 @@ function RelatedEntities({
 
 function AssignmentActions({
   cancel,
+  evaluateNow,
+  hasAnswers,
   rescoreAll,
   resendEmail,
   status,
 }: {
   cancel: () => Promise<void>;
+  evaluateNow: () => Promise<void>;
+  hasAnswers: boolean;
   rescoreAll: () => Promise<void>;
   resendEmail: () => Promise<void>;
   status: string;
@@ -411,6 +598,16 @@ function AssignmentActions({
 
   return (
     <div className="flex flex-wrap gap-2">
+      {hasAnswers && (
+        <form action={evaluateNow}>
+          <SubmitButton
+            className="rounded border border-primary/50 bg-primary/10 px-3 py-2 text-primary text-sm hover:bg-primary/20"
+            pendingLabel="Evaluating..."
+          >
+            Evaluate now
+          </SubmitButton>
+        </form>
+      )}
       {status === "completed" && (
         <form action={rescoreAll}>
           <SubmitButton

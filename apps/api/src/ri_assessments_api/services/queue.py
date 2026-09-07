@@ -179,14 +179,21 @@ def _serialize(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True)
 
 
-def enqueue_score_assignment(assignment_id: str) -> bool:
+def enqueue_score_assignment(
+    assignment_id: str, *, allow_partial: bool = False
+) -> bool:
     """Push a job onto the scoring queue. Returns True when enqueued,
     False when Redis is unavailable so the caller can fall back to
-    inline scoring."""
+    inline scoring.
+
+    allow_partial=True marks the job for evaluate_assignment semantics
+    (score answered attempts even when status != completed).
+    """
 
     payload: dict[str, Any] = {
         "type": "score_assignment",
         "assignment_id": assignment_id,
+        "allow_partial": allow_partial,
         "enqueued_at": datetime.now(UTC).isoformat(),
         "attempts": 0,
     }

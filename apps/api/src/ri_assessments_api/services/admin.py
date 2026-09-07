@@ -1207,10 +1207,12 @@ def get_assignment_detail(
             "id, subject_id, module_id, assessment_id, status, expires_at, "
             "started_at, completed_at, consent_at, total_time_seconds, "
             "integrity_score, final_score, max_possible_score, created_at, "
+            "evaluation_report, scored_at, "
             "subjects(full_name, email), modules(title), assessments(title), "
             "attempts(id, question_template_id, rendered_prompt, raw_answer, "
             "submitted_at, score, max_score, score_rationale, scorer_model, "
-            "scorer_confidence, needs_review, active_time_seconds)"
+            "scorer_confidence, needs_review, active_time_seconds, "
+            "quality_score, evaluation_report)"
         )
         .eq("id", assignment_id)
         .limit(1)
@@ -1238,6 +1240,8 @@ def get_assignment_detail(
             scorer_confidence=a.get("scorer_confidence"),
             needs_review=bool(a.get("needs_review")),
             active_time_seconds=a.get("active_time_seconds"),
+            quality_score=a.get("quality_score"),
+            evaluation_report=a.get("evaluation_report"),
         )
         for a in attempts_raw
     ]
@@ -1260,6 +1264,8 @@ def get_assignment_detail(
         final_score=row.get("final_score"),
         max_possible_score=row.get("max_possible_score"),
         created_at=row["created_at"],
+        evaluation_report=row.get("evaluation_report"),
+        scored_at=row.get("scored_at"),
         attempts=attempts,
     )
 

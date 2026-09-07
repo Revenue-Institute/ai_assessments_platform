@@ -103,11 +103,50 @@ export interface AssignmentSummary {
   subject_id: string;
 }
 
+export interface AttemptEvaluationReport {
+  analysis?: string | null;
+  quality_score?: number | null;
+  timing?: {
+    active_time_seconds?: number | null;
+    flag?: "rushed" | "normal" | "slow" | "unknown";
+    ratio?: number | null;
+    time_limit_seconds?: number | null;
+  };
+}
+
+export interface GamingRiskFlag {
+  code: string;
+  count: number;
+  detail: string;
+  severity: "low" | "medium" | "high";
+}
+
+export interface AssignmentEvaluationReport {
+  answered_count?: number;
+  evaluated_at?: string;
+  gaming_risk?: {
+    active_time_ratio?: number | null;
+    active_time_seconds?: number | null;
+    counts?: Record<string, number>;
+    flags?: GamingRiskFlag[];
+    integrity_score?: number | null;
+    risk_level?: "low" | "medium" | "high";
+    total_time_seconds?: number | null;
+  };
+  partial?: boolean;
+  scored_count?: number;
+  strengths?: string[];
+  total_questions?: number;
+  weaknesses?: string[];
+}
+
 export interface AttemptSummary {
   active_time_seconds: number | null;
+  evaluation_report?: AttemptEvaluationReport | null;
   id: string;
   max_score: number;
   needs_review?: boolean;
+  quality_score?: number | null;
   question_template_id: string;
   raw_answer: { value: unknown } | null;
   rendered_prompt: string;
@@ -120,6 +159,8 @@ export interface AttemptSummary {
 
 export type AssignmentDetail = AssignmentSummary & {
   consent_at: string | null;
+  evaluation_report?: AssignmentEvaluationReport | null;
+  scored_at?: string | null;
   total_time_seconds: number | null;
   attempts: AttemptSummary[];
 };
@@ -466,6 +507,25 @@ export const rescoreAttempt = (attemptId: string) =>
   callApi<AssignmentDetail>(`/api/attempts/${attemptId}/rescore`, {
     method: "POST",
     body: JSON.stringify({}),
+  });
+
+export const evaluateAssignment = (id: string) =>
+  callApi<AssignmentDetail>(`/api/assignments/${id}/evaluate`, {
+    method: "POST",
+  });
+
+export const backfillPartialEvaluations = (body?: {
+  enqueue?: boolean;
+  limit?: number;
+}) =>
+  callApi<{
+    errors: Array<{ assignment_id: string; error: string }>;
+    queued: string[];
+    scored_inline: string[];
+    skipped: string[];
+  }>("/api/assignments/backfill-partial-evaluations", {
+    method: "POST",
+    body: JSON.stringify(body ?? { limit: 25, enqueue: true }),
   });
 
 export const fetchAdminMe = () => callApi<AdminMe>("/api/me");
