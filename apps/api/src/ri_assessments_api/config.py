@@ -65,8 +65,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dims: int = 1024
 
-    # Observability
-    sentry_dsn_api: str = ""
+    # Observability (Axiom log shipping; Better Stack is pull-based uptime)
     axiom_token: str = ""
     axiom_dataset: str = ""
 
